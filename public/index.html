@@ -566,7 +566,8 @@ function App() {
     });
     const raw = store.get("ramimp-save");
     if (raw) { try { setSaved(JSON.parse(raw)); } catch (_) {} }
-    return () => { socket.off("state"); socket.off("info"); socket.off("fx"); socket.off("roomClosed"); socket.off("connect_error"); };
+    const keepAlive = setInterval(() => { fetch("/ping").catch(() => {}); }, 240000);
+    return () => { clearInterval(keepAlive); socket.off("state"); socket.off("info"); socket.off("fx"); socket.off("roomClosed"); socket.off("connect_error"); };
   }, []);
 
   // Reconnexion automatique après coupure réseau
@@ -580,6 +581,30 @@ function App() {
   }, []);
 
   useEffect(() => { SFX_MUTED = muted; store.set("ramimp-muted", muted ? "1" : "0"); }, [muted]);
+
+  // Sécurité du glisser-déposer : ne jamais laisser une carte fantôme
+  useEffect(() => {
+    const clearDrag = () => {
+      dragInfo.current = null;
+      discardDragInfo.current = null;
+      lastTargetRef.current = -1;
+      setDrag(null);
+    };
+    window.addEventListener("pointerup", clearDrag);
+    window.addEventListener("pointercancel", clearDrag);
+    window.addEventListener("blur", clearDrag);
+    return () => {
+      window.removeEventListener("pointerup", clearDrag);
+      window.removeEventListener("pointercancel", clearDrag);
+      window.removeEventListener("blur", clearDrag);
+    };
+  }, []);
+
+  // Si la carte glissée n'existe plus (mise à jour du serveur), on annule proprement
+  useEffect(() => {
+    if (drag && !drag.fromDiscard && !(srv && (srv.yourHand || []).some((c) => c.id === drag.id))) setDrag(null);
+  }, [srv]);
+
 
   // Horloge d'affichage (minuteur, fenêtre d'achat)
   useEffect(() => {
@@ -1156,7 +1181,7 @@ function App() {
             {topDiscard ? <Card card={topDiscard} /> : <div style={{ height: 58, width: 40 }} className="rounded-lg border-2 border-dashed border-emerald-600" />}
           </div>
           <span className="text-[10px] text-emerald-300 font-bold">
-            {buyOpen ? `Acheter (${me.buysLeft})` : myTurn && g.phase === "draw" ? "Prendre (gratuit)" : "Défausse"}
+            {buyOpen ? `Acheter (${me.buysLeft})` : myTurn && g.phase === "draw" ? "Prendre (gratuit)" : `Défausse · ${g.discardCount || 0}`}
           </span>
         </button>
       </div>

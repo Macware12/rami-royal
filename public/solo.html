@@ -785,6 +785,25 @@ function RamiRoyal() {
 
   useEffect(() => { SFX_MUTED = muted; store.set("rami-muted", muted ? "1" : "0"); }, [muted]);
 
+  // Sécurité du glisser-déposer : ne jamais laisser une carte fantôme
+  useEffect(() => {
+    const clearDrag = () => {
+      dragInfo.current = null;
+      discardDragInfo.current = null;
+      lastTargetRef.current = -1;
+      setDrag(null);
+    };
+    window.addEventListener("pointerup", clearDrag);
+    window.addEventListener("pointercancel", clearDrag);
+    window.addEventListener("blur", clearDrag);
+    return () => {
+      window.removeEventListener("pointerup", clearDrag);
+      window.removeEventListener("pointercancel", clearDrag);
+      window.removeEventListener("blur", clearDrag);
+    };
+  }, []);
+
+
   useEffect(() => {
     const now = Boolean(myTurn && g && g.phase === "draw");
     if (now && !prevMyTurn.current) { sfx("yourturn"); vibrate([70]); }
@@ -1698,7 +1717,7 @@ function RamiRoyal() {
             {topDiscard ? <Card card={topDiscard} /> : <div style={{ height: 58, width: 40 }} className="rounded-lg border-2 border-dashed border-emerald-600" />}
           </div>
           <span className="text-[10px] text-emerald-300 font-bold">
-            {g.buyWindow ? `Acheter (${me.buysLeft})` : myTurn && g.phase === "draw" ? "Prendre (gratuit)" : "Défausse"}
+            {g.buyWindow ? `Acheter (${me.buysLeft})` : myTurn && g.phase === "draw" ? "Prendre (gratuit)" : `Défausse · ${g.discard.length}`}
           </span>
         </button>
       </div>
