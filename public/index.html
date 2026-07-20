@@ -749,15 +749,41 @@ function App() {
 
   // ---------- Écrans ----------
   if (!srv) {
+    const joinReady = joinCode.trim().length >= 5;
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-5 p-6" style={bgStyle}>
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6" style={bgStyle}>
         {STYLE}
         <div className="text-center" style={{ textShadow: "0 3px 10px rgba(0,0,0,.6)" }}>
           <h1 className="text-5xl text-amber-300" style={{ fontFamily: "Georgia, serif" }}>Rami Royal</h1>
-          <p className="text-emerald-200 text-sm mt-1">Multijoueur en ligne — entre amis</p>
+          <p className="text-emerald-200 text-sm mt-1">Le rami à contrats de Madagascar</p>
         </div>
         {connErr && <p className="text-xs text-red-300">{connErr}</p>}
-        <div className="panel rounded-2xl p-5 w-full max-w-xs flex flex-col gap-4 text-emerald-100">
+
+        {/* Mode solo */}
+        <a href="/solo.html" className="panel rounded-2xl p-4 w-full max-w-xs flex items-center gap-3 text-emerald-100 no-underline">
+          <span className="text-3xl">🎮</span>
+          <span className="flex-1">
+            <span className="block font-bold text-base">Jouer en solo</span>
+            <span className="block text-xs text-emerald-300">Contre l'ordinateur, tout de suite, sans compte</span>
+          </span>
+          <span className="text-amber-300 text-xl font-bold">→</span>
+        </a>
+
+        <div className="flex items-center gap-3 w-full max-w-xs">
+          <span className="flex-1 border-t border-emerald-700"></span>
+          <span className="text-xs text-emerald-400 font-bold">OU</span>
+          <span className="flex-1 border-t border-emerald-700"></span>
+        </div>
+
+        {/* Mode multijoueur */}
+        <div className="panel rounded-2xl p-5 w-full max-w-xs flex flex-col gap-4 text-emerald-100" style={{ borderColor: "#f59e0b66" }}>
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">🌐</span>
+            <div>
+              <span className="block font-bold text-base text-amber-300">Multijoueur en ligne</span>
+              <span className="block text-[11px] text-emerald-300">Avec tes amis, chacun sur son téléphone</span>
+            </div>
+          </div>
           <label className="flex flex-col gap-2 text-sm">
             Ton nom
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Joueur" maxLength={14}
@@ -768,9 +794,8 @@ function App() {
               ▶ Reprendre la partie ({saved.code})
             </button>
           )}
-          <a href="/solo.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center block">🎮 Jouer en solo contre l'IA</a>
           <div className="border-t border-emerald-800 pt-3 flex flex-col gap-2">
-            <span className="text-xs text-emerald-300 font-bold">Créer un salon</span>
+            <span className="text-xs text-amber-200 font-bold">1 · Crée un salon et partage le code</span>
             <div className="flex gap-2 text-xs">
               {[30, 45, 60].map((t) => (
                 <button key={t} onClick={() => setTurnSeconds(t)} className={`flex-1 py-1.5 rounded-xl font-bold ${turnSeconds === t ? "btn-gold" : "btn-dark"}`}>{t}s/tour</button>
@@ -785,12 +810,16 @@ function App() {
             <button onClick={createRoom} className="btn-gold font-bold py-3 rounded-xl">Créer un salon 🎴</button>
           </div>
           <div className="border-t border-emerald-800 pt-3 flex flex-col gap-2">
-            <span className="text-xs text-emerald-300 font-bold">Rejoindre des amis</span>
-            <div className="flex gap-2">
+            <span className="text-xs text-amber-200 font-bold">2 · Ou rejoins avec le code d'un ami</span>
+            <div className="flex gap-2 items-stretch">
               <input value={joinCode} onChange={(e) => setJoinCode(e.target.value.toUpperCase())} placeholder="CODE" maxLength={5}
-                className="flex-1 bg-emerald-950/70 border border-emerald-600 rounded-xl p-2.5 text-center tracking-widest font-bold uppercase placeholder-emerald-600" />
-              <button onClick={joinRoom} disabled={joinCode.trim().length < 5} className="btn-green font-bold px-4 rounded-xl disabled:opacity-40">Rejoindre</button>
+                className="flex-1 min-w-0 bg-emerald-950/70 border border-emerald-600 rounded-xl p-2.5 text-center tracking-widest font-bold uppercase placeholder-emerald-600" />
+              <button onClick={joinRoom} disabled={!joinReady}
+                className={`px-4 rounded-xl font-bold text-sm ${joinReady ? "btn-green" : "bg-emerald-950/60 border border-emerald-800 text-emerald-600"}`}>
+                Rejoindre
+              </button>
             </div>
+            {!joinReady && <span className="text-[10px] text-emerald-500">Saisis le code de 5 lettres pour activer le bouton.</span>}
           </div>
         </div>
         {msg && <p className="text-xs text-amber-200 text-center max-w-xs">{msg}</p>}
