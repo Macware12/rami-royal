@@ -158,7 +158,18 @@ function helpArrangement(hand, contract, variant) {
       }
     }
   };
-  if (preferEsc) { takeRuns(); takeTris(); } else { takeTris(); takeRuns(); }
+  const takeJokerRuns = () => {
+    for (const jr of rotArr(findJokerRuns(hand))) {
+      const jks = jokers.filter((c) => !used.has(c.id));
+      if (!jks.length) break;
+      if (jr.some((c) => used.has(c.id))) continue;
+      const jk = jks[0];
+      const cards = sortEscalier([...jr, jk]);
+      cards.forEach((c) => used.add(c.id));
+      groups.push({ kind: "esc", cards, complete: true, withJoker: true });
+    }
+  };
+  if (preferEsc) { takeRuns(); takeJokerRuns(); takeTris(); } else { takeTris(); takeRuns(); takeJokerRuns(); }
 
   const m2 = byRankGroups();
   for (const r of rotArr(Object.keys(m2))) {
@@ -197,12 +208,14 @@ function helpArrangement(hand, contract, variant) {
   jokers.forEach((c) => { if (!used.has(c.id)) order.push(c); });
 
   const nTri = groups.filter((x) => x.kind === "tri" && x.complete).length;
-  const nEsc = groups.filter((x) => x.kind === "esc" && x.complete).length;
+  const nEsc = groups.filter((x) => x.kind === "esc" && x.complete && !x.withJoker).length;
+  const jEsc = groups.filter((x) => x.withJoker).length;
   const pTri = groups.filter((x) => x.kind === "tri" && !x.complete).length;
   const pEsc = groups.filter((x) => x.kind === "esc" && !x.complete).length;
   const parts = [];
   if (nTri) parts.push(nTri + " tri" + (nTri > 1 ? "s" : "") + " complet" + (nTri > 1 ? "s" : ""));
   if (nEsc) parts.push(nEsc + " escalier" + (nEsc > 1 ? "s" : "") + " complet" + (nEsc > 1 ? "s" : ""));
+  if (jEsc) parts.push(jEsc + " escalier" + (jEsc > 1 ? "s" : "") + " avec joker 🤡");
   if (pTri) parts.push(pTri + " paire" + (pTri > 1 ? "s" : "") + " (futur tri)");
   if (pEsc) parts.push(pEsc + " début" + (pEsc > 1 ? "s" : "") + " d'escalier");
   const summary = parts.length ? "repérés : " + parts.join(" · ") : "rien à regrouper pour l'instant, pioche encore !";
@@ -552,6 +565,8 @@ function App() {
   const introTimer = useRef(null);
   const helpCount = useRef(0);
   const lastEmoteSent = useRef(0);
+  const handleDropRef = useRef(null);
+  const discardDropRef = useRef(null);
 
   const g = srv && srv.game;
   const youIdx = srv ? srv.youIdx : -1;
@@ -596,10 +611,18 @@ function App() {
 
   // Sécurité du glisser-déposer : ne jamais laisser une carte fantôme
   useEffect(() => {
-    const clearDrag = () => {
+    const clearDrag = (e) => {
+      const d = dragInfo.current;
+      const dd = discardDragInfo.current;
       dragInfo.current = null;
       discardDragInfo.current = null;
       lastTargetRef.current = -1;
+      if (e && e.clientX != null) {
+        try {
+          if (d && d.dragging && handleDropRef.current) handleDropRef.current(e.clientX, e.clientY, d.card);
+          else if (dd && dd.dragging && discardDropRef.current) discardDropRef.current(e.clientX, e.clientY);
+        } catch (_) {}
+      }
       setDrag(null);
     };
     window.addEventListener("pointerup", clearDrag);
@@ -828,6 +851,8 @@ function App() {
     if (!d.dragging && Math.hypot(e.clientX - d.startX, e.clientY - d.startY) > 8) { d.dragging = true; lastTargetRef.current = -1; }
     if (d.dragging) {
       setDrag({ id: d.id, card: d.card, x: e.clientX, y: e.clientY });
+      const hr = handRef.current && handRef.current.getBoundingClientRect();
+      if (!(hr && e.clientY >= hr.top - 10 && e.clientY <= hr.bottom + 10)) return;
       const vi = insertionIndexAt(e.clientX, e.clientY);
       if (vi != null && vi !== lastTargetRef.current) {
         lastTargetRef.current = vi;
@@ -853,6 +878,19 @@ function App() {
     }
     tapCard(c.id);
   }
+  function discardDropAt(x, y) {
+    const cont = handRef.current;
+    const r = cont && cont.getBoundingClientRect();
+    const overHand = r && y >= r.top - 24 && y <= r.bottom + 24 && x >= r.left && x <= r.right;
+    if (!overHand) return;
+    if (g && g.discardTop && g.discardTop.joker) { setMsg("Impossible de récupérer un joker jeté — il est perdu !"); return; }
+    const vi = insertionIndexAt(x, y);
+    pendingInsertRef.current = visibleIndexToOrderIndex(vi);
+    if (g.phase === "buyWindow") act({ type: "buy" });
+    else if (myTurn && g.phase === "draw") act({ type: "draw", source: "discard" });
+    else { pendingInsertRef.current = null; setMsg("Tu ne peux pas prendre cette carte maintenant."); }
+  }
+
   function handleDrop(x, y, card) {
     const dr = discardRef.current && discardRef.current.getBoundingClientRect();
     if (dr && x >= dr.left - 12 && x <= dr.right + 12 && y >= dr.top - 12 && y <= dr.bottom + 12) {
@@ -872,6 +910,9 @@ function App() {
       }
     }
   }
+
+  handleDropRef.current = handleDrop;
+  discardDropRef.current = discardDropAt;
   function onDiscardPointerDown(e) {
     const top = g && g.discardTop;
     if (!top || g.roundOver) return;
@@ -892,14 +933,7 @@ function App() {
       const cont = handRef.current;
       const r = cont && cont.getBoundingClientRect();
       const overHand = r && e.clientY >= r.top - 24 && e.clientY <= r.bottom + 24 && e.clientX >= r.left && e.clientX <= r.right;
-      if (overHand) {
-        if (g && g.discardTop && g.discardTop.joker) { setMsg("Impossible de récupérer un joker jeté — il est perdu !"); return; }
-        const vi = insertionIndexAt(e.clientX, e.clientY);
-        pendingInsertRef.current = visibleIndexToOrderIndex(vi);
-        if (g.phase === "buyWindow") act({ type: "buy" });
-        else if (myTurn && g.phase === "draw") act({ type: "draw", source: "discard" });
-        else { pendingInsertRef.current = null; setMsg("Tu ne peux pas prendre cette carte maintenant."); }
-      }
+      discardDropAt(e.clientX, e.clientY);
       return;
     }
     if (g && g.discardTop && g.discardTop.joker) { setMsg("Impossible de récupérer un joker jeté — il est perdu !"); return; }

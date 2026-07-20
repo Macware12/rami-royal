@@ -263,7 +263,18 @@ function helpArrangement(hand, contract, variant) {
       }
     }
   };
-  if (preferEsc) { takeRuns(); takeTris(); } else { takeTris(); takeRuns(); }
+  const takeJokerRuns = () => {
+    for (const jr of rotArr(findJokerRuns(hand))) {
+      const jks = jokers.filter((c) => !used.has(c.id));
+      if (!jks.length) break;
+      if (jr.some((c) => used.has(c.id))) continue;
+      const jk = jks[0];
+      const cards = sortEscalier([...jr, jk]);
+      cards.forEach((c) => used.add(c.id));
+      groups.push({ kind: "esc", cards, complete: true, withJoker: true });
+    }
+  };
+  if (preferEsc) { takeRuns(); takeJokerRuns(); takeTris(); } else { takeTris(); takeRuns(); takeJokerRuns(); }
 
   const m2 = byRankGroups();
   for (const r of rotArr(Object.keys(m2))) {
@@ -302,12 +313,14 @@ function helpArrangement(hand, contract, variant) {
   jokers.forEach((c) => { if (!used.has(c.id)) order.push(c); });
 
   const nTri = groups.filter((x) => x.kind === "tri" && x.complete).length;
-  const nEsc = groups.filter((x) => x.kind === "esc" && x.complete).length;
+  const nEsc = groups.filter((x) => x.kind === "esc" && x.complete && !x.withJoker).length;
+  const jEsc = groups.filter((x) => x.withJoker).length;
   const pTri = groups.filter((x) => x.kind === "tri" && !x.complete).length;
   const pEsc = groups.filter((x) => x.kind === "esc" && !x.complete).length;
   const parts = [];
   if (nTri) parts.push(nTri + " tri" + (nTri > 1 ? "s" : "") + " complet" + (nTri > 1 ? "s" : ""));
   if (nEsc) parts.push(nEsc + " escalier" + (nEsc > 1 ? "s" : "") + " complet" + (nEsc > 1 ? "s" : ""));
+  if (jEsc) parts.push(jEsc + " escalier" + (jEsc > 1 ? "s" : "") + " avec joker 🤡");
   if (pTri) parts.push(pTri + " paire" + (pTri > 1 ? "s" : "") + " (futur tri)");
   if (pEsc) parts.push(pEsc + " début" + (pEsc > 1 ? "s" : "") + " d'escalier");
   const summary = parts.length ? "repérés : " + parts.join(" · ") : "rien à regrouper pour l'instant, pioche encore !";
@@ -700,6 +713,8 @@ function RamiRoyal() {
   const introTimer = useRef(null);
   const helpCount = useRef(0);
   const prevPosed = useRef(false);
+  const handleDropRef = useRef(null);
+  const discardDropRef = useRef(null);
 
   function newRound(players, mancheIdx, totals, history) {
     const deck = buildDeck();
@@ -805,10 +820,16 @@ function RamiRoyal() {
 
   // Sécurité du glisser-déposer : ne jamais laisser une carte fantôme
   useEffect(() => {
-    const clearDrag = () => {
+    const clearDrag = (e) => {
+      const d = dragInfo.current;
       dragInfo.current = null;
-      discardDragInfo.current = null;
       lastTargetRef.current = -1;
+      if (d && d.dragging && e && e.clientX != null) {
+        try {
+          if (d.origin === "discard" && discardDropRef.current) discardDropRef.current(e.clientX, e.clientY);
+          else if (d.origin === "hand" && handleDropRef.current) handleDropRef.current(e.clientX, e.clientY, d.card);
+        } catch (_) {}
+      }
       setDrag(null);
     };
     window.addEventListener("pointerup", clearDrag);
@@ -1093,7 +1114,8 @@ function RamiRoyal() {
     if (!d.dragging && Math.hypot(dx, dy) > 8) { d.dragging = true; lastTargetRef.current = -1; }
     if (d.dragging) {
       setDrag({ id: d.id, card: d.card, x: e.clientX, y: e.clientY });
-      reorderTo(e.clientX, e.clientY, d.id);
+      const hr = handRef.current && handRef.current.getBoundingClientRect();
+      if (hr && e.clientY >= hr.top - 10 && e.clientY <= hr.bottom + 10) reorderTo(e.clientX, e.clientY, d.id);
     }
   }
 
@@ -1184,9 +1206,7 @@ function RamiRoyal() {
     dragInfo.current = null;
     if (d && d.origin === "discard" && d.dragging) {
       setDrag(null);
-      const idx = insertIndexAt(e.clientX, e.clientY);
-      if (idx != null) takeDiscardAt(idx);
-      else setMsg("Dépose la carte dans ta main pour la prendre.");
+      discardDropAt(e.clientX, e.clientY);
       return;
     }
     const topD = g.discard[g.discard.length - 1];
@@ -1194,6 +1214,12 @@ function RamiRoyal() {
     if (g.buyWindow) { requestBuy(); return; }
     if (myTurn && g.phase === "draw") playerDraw("discard");
     else if (!myTurn && !g.roundOver) setMsg("L'achat se fait dans la fenêtre qui s'ouvre après chaque défausse.");
+  }
+
+  function discardDropAt(x, y) {
+    const idx = insertIndexAt(x, y);
+    if (idx != null) takeDiscardAt(idx);
+    else setMsg("Dépose la carte dans ta main pour la prendre.");
   }
 
   function handleDrop(x, y, card) {
@@ -1215,6 +1241,9 @@ function RamiRoyal() {
       }
     }
   }
+
+  handleDropRef.current = handleDrop;
+  discardDropRef.current = discardDropAt;
 
   function endDrag() { dragInfo.current = null; setDrag(null); lastTargetRef.current = -1; }
 
