@@ -26,6 +26,7 @@ const { useState, useEffect, useRef } = React;
 // ---------- Constantes ----------
 const SUITS = ["♠", "♥", "♦", "♣"];
 const AVATARS = ["🙂", "🦎", "🐒", "🦉", "🦜", "🐢"];
+const AVATARS_POOL = ["🦁", "🐯", "🦊", "🐼", "🐸", "🦉", "🐙", "🦜", "🐢", "🦎"];
 const AVATAR_COLORS = ["#fbbf24", "#f59e0b", "#38bdf8", "#f472b6", "#a3e635", "#c084fc"];
 const MANCHE_LABELS = ["2 tri", "1 tri + 1 escalier", "2 escaliers", "3 tri", "2 tri + 1 escalier", "2 escaliers + 1 tri", "3 escaliers", "Pose-tout"];
 
@@ -134,7 +135,20 @@ function helpArrangement(hand, contract, variant) {
   const jokers = hand.filter((c) => c.joker);
   const reals = hand.filter((c) => !c.joker);
   const rotArr = (arr) => (arr.length ? arr.map((_, i) => arr[(i + variant) % arr.length]) : arr);
-  const preferEsc = contract.poseTout ? variant % 2 === 1 : (contract.esc || 0) > 0 && ((contract.tri || 0) === 0 || variant % 2 === 0);
+
+  // 1) Le contrat d'abord : le planificateur (jokers compris) réserve ce qu'il faut
+  let planOK = false;
+  if (!contract.poseTout && ((contract.tri || 0) > 0 || (contract.esc || 0) > 0)) {
+    const plan = planContract(hand, { tri: contract.tri || 0, esc: contract.esc || 0 });
+    if (plan) {
+      planOK = true;
+      for (const m of plan) {
+        const cards = m.type === "esc" ? sortEscalier(m.cards) : m.cards;
+        cards.forEach((c) => used.add(c.id));
+        groups.push({ kind: m.type, cards, complete: true, forContract: true, withJoker: m.cards.some((c) => c.joker) });
+      }
+    }
+  }
 
   const byRankGroups = () => {
     const m = {};
@@ -148,16 +162,6 @@ function helpArrangement(hand, contract, variant) {
       groups.push({ kind: "esc", cards: run, complete: true });
     }
   };
-  const takeTris = () => {
-    const m = byRankGroups();
-    for (const r of rotArr(Object.keys(m))) {
-      const grp = m[r].filter((c) => !used.has(c.id));
-      if (grp.length >= 3) {
-        grp.slice(0, 4).forEach((c) => used.add(c.id));
-        groups.push({ kind: "tri", cards: grp.slice(0, 4), complete: true });
-      }
-    }
-  };
   const takeJokerRuns = () => {
     for (const jr of rotArr(findJokerRuns(hand))) {
       const jks = jokers.filter((c) => !used.has(c.id));
@@ -169,8 +173,20 @@ function helpArrangement(hand, contract, variant) {
       groups.push({ kind: "esc", cards, complete: true, withJoker: true });
     }
   };
+  const takeTris = () => {
+    const m = byRankGroups();
+    for (const r of rotArr(Object.keys(m))) {
+      const grp = m[r].filter((c) => !used.has(c.id));
+      if (grp.length >= 3) {
+        grp.slice(0, 4).forEach((c) => used.add(c.id));
+        groups.push({ kind: "tri", cards: grp.slice(0, 4), complete: true });
+      }
+    }
+  };
+  const preferEsc = contract.poseTout ? variant % 2 === 1 : (contract.esc || 0) >= (contract.tri || 0) ? variant % 2 === 0 : variant % 2 === 1;
   if (preferEsc) { takeRuns(); takeJokerRuns(); takeTris(); } else { takeTris(); takeRuns(); takeJokerRuns(); }
 
+  // Ébauches : paires (futur tri) et voisins de suite (futur escalier)
   const m2 = byRankGroups();
   for (const r of rotArr(Object.keys(m2))) {
     const grp = m2[r].filter((c) => !used.has(c.id));
@@ -186,8 +202,17 @@ function helpArrangement(hand, contract, variant) {
       if (b.rank - a.rank <= 2) { used.add(a.id); used.add(b.id); groups.push({ kind: "esc", cards: [a, b], complete: false }); }
     }
   }
+  // Les jokers libres rejoignent les ébauches (escaliers d'abord, puis paires)
+  for (const grp of [...groups.filter((x) => !x.complete && x.kind === "esc"), ...groups.filter((x) => !x.complete && x.kind === "tri")]) {
+    const jk = jokers.find((c) => !used.has(c.id));
+    if (!jk) break;
+    used.add(jk.id);
+    grp.cards = [...grp.cards, jk];
+    grp.plusJoker = true;
+  }
+
   const wantTri = contract.tri || 0, wantEsc = contract.esc || 0;
-  const gScore = (x) => (x.complete ? 0 : 10) + ((x.kind === "tri" && wantTri > 0) || (x.kind === "esc" && wantEsc > 0) || contract.poseTout ? 0 : 5);
+  const gScore = (x) => (x.forContract ? -20 : 0) + (x.complete ? 0 : 10) + ((x.kind === "tri" && wantTri > 0) || (x.kind === "esc" && wantEsc > 0) || contract.poseTout ? 0 : 5);
   const buckets = {};
   groups.forEach((x) => { const sc = gScore(x); (buckets[sc] = buckets[sc] || []).push(x); });
   const arranged = [];
@@ -202,23 +227,22 @@ function helpArrangement(hand, contract, variant) {
   const leftKey = variant % 2 === 0
     ? (c) => SUITS.indexOf(c.suit) * 20 + c.rank
     : (c) => c.rank * 8 + SUITS.indexOf(c.suit);
-  hand.filter((c) => !c.joker && !used.has(c.id))
-    .sort((a, b) => leftKey(a) - leftKey(b))
-    .forEach((c) => order.push(c));
+  hand.filter((c) => !c.joker && !used.has(c.id)).sort((a, b) => leftKey(a) - leftKey(b)).forEach((c) => order.push(c));
   jokers.forEach((c) => { if (!used.has(c.id)) order.push(c); });
 
   const nTri = groups.filter((x) => x.kind === "tri" && x.complete).length;
   const nEsc = groups.filter((x) => x.kind === "esc" && x.complete && !x.withJoker).length;
-  const jEsc = groups.filter((x) => x.withJoker).length;
+  const jEsc = groups.filter((x) => x.complete && x.withJoker).length;
   const pTri = groups.filter((x) => x.kind === "tri" && !x.complete).length;
   const pEsc = groups.filter((x) => x.kind === "esc" && !x.complete).length;
+  const pJk = groups.filter((x) => !x.complete && x.plusJoker).length;
   const parts = [];
   if (nTri) parts.push(nTri + " tri" + (nTri > 1 ? "s" : "") + " complet" + (nTri > 1 ? "s" : ""));
   if (nEsc) parts.push(nEsc + " escalier" + (nEsc > 1 ? "s" : "") + " complet" + (nEsc > 1 ? "s" : ""));
-  if (jEsc) parts.push(jEsc + " escalier" + (jEsc > 1 ? "s" : "") + " avec joker 🤡");
+  if (jEsc) parts.push(jEsc + " avec joker 🤡");
   if (pTri) parts.push(pTri + " paire" + (pTri > 1 ? "s" : "") + " (futur tri)");
-  if (pEsc) parts.push(pEsc + " début" + (pEsc > 1 ? "s" : "") + " d'escalier");
-  const summary = parts.length ? "repérés : " + parts.join(" · ") : "rien à regrouper pour l'instant, pioche encore !";
+  if (pEsc) parts.push(pEsc + " début" + (pEsc > 1 ? "s" : "") + " d'escalier" + (pJk ? " (joker accolé)" : ""));
+  const summary = (planOK ? "🎯 ton contrat est réalisable ! " : "") + (parts.length ? "repérés : " + parts.join(" · ") : "rien à regrouper pour l'instant, pioche encore !");
   return { order, summary };
 }
 
@@ -431,7 +455,7 @@ function CardFan({ count }) {
 }
 
 function OpponentCard({ p, active, seconds, emote }) {
-  const emoji = AVATARS[p.idx % AVATARS.length];
+  const emoji = p.avatar || AVATARS[p.idx % AVATARS.length];
   const color = AVATAR_COLORS[p.idx % AVATAR_COLORS.length];
   return (
     <div className={`relative flex flex-col items-center rounded-2xl px-2 pt-2 pb-1 min-w-[92px] transition-all panel ${active ? "pulse-gold" : ""}`}
@@ -450,7 +474,7 @@ function OpponentCard({ p, active, seconds, emote }) {
       <div className="flex items-center gap-1.5">
         <span className="flex items-center justify-center rounded-full text-base shrink-0"
           style={{ width: 30, height: 30, background: color + "33", border: `2px solid ${active ? "#fbbf24" : color}`, boxShadow: "0 2px 5px rgba(0,0,0,.4)" }}>
-          {p.isBot ? "🤖" : emoji}
+          {emoji}
         </span>
         <CardFan count={p.handCount} />
       </div>
@@ -529,6 +553,7 @@ const socket = io();
 function App() {
   const [srv, setSrv] = useState(null);          // dernier état reçu du serveur
   const [name, setName] = useState(store.get("ramimp-name") || "");
+  const [avatar, setAvatar] = useState(store.get("ramimp-avatar") || AVATARS_POOL[0]);
   const [joinCode, setJoinCode] = useState("");
   const [turnSeconds, setTurnSeconds] = useState(45);
   const [level, setLevel] = useState("moyen");
@@ -550,6 +575,7 @@ function App() {
   const [drag, setDrag] = useState(null);
   const [saved, setSaved] = useState(null);
   const [connErr, setConnErr] = useState("");
+  const [connLost, setConnLost] = useState(false);
 
   const orderRef = useRef([]);          // ordre local des cartes de la main
   const prevIdsRef = useRef([]);
@@ -577,7 +603,8 @@ function App() {
 
   // ---------- Connexion & événements serveur ----------
   useEffect(() => {
-    socket.on("state", (st) => { setSrv(st); setConnErr(""); });
+    socket.on("state", (st) => { setSrv(st); setConnErr(""); setConnLost(false); });
+    socket.on("disconnect", () => setConnLost(true));
     socket.on("info", (m) => setMsg(m));
     socket.on("roomClosed", () => { setSrv(null); setMsg("Le salon a été fermé (inactivité)."); store.del("ramimp-save"); });
     socket.on("kicked", (m) => { setSrv(null); setMsg(m || "L'hôte t'a retiré du salon."); store.del("ramimp-save"); });
@@ -594,7 +621,8 @@ function App() {
     const raw = store.get("ramimp-save");
     if (raw) { try { setSaved(JSON.parse(raw)); } catch (_) {} }
     const keepAlive = setInterval(() => { fetch("/ping").catch(() => {}); }, 240000);
-    return () => { clearInterval(keepAlive); socket.off("state"); socket.off("info"); socket.off("fx"); socket.off("roomClosed"); socket.off("kicked"); socket.off("emote"); socket.off("connect_error"); };
+    const resync = setInterval(() => { if (socket.connected) socket.emit("resync"); }, 10000);
+    return () => { clearInterval(keepAlive); clearInterval(resync); socket.off("state"); socket.off("info"); socket.off("fx"); socket.off("roomClosed"); socket.off("kicked"); socket.off("emote"); socket.off("disconnect"); socket.off("connect_error"); };
   }, []);
 
   // Reconnexion automatique après coupure réseau
@@ -604,7 +632,10 @@ function App() {
       if (raw) { try { const d = JSON.parse(raw); socket.emit("rejoin", { code: d.code, token: d.token }, () => {}); } catch (_) {} }
     };
     socket.io.on("reconnect", onReconnect);
-    return () => socket.io.off("reconnect", onReconnect);
+    socket.on("connect", onReconnect);
+    const onVis = () => { if (document.visibilityState === "visible") { if (socket.connected) onReconnect(); else socket.connect(); } };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { socket.io.off("reconnect", onReconnect); socket.off("connect", onReconnect); document.removeEventListener("visibilitychange", onVis); };
   }, []);
 
   useEffect(() => { SFX_MUTED = muted; store.set("ramimp-muted", muted ? "1" : "0"); }, [muted]);
@@ -719,7 +750,8 @@ function App() {
     ensureAudio();
     const n = name.trim() || "Joueur";
     store.set("ramimp-name", n);
-    socket.emit("createRoom", { name: n, options: { turnSeconds, level } }, (res) => {
+    store.set("ramimp-avatar", avatar);
+    socket.emit("createRoom", { name: n, options: { turnSeconds, level }, avatar }, (res) => {
       if (!res.ok) return setMsg(res.error || "Erreur.");
       store.set("ramimp-save", JSON.stringify({ code: res.code, token: res.token, name: n }));
       setSaved(null);
@@ -729,7 +761,8 @@ function App() {
     ensureAudio();
     const n = name.trim() || "Joueur";
     store.set("ramimp-name", n);
-    socket.emit("joinRoom", { code: joinCode.trim().toUpperCase(), name: n }, (res) => {
+    store.set("ramimp-avatar", avatar);
+    socket.emit("joinRoom", { code: joinCode.trim().toUpperCase(), name: n, avatar }, (res) => {
       if (!res.ok) return setMsg(res.error || "Erreur.");
       store.set("ramimp-save", JSON.stringify({ code: res.code, token: res.token, name: n }));
       setSaved(null);
@@ -757,6 +790,28 @@ function App() {
     setSelected([]); setMsg("");
   }
   function unstage(i) { setStaged((st) => st.filter((_, k) => k !== i)); }
+
+  function addToStagedCards(gi, cardIds) {
+    const grp = staged[gi];
+    if (!grp || (me && me.posed)) return;
+    const cards = visibleHand.filter((c) => cardIds.includes(c.id));
+    if (cards.length === 0) return;
+    const candidate = [...grp.cards, ...cards];
+    const okG = grp.type === "tri" ? isTri(candidate) : isEscalier(candidate);
+    if (!okG) {
+      setMsg("Cette carte ne va pas dans ce " + (grp.type === "tri" ? "tri" : "escalier") + ".");
+      return;
+    }
+    setStaged((st) => st.map((m, k) => (k === gi ? { ...m, cards: normMeld(m.type, candidate) } : m)));
+    setSelected([]);
+    setMsg("Carte ajoutée au groupe ✓");
+    sfx("draw");
+  }
+
+  function addToStaged(gi) {
+    if (selected.length === 0) { setMsg("Sélectionne d'abord la carte à ajouter, puis touche le groupe."); return; }
+    addToStagedCards(gi, selected);
+  }
 
   function sendEmote(text) {
     const now = Date.now();
@@ -850,7 +905,10 @@ function App() {
     if (!d) return;
     if (!d.dragging && Math.hypot(e.clientX - d.startX, e.clientY - d.startY) > 8) { d.dragging = true; lastTargetRef.current = -1; }
     if (d.dragging) {
-      setDrag({ id: d.id, card: d.card, x: e.clientX, y: e.clientY });
+      const dr = discardRef.current && discardRef.current.getBoundingClientRect();
+      const overD = Boolean(dr) && [[e.clientX, e.clientY], [e.clientX, e.clientY - 34]].some(([px, py]) =>
+        px >= dr.left - 16 && px <= dr.right + 16 && py >= dr.top - 16 && py <= dr.bottom + 16);
+      setDrag({ id: d.id, card: d.card, x: e.clientX, y: e.clientY, over: overD ? "discard" : null });
       const hr = handRef.current && handRef.current.getBoundingClientRect();
       if (!(hr && e.clientY >= hr.top - 10 && e.clientY <= hr.bottom + 10)) return;
       const vi = insertionIndexAt(e.clientX, e.clientY);
@@ -886,23 +944,36 @@ function App() {
     if (g && g.discardTop && g.discardTop.joker) { setMsg("Impossible de récupérer un joker jeté — il est perdu !"); return; }
     const vi = insertionIndexAt(x, y);
     pendingInsertRef.current = visibleIndexToOrderIndex(vi);
-    if (g.phase === "buyWindow") act({ type: "buy" });
+    if (g.phase === "buyWindow") {
+      if (g.buyNextIdx === youIdx) socket.emit("claimNext");
+      else act({ type: "buy" });
+    }
     else if (myTurn && g.phase === "draw") act({ type: "draw", source: "discard" });
     else { pendingInsertRef.current = null; setMsg("Tu ne peux pas prendre cette carte maintenant."); }
   }
 
   function handleDrop(x, y, card) {
+    const pts = [[x, y], [x, y - 34]]; // le doigt ET le centre de la carte fantôme (affichée plus haut)
+    const inRect = (r, m) => Boolean(r) && pts.some(([px, py]) => px >= r.left - m && px <= r.right + m && py >= r.top - m && py <= r.bottom + m);
     const dr = discardRef.current && discardRef.current.getBoundingClientRect();
-    if (dr && x >= dr.left - 12 && x <= dr.right + 12 && y >= dr.top - 12 && y <= dr.bottom + 12) {
+    if (inRect(dr, 16)) {
       if (myTurn && g.phase === "play") { discardById(card.id); }
       else if (myTurn && g.phase === "draw") setMsg("Pioche d'abord, tu jetteras ensuite.");
       else setMsg("Tu pourras jeter pendant ton tour.");
       return;
     }
+    const stagedEls = document.querySelectorAll("[data-sid]");
+    for (const el of stagedEls) {
+      const r = el.getBoundingClientRect();
+      if (inRect(r, 6)) {
+        addToStagedCards(Number(el.getAttribute("data-sid")), [card.id]);
+        return;
+      }
+    }
     const meldEls = document.querySelectorAll("[data-mid]");
     for (const el of meldEls) {
       const r = el.getBoundingClientRect();
-      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
+      if (inRect(r, 4)) {
         const mid = Number(el.getAttribute("data-mid"));
         if (me && me.posed) completeWith(mid, card.id);
         else setMsg("Pose d'abord ton contrat avant de compléter.");
@@ -937,7 +1008,11 @@ function App() {
       return;
     }
     if (g && g.discardTop && g.discardTop.joker) { setMsg("Impossible de récupérer un joker jeté — il est perdu !"); return; }
-    if (g && g.phase === "buyWindow") { act({ type: "buy" }); return; }
+    if (g && g.phase === "buyWindow") {
+      if (g.buyNextIdx === youIdx) socket.emit("claimNext");
+      else act({ type: "buy" });
+      return;
+    }
     if (myTurn && g.phase === "draw") act({ type: "draw", source: "discard" });
     else if (g && !g.roundOver) setMsg("L'achat se fait dans la fenêtre qui suit chaque défausse.");
   }
@@ -987,6 +1062,15 @@ function App() {
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Joueur" maxLength={14}
               className="bg-emerald-950/70 border border-emerald-600 rounded-xl p-2.5 text-emerald-100 placeholder-emerald-500" />
           </label>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs text-emerald-300">Ton emoji</span>
+            <div className="flex flex-wrap gap-1.5 justify-center">
+              {AVATARS_POOL.map((a) => (
+                <button key={a} onClick={() => setAvatar(a)}
+                  className={`text-xl rounded-xl p-1.5 transition-all ${avatar === a ? "btn-gold scale-110" : "btn-dark"}`}>{a}</button>
+              ))}
+            </div>
+          </div>
           {saved && (
             <button onClick={rejoinSaved} className="btn-green font-bold py-2.5 rounded-xl text-sm">
               ▶ Reprendre la partie ({saved.code})
@@ -1038,7 +1122,7 @@ function App() {
         <div className="panel rounded-2xl p-4 w-full max-w-xs">
           {srv.players.map((p) => (
             <div key={p.idx} className="flex items-center gap-2 py-1.5 border-b border-emerald-800 last:border-0">
-              <span className="text-lg">{p.isBot ? "🤖" : AVATARS[p.idx % AVATARS.length]}</span>
+              <span className="text-lg">{p.avatar || "🙂"}{p.isBot ? <span className="text-[10px]"> 🤖</span> : null}</span>
               <span className="font-bold text-sm flex-1">{p.name}{p.idx === youIdx ? " (toi)" : ""}</span>
               {(p.wins || 0) > 0 && <span className="text-[9px] text-amber-300 font-bold">🏆{p.wins}</span>}
               {p.idx === 0 && <span className="text-[9px] text-amber-300 uppercase">hôte</span>}
@@ -1049,6 +1133,21 @@ function App() {
             </div>
           ))}
           {srv.players.length < 3 && <p className="text-[10px] text-emerald-400 mt-2">Minimum 3 joueurs pour lancer{isHost ? " — ajoute un bot si besoin" : ""}.</p>}
+          <div className="border-t border-emerald-800 mt-2 pt-2">
+            <span className="text-[10px] text-emerald-300">Ton emoji (les grisés sont pris) :</span>
+            <div className="flex flex-wrap gap-1 justify-center mt-1">
+              {AVATARS_POOL.map((a) => {
+                const owner = srv.players.find((p) => p.avatar === a);
+                const mine = me && me.avatar === a;
+                const taken = owner && !mine && !owner.isBot; // les emojis des bots restent réclamables
+                return (
+                  <button key={a} disabled={taken}
+                    onClick={() => { socket.emit("setAvatar", a); store.set("ramimp-avatar", a); }}
+                    className={`text-lg rounded-xl p-1 transition-all ${mine ? "btn-gold scale-110" : taken ? "opacity-30" : "btn-dark"}`}>{a}</button>
+                );
+              })}
+            </div>
+          </div>
         </div>
         {isHost ? (
           <div className="flex gap-2">
@@ -1075,15 +1174,34 @@ function App() {
         <div className="panel rounded-2xl p-5 w-full max-w-xs">
           {ranking.map((p, i) => (
             <div key={p.idx} className={`flex justify-between py-2 border-b border-emerald-800 last:border-0 ${i === 0 ? "text-amber-300 font-bold" : ""}`}>
-              <span>{i === 0 ? "👑 " : `${i + 1}. `}{p.isBot ? "🤖" : AVATARS[p.idx % AVATARS.length]} {p.name}</span>
+              <span>{i === 0 ? "👑 " : `${i + 1}. `}{p.avatar || "🙂"} {p.name}{p.isBot ? " 🤖" : ""}</span>
               <span>{p.total} pts{(p.wins || 0) > 0 ? " · 🏆" + p.wins : ""}</span>
             </div>
           ))}
         </div>
-        {isHost ? (
-          <button onClick={() => socket.emit("rematch")} className="btn-gold font-bold py-3 px-8 rounded-xl pulse-gold">🔁 Revanche !</button>
+        {srv.rematch ? (
+          <div className="panel rounded-2xl p-4 w-full max-w-xs text-center" style={{ borderColor: "#fbbf24" }}>
+            <div className="text-sm font-bold text-amber-200 mb-1">🔁 Revanche proposée !</div>
+            <div className="text-base mb-2">
+              {srv.players.map((p) => (
+                <span key={p.idx} className="mr-2 whitespace-nowrap">
+                  {p.avatar}{srv.rematch.accepted.includes(p.idx) ? "✅" : srv.rematch.declined.includes(p.idx) ? "❌" : "⏳"}
+                </span>
+              ))}
+            </div>
+            {!srv.rematch.accepted.includes(youIdx) && !srv.rematch.declined.includes(youIdx) ? (
+              <div className="flex gap-2 justify-center">
+                <button onClick={() => socket.emit("rematchVote", true)} className="btn-green px-4 py-2 rounded-xl text-sm font-bold">✅ Je rejoue !</button>
+                <button onClick={() => socket.emit("rematchVote", false)} className="btn-red px-4 py-2 rounded-xl text-sm font-bold">Non merci</button>
+              </div>
+            ) : (
+              <p className="text-xs text-emerald-300 animate-pulse">En attente des autres joueurs… (30 s max)</p>
+            )}
+          </div>
+        ) : isHost ? (
+          <button onClick={() => socket.emit("rematch")} className="btn-gold font-bold py-3 px-8 rounded-xl pulse-gold">🔁 Proposer une revanche</button>
         ) : (
-          <p className="text-sm text-emerald-300 animate-pulse">L'hôte peut lancer une revanche — le compteur 🏆 continue…</p>
+          <p className="text-sm text-emerald-300 animate-pulse">L'hôte peut proposer une revanche — le compteur 🏆 continue…</p>
         )}
         <button onClick={quitRoom} className="text-xs text-emerald-400 underline">Retour à l'accueil</button>
       </div>
@@ -1102,6 +1220,11 @@ function App() {
   return (
     <div className="min-h-screen flex flex-col text-emerald-100" style={bgStyle}>
       {STYLE}
+      {connLost && (
+        <div className="fixed top-12 left-1/2 -translate-x-1/2 z-50 bg-red-600 text-white text-xs font-bold px-4 py-2 rounded-2xl shadow-xl animate-pulse">
+          ⚠ Connexion perdue — reconnexion en cours…
+        </div>
+      )}
       {intro && (
         <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
           <div className="panel rounded-3xl px-8 py-5 text-center" style={{ borderColor: "#fbbf24", animation: "introPop 2.2s ease forwards" }}>
@@ -1188,7 +1311,7 @@ function App() {
         {[...new Set(g.melds.map((m) => m.owner))].map((o) => (
           <div key={o} className="flex items-center gap-1.5 overflow-x-auto" style={{ paddingRight: 84 }}>
             <span className="shrink-0 text-base" style={{ width: 22 }} title={(srv.players[o] || {}).name}>
-              {(srv.players[o] || {}).isBot ? "🤖" : AVATARS[o % AVATARS.length]}
+              {(srv.players[o] || {}).avatar || "🙂"}
             </span>
             {g.melds.filter((m) => m.owner === o).map((m) => (
               <MeldChip key={m.id} mid={m.id} meld={m}
@@ -1204,6 +1327,21 @@ function App() {
         <div className="mx-3 my-1 py-2 rounded-xl panel text-center" style={{ borderColor: "#f87171" }}>
           <div className="text-xs text-red-300 font-bold">Mode automatique (l'IA joue pour toi)</div>
           <button onClick={() => act({ type: "resume" })} className="btn-gold px-4 py-1.5 rounded-xl text-xs font-bold mt-1">✋ Reprendre la main</button>
+        </div>
+      ) : buyOpen && g.buyNextIdx === youIdx ? (
+        <div className="mx-3 my-1 py-2 px-3 rounded-xl panel pulse-gold flex items-center justify-center gap-3" style={{ borderColor: "#34d399" }}>
+          {topDiscard && <Card card={topDiscard} small flat />}
+          <div className="text-center">
+            <div className="text-xs font-bold text-emerald-200">
+              C'est ton tour ensuite — <span className="text-amber-300">tu es prioritaire</span> <span className="text-amber-300 text-sm">{secLeft(g.buyWindowUntil)}s</span>
+            </div>
+            <div className="flex gap-2 mt-1 justify-center">
+              <button onClick={() => socket.emit("claimNext")}
+                className="btn-green px-3 py-1.5 rounded-xl text-xs font-bold">👍 Je la prends (gratuit)</button>
+              <button onClick={() => { socket.emit("passNext"); setPassedWindow(g.buyWindowUntil); }}
+                className="btn-dark px-3 py-1.5 rounded-xl text-xs font-bold">Laisser</button>
+            </div>
+          </div>
         </div>
       ) : buyOpen ? (
         <div className="mx-3 my-1 py-2 px-3 rounded-xl panel pulse-gold flex items-center justify-center gap-3" style={{ borderColor: "#fbbf24" }}>
@@ -1225,7 +1363,7 @@ function App() {
         </div>
       ) : !g.roundOver && (
         <div className="mx-3 my-1 py-1 rounded-xl panel text-center text-xs text-emerald-300">
-          {(srv.players[g.turn] || {}).isBot ? "🤖" : AVATARS[g.turn % AVATARS.length]} {(srv.players[g.turn] || {}).name} est en train de jouer…
+          {(srv.players[g.turn] || {}).avatar || "🙂"} {(srv.players[g.turn] || {}).name} est en train de jouer…
         </div>
       )}
 
@@ -1246,7 +1384,7 @@ function App() {
           onPointerCancel={() => { discardDragInfo.current = null; setDrag(null); }}
           style={{ touchAction: "none" }}
           className={`flex flex-col items-center gap-1 active:scale-95 transition-transform rounded-xl ${drag && !drag.fromDiscard && myTurn && g.phase === "play" ? "pulse-gold" : ""}`}>
-          <div style={{ transform: "rotate(4deg)" }}>
+          <div style={{ transform: drag && drag.over === "discard" ? "rotate(4deg) scale(1.18)" : "rotate(4deg)", transition: "transform .12s" }}>
             {topDiscard ? <Card card={topDiscard} /> : <div style={{ height: 58, width: 40 }} className="rounded-lg border-2 border-dashed border-emerald-600" />}
           </div>
           <span className="text-[10px] text-emerald-300 font-bold">
@@ -1260,10 +1398,12 @@ function App() {
         <div className="px-3 py-1.5 flex gap-2 flex-wrap items-center bg-emerald-950/50 border-t border-emerald-800/60">
           <span className="text-[10px] text-amber-300 font-bold uppercase">Prêt :</span>
           {staged.map((m, i) => (
-            <div key={i} className="flex items-center gap-1 rounded-xl p-1 panel" style={{ borderColor: "#f59e0b88" }}>
+            <div key={i} data-sid={i} onClick={() => addToStaged(i)}
+              className={`flex items-center gap-1 rounded-xl p-1 panel ${selected.length > 0 || drag ? "pulse-gold" : ""}`}
+              style={{ borderColor: "#f59e0b88" }}>
               <span className="text-[10px] text-amber-300 uppercase font-bold">{m.type === "tri" ? "Tri" : "Esc."}</span>
               <div className="flex gap-0.5">{m.cards.map((c) => <Card key={c.id} card={c} small flat />)}</div>
-              <button onClick={() => unstage(i)} className="text-red-400 text-sm px-1 font-bold">✕</button>
+              <button onClick={(e) => { e.stopPropagation(); unstage(i); }} className="text-red-400 text-sm px-1 font-bold">✕</button>
             </div>
           ))}
         </div>
@@ -1351,7 +1491,7 @@ function App() {
             {[...new Set(g.melds.map((m) => m.owner))].map((o) => (
               <div key={o}>
                 <div className="text-xs text-amber-200 font-bold mb-1">
-                  {(srv.players[o] || {}).isBot ? "🤖" : AVATARS[o % AVATARS.length]} {(srv.players[o] || {}).name}
+                  {(srv.players[o] || {}).avatar || "🙂"} {(srv.players[o] || {}).name}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {g.melds.filter((m) => m.owner === o).map((m) => (
@@ -1401,7 +1541,7 @@ function App() {
               <li><b>Pose</b> quand le contrat est complet (bouton doré), en une seule fois.</li>
               <li><b>Jette</b> une carte pour finir ton tour. Premier à vider sa main = gagnant !</li>
             </ol>
-            <p className="text-[11px] text-emerald-300 mt-3">Gestes : glisse la carte de la défausse dans ta main pour la prendre à l'endroit voulu, glisse une carte sur la défausse pour la jeter, sur une combinaison pour la compléter, ou dans ta main pour la réorganiser. Après chaque défausse, une fenêtre de 4 secondes s'ouvre : chacun peut <b>acheter</b> la carte jetée (+1 pénalité, 3 achats max par manche), priorité dans le sens du jeu. Un joker jeté dans la défausse est perdu pour tous. Échange de joker : si un escalier posé contient un joker (halo violet) et que tu as la carte correspondant à sa position exacte, glisse-la dessus pour récupérer le joker (après avoir posé, jamais sur un tri). Minuteur : {srv.options.turnSeconds}s par tour, sinon le jeu pioche et jette pour toi ; 3 dépassements = mode auto (bouton Reprendre). Si tu es déconnecté, l'IA te remplace et tu reviens avec le code du salon.</p>
+            <p className="text-[11px] text-emerald-300 mt-3">Un groupe « Prêt » n'est pas figé : touche-le avec une carte sélectionnée (ou glisse-la dessus) pour l'y ajouter. Gestes : glisse la carte de la défausse dans ta main pour la prendre à l'endroit voulu, glisse une carte sur la défausse pour la jeter, sur une combinaison pour la compléter, ou dans ta main pour la réorganiser. Après chaque défausse, une fenêtre de 4 secondes s'ouvre : chacun peut <b>acheter</b> la carte jetée (+1 pénalité, 3 achats max par manche), priorité dans le sens du jeu — et le joueur dont c'est le tour ensuite est prioritaire sur tous les acheteurs (bandeau vert « Je la prends »). Un joker jeté dans la défausse est perdu pour tous. Échange de joker : si un escalier posé contient un joker (halo violet) et que tu as la carte correspondant à sa position exacte, glisse-la dessus pour récupérer le joker (après avoir posé, jamais sur un tri). Minuteur : {srv.options.turnSeconds}s par tour, sinon le jeu pioche et jette pour toi ; 3 dépassements = mode auto (bouton Reprendre). Si tu es déconnecté, l'IA te remplace et tu reviens avec le code du salon.</p>
           </div>
         </div>
       )}

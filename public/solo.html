@@ -92,6 +92,8 @@ function vibrate(pattern) {
   try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (_) {}
 }
 
+const AVATARS_POOL = ["🦁", "🐯", "🦊", "🐼", "🐸", "🦉", "🐙", "🦜", "🐢", "🦎"];
+
 const SUCCES_LIST = [
   { id: "premiere_victoire", nom: "Première victoire", desc: "Gagner une partie complète" },
   { id: "maitre", nom: "Maître du Rami", desc: "Gagner 10 parties" },
@@ -239,7 +241,20 @@ function helpArrangement(hand, contract, variant) {
   const jokers = hand.filter((c) => c.joker);
   const reals = hand.filter((c) => !c.joker);
   const rotArr = (arr) => (arr.length ? arr.map((_, i) => arr[(i + variant) % arr.length]) : arr);
-  const preferEsc = contract.poseTout ? variant % 2 === 1 : (contract.esc || 0) > 0 && ((contract.tri || 0) === 0 || variant % 2 === 0);
+
+  // 1) Le contrat d'abord : le planificateur (jokers compris) réserve ce qu'il faut
+  let planOK = false;
+  if (!contract.poseTout && ((contract.tri || 0) > 0 || (contract.esc || 0) > 0)) {
+    const plan = aiPlanContract(hand, { tri: contract.tri || 0, esc: contract.esc || 0 }, "difficile");
+    if (plan) {
+      planOK = true;
+      for (const m of plan) {
+        const cards = m.type === "esc" ? sortEscalier(m.cards) : m.cards;
+        cards.forEach((c) => used.add(c.id));
+        groups.push({ kind: m.type, cards, complete: true, forContract: true, withJoker: m.cards.some((c) => c.joker) });
+      }
+    }
+  }
 
   const byRankGroups = () => {
     const m = {};
@@ -253,16 +268,6 @@ function helpArrangement(hand, contract, variant) {
       groups.push({ kind: "esc", cards: run, complete: true });
     }
   };
-  const takeTris = () => {
-    const m = byRankGroups();
-    for (const r of rotArr(Object.keys(m))) {
-      const grp = m[r].filter((c) => !used.has(c.id));
-      if (grp.length >= 3) {
-        grp.slice(0, 4).forEach((c) => used.add(c.id));
-        groups.push({ kind: "tri", cards: grp.slice(0, 4), complete: true });
-      }
-    }
-  };
   const takeJokerRuns = () => {
     for (const jr of rotArr(findJokerRuns(hand))) {
       const jks = jokers.filter((c) => !used.has(c.id));
@@ -274,8 +279,20 @@ function helpArrangement(hand, contract, variant) {
       groups.push({ kind: "esc", cards, complete: true, withJoker: true });
     }
   };
+  const takeTris = () => {
+    const m = byRankGroups();
+    for (const r of rotArr(Object.keys(m))) {
+      const grp = m[r].filter((c) => !used.has(c.id));
+      if (grp.length >= 3) {
+        grp.slice(0, 4).forEach((c) => used.add(c.id));
+        groups.push({ kind: "tri", cards: grp.slice(0, 4), complete: true });
+      }
+    }
+  };
+  const preferEsc = contract.poseTout ? variant % 2 === 1 : (contract.esc || 0) >= (contract.tri || 0) ? variant % 2 === 0 : variant % 2 === 1;
   if (preferEsc) { takeRuns(); takeJokerRuns(); takeTris(); } else { takeTris(); takeRuns(); takeJokerRuns(); }
 
+  // Ébauches : paires (futur tri) et voisins de suite (futur escalier)
   const m2 = byRankGroups();
   for (const r of rotArr(Object.keys(m2))) {
     const grp = m2[r].filter((c) => !used.has(c.id));
@@ -291,8 +308,17 @@ function helpArrangement(hand, contract, variant) {
       if (b.rank - a.rank <= 2) { used.add(a.id); used.add(b.id); groups.push({ kind: "esc", cards: [a, b], complete: false }); }
     }
   }
+  // Les jokers libres rejoignent les ébauches (escaliers d'abord, puis paires)
+  for (const grp of [...groups.filter((x) => !x.complete && x.kind === "esc"), ...groups.filter((x) => !x.complete && x.kind === "tri")]) {
+    const jk = jokers.find((c) => !used.has(c.id));
+    if (!jk) break;
+    used.add(jk.id);
+    grp.cards = [...grp.cards, jk];
+    grp.plusJoker = true;
+  }
+
   const wantTri = contract.tri || 0, wantEsc = contract.esc || 0;
-  const gScore = (x) => (x.complete ? 0 : 10) + ((x.kind === "tri" && wantTri > 0) || (x.kind === "esc" && wantEsc > 0) || contract.poseTout ? 0 : 5);
+  const gScore = (x) => (x.forContract ? -20 : 0) + (x.complete ? 0 : 10) + ((x.kind === "tri" && wantTri > 0) || (x.kind === "esc" && wantEsc > 0) || contract.poseTout ? 0 : 5);
   const buckets = {};
   groups.forEach((x) => { const sc = gScore(x); (buckets[sc] = buckets[sc] || []).push(x); });
   const arranged = [];
@@ -307,23 +333,22 @@ function helpArrangement(hand, contract, variant) {
   const leftKey = variant % 2 === 0
     ? (c) => SUITS.indexOf(c.suit) * 20 + c.rank
     : (c) => c.rank * 8 + SUITS.indexOf(c.suit);
-  hand.filter((c) => !c.joker && !used.has(c.id))
-    .sort((a, b) => leftKey(a) - leftKey(b))
-    .forEach((c) => order.push(c));
+  hand.filter((c) => !c.joker && !used.has(c.id)).sort((a, b) => leftKey(a) - leftKey(b)).forEach((c) => order.push(c));
   jokers.forEach((c) => { if (!used.has(c.id)) order.push(c); });
 
   const nTri = groups.filter((x) => x.kind === "tri" && x.complete).length;
   const nEsc = groups.filter((x) => x.kind === "esc" && x.complete && !x.withJoker).length;
-  const jEsc = groups.filter((x) => x.withJoker).length;
+  const jEsc = groups.filter((x) => x.complete && x.withJoker).length;
   const pTri = groups.filter((x) => x.kind === "tri" && !x.complete).length;
   const pEsc = groups.filter((x) => x.kind === "esc" && !x.complete).length;
+  const pJk = groups.filter((x) => !x.complete && x.plusJoker).length;
   const parts = [];
   if (nTri) parts.push(nTri + " tri" + (nTri > 1 ? "s" : "") + " complet" + (nTri > 1 ? "s" : ""));
   if (nEsc) parts.push(nEsc + " escalier" + (nEsc > 1 ? "s" : "") + " complet" + (nEsc > 1 ? "s" : ""));
-  if (jEsc) parts.push(jEsc + " escalier" + (jEsc > 1 ? "s" : "") + " avec joker 🤡");
+  if (jEsc) parts.push(jEsc + " avec joker 🤡");
   if (pTri) parts.push(pTri + " paire" + (pTri > 1 ? "s" : "") + " (futur tri)");
-  if (pEsc) parts.push(pEsc + " début" + (pEsc > 1 ? "s" : "") + " d'escalier");
-  const summary = parts.length ? "repérés : " + parts.join(" · ") : "rien à regrouper pour l'instant, pioche encore !";
+  if (pEsc) parts.push(pEsc + " début" + (pEsc > 1 ? "s" : "") + " d'escalier" + (pJk ? " (joker accolé)" : ""));
+  const summary = (planOK ? "🎯 ton contrat est réalisable ! " : "") + (parts.length ? "repérés : " + parts.join(" · ") : "rien à regrouper pour l'instant, pioche encore !");
   return { order, summary };
 }
 
@@ -698,6 +723,7 @@ function RamiRoyal() {
   const [succesBanner, setSuccesBanner] = useState(null);
   const [showSucces, setShowSucces] = useState(false);
   const [stats, setStats] = useState(readJSON("rami-stats"));
+  const [myAvatar, setMyAvatar] = useState(store.get("rami-avatar") || AVATARS_POOL[0]);
   const [muted, setMuted] = useState(store.get("rami-muted") === "1");
   const [intro, setIntro] = useState(null);
   const [hasSave, setHasSave] = useState(false);
@@ -742,14 +768,15 @@ function RamiRoyal() {
   function startGame() {
     const name = playerName.trim() || "Joueur 1";
     const players = [
-      { name, isAI: false, avatar: "🙂", color: "#fbbf24" },
+      { name, isAI: false, avatar: myAvatar, color: "#fbbf24" },
       ...Array.from({ length: nbAI }, (_, i) => ({
         name: "Joueur " + (i + 2), isAI: true,
-        avatar: AVATARS[i % AVATARS.length], color: AVATAR_COLORS[i % AVATAR_COLORS.length],
+        avatar: AVATARS_POOL.filter((a) => a !== myAvatar)[i % (AVATARS_POOL.length - 1)], color: AVATAR_COLORS[i % AVATAR_COLORS.length],
       })),
     ];
     ensureAudio();
     store.set("rami-name", name);
+    store.set("rami-avatar", myAvatar);
     store.set("rami-level", level);
     setG({ ...newRound(players, startManche - 1, null), level });
     setSelected([]);
@@ -1003,6 +1030,10 @@ function RamiRoyal() {
     const top = state.discard[state.discard.length - 1];
     const aiBuyer = pickAiBuyer(state, discarderIdx, nextIdx);
     const humanEligible = discarderIdx !== 0 && nextIdx !== 0 && state.players[0].buysLeft > 0 && Boolean(top) && !top.joker;
+    // Priorité du joueur suivant : si un bot veut acheter alors que TON tour arrive, tu choisis d'abord
+    if (!humanEligible && nextIdx === 0 && aiBuyer != null && Boolean(top) && !top.joker) {
+      return { ...state, phase: "buyWindow", buyWindow: { discarderIdx, nextIdx, aiBuyer, priority: true, until: Date.now() + BUY_WINDOW_MS } };
+    }
     if (!humanEligible) {
       let ns = state;
       if (aiBuyer != null) ns = execBuy(ns, aiBuyer);
@@ -1015,16 +1046,44 @@ function RamiRoyal() {
     if (!s || !s.buyWindow || s.roundOver) return s;
     const bw = s.buyWindow;
     const n = s.players.length;
+    // Mode priorité : ton tour arrive, un bot voulait acheter — à toi de décider
+    if (bw.priority) {
+      let ns = { ...s, buyWindow: null };
+      if (humanChoice === "buy" && ns.discard.length > 0) {
+        const taken = takeCard(ns.stock, ns.discard, "discard");
+        const players = ns.players.map((p, i) => {
+          if (i !== 0) return p;
+          const hand = [...p.hand];
+          const at = insertAt == null ? hand.length : Math.max(0, Math.min(insertAt, hand.length));
+          hand.splice(at, 0, taken.card);
+          return { ...p, hand };
+        });
+        ns = { ...ns, stock: taken.stock, discard: taken.discard, players, lastDrawn: [taken.card.id], turn: 0, phase: "play", justPosed: false };
+        setMsg("Tu prends " + cardName(taken.card) + " (prioritaire) — joue puis jette une carte.");
+        sfx("take");
+        return addLog(ns, "Tu prends " + cardName(taken.card) + " (prioritaire)");
+      }
+      if (bw.aiBuyer != null && ns.discard.length > 0) ns = execBuy(ns, bw.aiBuyer);
+      return { ...ns, turn: bw.nextIdx, phase: "draw", justPosed: false };
+    }
+    // Fenêtre classique : le joueur suivant (IA) reste prioritaire s'il veut la carte
     const wants = [];
     const topD = s.discard[s.discard.length - 1];
-    if (humanChoice === "buy" && s.players[0].buysLeft > 0 && topD && !topD.joker) wants.push({ idx: 0, insertAt });
+    const nextP = s.players[bw.nextIdx];
+    if (humanChoice === "buy" && s.players[0].buysLeft > 0 && topD && !topD.joker) {
+      if (nextP && nextP.isAI && aiWantsBuy(nextP, topD, s.level || "moyen")) {
+        setMsg(nextP.name + " est le joueur suivant : il est prioritaire et garde la carte pour son tour.");
+      } else {
+        wants.push({ idx: 0, insertAt });
+      }
+    }
     if (bw.aiBuyer != null) wants.push({ idx: bw.aiBuyer });
     let ns = { ...s, buyWindow: null };
     if (wants.length > 0 && ns.discard.length > 0) {
       wants.sort((a, b) => ((a.idx - bw.discarderIdx + n) % n) - ((b.idx - bw.discarderIdx + n) % n));
       const w = wants[0];
       ns = execBuy(ns, w.idx, w.insertAt);
-      if (humanChoice === "buy" && w.idx !== 0) {
+      if (humanChoice === "buy" && w.idx !== 0 && wants.some((x) => x.idx === 0)) {
         setMsg(ns.players[w.idx].name + " était mieux placé dans le sens du jeu — achat manqué.");
       }
     }
@@ -1064,36 +1123,7 @@ function RamiRoyal() {
     });
   }
 
-  function playerBuyOutOfTurn() {
-    ensureAudio();
-    sfx("take");
-    setG((s) => {
-      if (s.roundOver || s.turn === 0) return s;
-      if (s.discard.length === 0) return s;
-      if (s.players[0].buysLeft <= 0) {
-        setMsg("Plus d'achats disponibles (" + MAX_ACHATS + " max par manche).");
-        return s;
-      }
-      const bought = takeCard(s.stock, s.discard, "discard");
-      const penalty = takeCard(bought.stock, bought.discard, "stock");
-      const players = s.players.map((p, i) =>
-        i === 0 ? { ...p, hand: [...p.hand, bought.card, penalty.card], buysLeft: p.buysLeft - 1 } : p
-      );
-      setMsg("Achat hors tour : " + cardName(bought.card) + " + 1 carte de pénalité.");
-      let ns = {
-        ...s, stock: penalty.stock, discard: penalty.discard, players,
-        lastDrawn: [bought.card.id, penalty.card.id],
-        animEvents: [
-          { source: "discard", target: "p0", card: bought.card, faceDown: false },
-          { source: "stock", target: "p0", card: null, faceDown: true },
-        ],
-        animSeq: ++ANIM_SEQ,
-      };
-      return addLog(ns, "Tu achètes " + cardName(bought.card) + " hors tour (+1 pénalité)");
-    });
-  }
-
-  function tapCard(id) {
+function tapCard(id) {
     setSelected((sel) => (sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id]));
   }
 
@@ -1113,7 +1143,10 @@ function RamiRoyal() {
     const dx = e.clientX - d.startX, dy = e.clientY - d.startY;
     if (!d.dragging && Math.hypot(dx, dy) > 8) { d.dragging = true; lastTargetRef.current = -1; }
     if (d.dragging) {
-      setDrag({ id: d.id, card: d.card, x: e.clientX, y: e.clientY });
+      const dr = discardRef.current && discardRef.current.getBoundingClientRect();
+      const overD = Boolean(dr) && [[e.clientX, e.clientY], [e.clientX, e.clientY - 34]].some(([px, py]) =>
+        px >= dr.left - 16 && px <= dr.right + 16 && py >= dr.top - 16 && py <= dr.bottom + 16);
+      setDrag({ id: d.id, card: d.card, x: e.clientX, y: e.clientY, over: overD ? "discard" : null });
       const hr = handRef.current && handRef.current.getBoundingClientRect();
       if (hr && e.clientY >= hr.top - 10 && e.clientY <= hr.bottom + 10) reorderTo(e.clientX, e.clientY, d.id);
     }
@@ -1223,17 +1256,27 @@ function RamiRoyal() {
   }
 
   function handleDrop(x, y, card) {
+    const pts = [[x, y], [x, y - 34]]; // le doigt ET le centre de la carte fantôme (affichée plus haut)
+    const inRect = (r, m) => Boolean(r) && pts.some(([px, py]) => px >= r.left - m && px <= r.right + m && py >= r.top - m && py <= r.bottom + m);
     const dr = discardRef.current && discardRef.current.getBoundingClientRect();
-    if (dr && x >= dr.left - 12 && x <= dr.right + 12 && y >= dr.top - 12 && y <= dr.bottom + 12) {
+    if (inRect(dr, 16)) {
       if (myTurn && g.phase === "play") { sfx("discard"); discardById(card.id); }
       else if (myTurn && g.phase === "draw") setMsg("Pioche d'abord, tu jetteras ensuite.");
       else setMsg("Tu pourras jeter pendant ton tour.");
       return;
     }
+    const stagedEls = document.querySelectorAll("[data-sid]");
+    for (const el of stagedEls) {
+      const r = el.getBoundingClientRect();
+      if (inRect(r, 6)) {
+        addToStagedCards(Number(el.getAttribute("data-sid")), [card.id]);
+        return;
+      }
+    }
     const meldEls = document.querySelectorAll("[data-mid]");
     for (const el of meldEls) {
       const r = el.getBoundingClientRect();
-      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
+      if (inRect(r, 4)) {
         const mid = Number(el.getAttribute("data-mid"));
         if (myTurn && g.phase === "play" && me.posed) { sfx("draw"); completeMeldWith(mid, card.id); }
         else setMsg(me.posed ? "Attends ton tour pour compléter." : "Pose d'abord ton contrat avant de compléter.");
@@ -1343,6 +1386,31 @@ function RamiRoyal() {
       setMsg("Combinaisons trouvées automatiquement ! Vérifie puis pose.");
       return { ...s, players, staged: [...s.staged, ...plan.map((m) => ({ ...m, cards: normMeld(m.type, m.cards) }))] };
     });
+  }
+
+  function addToStagedCards(gi, cardIds) {
+    setG((s) => {
+      const grp = s.staged[gi];
+      if (!grp || s.players[0].posed) return s;
+      const cards = s.players[0].hand.filter((c) => cardIds.includes(c.id));
+      if (cards.length === 0) return s;
+      const candidate = [...grp.cards, ...cards];
+      if (!validGroup(grp.type, candidate)) {
+        setMsg("Cette carte ne va pas dans ce " + (grp.type === "tri" ? "tri" : "escalier") + ".");
+        return s;
+      }
+      const players = s.players.map((p, k) => (k === 0 ? { ...p, hand: p.hand.filter((c) => !cardIds.includes(c.id)) } : p));
+      const staged = s.staged.map((m, k) => (k === gi ? { ...m, cards: normMeld(m.type, candidate) } : m));
+      setSelected([]);
+      setMsg("Carte ajoutée au groupe ✓");
+      sfx("draw");
+      return { ...s, players, staged };
+    });
+  }
+
+  function addToStaged(gi) {
+    if (selected.length === 0) { setMsg("Sélectionne d'abord la carte à ajouter, puis touche le groupe."); return; }
+    addToStagedCards(gi, selected);
   }
 
   function unstage(idx) {
@@ -1590,6 +1658,15 @@ function RamiRoyal() {
               placeholder="Joueur 1" maxLength={14}
               className="bg-emerald-950/70 border border-emerald-600 rounded-xl p-2.5 text-emerald-100 placeholder-emerald-500" />
           </label>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs text-emerald-300">Ton emoji</span>
+            <div className="flex flex-wrap gap-1.5 justify-center">
+              {AVATARS_POOL.map((a) => (
+                <button key={a} onClick={() => { setMyAvatar(a); store.set("rami-avatar", a); }}
+                  className={`text-xl rounded-xl p-1.5 transition-all ${myAvatar === a ? "btn-gold scale-110" : "btn-dark"}`}>{a}</button>
+              ))}
+            </div>
+          </div>
           <label className="flex flex-col gap-2 text-sm">
             Adversaires (IA)
             <div className="flex gap-2">
@@ -1804,7 +1881,20 @@ function RamiRoyal() {
       </div>
 
       {/* Indicateur de tour */}
-      {g.buyWindow ? (
+      {g.buyWindow && g.buyWindow.priority ? (
+        <div className="mx-3 my-1 py-2 px-3 rounded-xl panel pulse-gold flex items-center justify-center gap-3" style={{ borderColor: "#34d399" }}>
+          {topDiscard && <Card card={topDiscard} small flat />}
+          <div className="text-center">
+            <div className="text-xs font-bold text-emerald-200">
+              {g.players[g.buyWindow.aiBuyer].name} veut l'acheter — <span className="text-amber-300">tu es prioritaire</span> <span className="text-amber-300 text-sm">{Math.max(0, Math.ceil((g.buyWindow.until - Date.now()) / 1000))}s</span>
+            </div>
+            <div className="flex gap-2 mt-1 justify-center">
+              <button onClick={() => requestBuy()} className="btn-green px-3 py-1.5 rounded-xl text-xs font-bold">👍 Je la prends (gratuit)</button>
+              <button onClick={passBuy} className="btn-dark px-3 py-1.5 rounded-xl text-xs font-bold">Laisser</button>
+            </div>
+          </div>
+        </div>
+      ) : g.buyWindow ? (
         <div className="mx-3 my-1 py-2 px-3 rounded-xl panel pulse-gold flex items-center justify-center gap-3" style={{ borderColor: "#fbbf24" }}>
           {topDiscard && <Card card={topDiscard} small flat />}
           <div className="text-center">
@@ -1845,7 +1935,7 @@ function RamiRoyal() {
           onPointerCancel={endDrag}
           style={{ touchAction: "none" }}
           className={`flex flex-col items-center gap-1 active:scale-95 transition-transform rounded-xl ${drag && drag.origin !== "discard" && myTurn && g.phase === "play" ? "pulse-gold" : ""}`}>
-          <div style={{ transform: "rotate(4deg)", opacity: drag && drag.origin === "discard" ? 0.35 : 1 }}>
+          <div style={{ transform: drag && drag.over === "discard" ? "rotate(4deg) scale(1.18)" : "rotate(4deg)", transition: "transform .12s", opacity: drag && drag.origin === "discard" ? 0.35 : 1 }}>
             {topDiscard ? <Card card={topDiscard} /> : <div style={{ height: 58, width: 40 }} className="rounded-lg border-2 border-dashed border-emerald-600" />}
           </div>
           <span className="text-[10px] text-emerald-300 font-bold">
@@ -1859,10 +1949,12 @@ function RamiRoyal() {
         <div className="px-3 py-1.5 flex gap-2 flex-wrap items-center bg-emerald-950/50 border-t border-emerald-800/60">
           <span className="text-[10px] text-amber-300 font-bold uppercase">Prêt :</span>
           {g.staged.map((m, i) => (
-            <div key={i} className="flex items-center gap-1 rounded-xl p-1 panel" style={{ borderColor: "#f59e0b88" }}>
+            <div key={i} data-sid={i} onClick={() => addToStaged(i)}
+              className={`flex items-center gap-1 rounded-xl p-1 panel ${selected.length > 0 || drag ? "pulse-gold" : ""}`}
+              style={{ borderColor: "#f59e0b88" }}>
               <span className="text-[10px] text-amber-300 uppercase font-bold">{m.type === "tri" ? "Tri" : "Esc."}</span>
               <div className="flex gap-0.5">{m.cards.map((c) => <Card key={c.id} card={c} small flat />)}</div>
-              <button onClick={() => unstage(i)} className="text-red-400 text-sm px-1 font-bold">✕</button>
+              <button onClick={(e) => { e.stopPropagation(); unstage(i); }} className="text-red-400 text-sm px-1 font-bold">✕</button>
             </div>
           ))}
         </div>
@@ -2009,7 +2101,7 @@ function RamiRoyal() {
               <li><b>Pose</b> quand le contrat est complet (bouton doré), en une seule fois.</li>
               <li><b>Jette</b> une carte pour finir ton tour. Premier à vider sa main = gagnant de la manche !</li>
             </ol>
-            <p className="text-[11px] text-emerald-300 mt-3">Gestes : glisse la carte de la défausse dans ta main pour la prendre à l'endroit voulu, glisse une carte sur la défausse pour la jeter, sur une combinaison pour la compléter, ou dans ta main pour la réorganiser. Après chaque défausse, une fenêtre de 4 secondes s'ouvre : chacun peut demander à <b>acheter</b> la carte jetée (+1 carte de pénalité, 3 achats max par manche). Priorité dans le sens du jeu ; sans réponse avant la fin du décompte, personne n'achète. Le joueur suivant, lui, n'a pas besoin d'acheter : il prend gratuitement à son tour. Le joker remplace n'importe quelle carte (min. 3 vraies cartes par combinaison, jamais 2 jokers côte à côte). Un joker jeté dans la défausse est perdu : personne ne peut le prendre ni l'acheter. Échange : si un escalier posé contient un joker (halo violet) et que tu as la carte correspondant à sa position exacte, glisse-la sur cet escalier pour récupérer le joker — possible seulement après avoir posé ton contrat, et jamais sur un tri. Cartes restantes = points : 2-9 → 5 · 10-R → 10 · As → 15 · Joker → 20. Le plus petit total après 8 manches gagne !</p>
+            <p className="text-[11px] text-emerald-300 mt-3">Un groupe « Prêt » n'est pas figé : touche-le avec une carte sélectionnée (ou glisse-la dessus) pour l'y ajouter. Gestes : glisse la carte de la défausse dans ta main pour la prendre à l'endroit voulu, glisse une carte sur la défausse pour la jeter, sur une combinaison pour la compléter, ou dans ta main pour la réorganiser. Après chaque défausse, une fenêtre de 4 secondes s'ouvre : chacun peut demander à <b>acheter</b> la carte jetée (+1 carte de pénalité, 3 achats max par manche). Priorité dans le sens du jeu ; sans réponse avant la fin du décompte, personne n'achète. Le joueur dont c'est le tour ensuite est prioritaire sur tous les acheteurs : s'il veut la carte, il la prend gratuitement et aucun achat ne peut la lui souffler (bandeau vert « Je la prends »). Le joker remplace n'importe quelle carte (min. 3 vraies cartes par combinaison, jamais 2 jokers côte à côte). Un joker jeté dans la défausse est perdu : personne ne peut le prendre ni l'acheter. Échange : si un escalier posé contient un joker (halo violet) et que tu as la carte correspondant à sa position exacte, glisse-la sur cet escalier pour récupérer le joker — possible seulement après avoir posé ton contrat, et jamais sur un tri. Cartes restantes = points : 2-9 → 5 · 10-R → 10 · As → 15 · Joker → 20. Le plus petit total après 8 manches gagne !</p>
             <div className="mt-3 text-[11px] text-emerald-200">
               <b className="text-amber-200">Les 8 manches :</b> {MANCHES.map((m, i) => `${i + 1}. ${m.label}`).join(" · ")}
             </div>
