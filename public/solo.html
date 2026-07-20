@@ -218,6 +218,88 @@ function sortEscalier(cards) {
 
 function normMeld(type, cards) { return type === "esc" ? sortEscalier(cards) : cards; }
 
+
+function helpArrangement(hand, contract, variant) {
+  const used = new Set();
+  const groups = [];
+  const jokers = hand.filter((c) => c.joker);
+  const reals = hand.filter((c) => !c.joker);
+  const rotArr = (arr) => (arr.length ? arr.map((_, i) => arr[(i + variant) % arr.length]) : arr);
+  const preferEsc = contract.poseTout ? variant % 2 === 1 : (contract.esc || 0) > 0 && ((contract.tri || 0) === 0 || variant % 2 === 0);
+
+  const byRankGroups = () => {
+    const m = {};
+    reals.filter((c) => !used.has(c.id)).forEach((c) => { (m[c.rank] = m[c.rank] || []).push(c); });
+    return m;
+  };
+  const takeRuns = () => {
+    for (const run of rotArr(findRuns(hand))) {
+      if (run.some((c) => used.has(c.id))) continue;
+      run.forEach((c) => used.add(c.id));
+      groups.push({ kind: "esc", cards: run, complete: true });
+    }
+  };
+  const takeTris = () => {
+    const m = byRankGroups();
+    for (const r of rotArr(Object.keys(m))) {
+      const grp = m[r].filter((c) => !used.has(c.id));
+      if (grp.length >= 3) {
+        grp.slice(0, 4).forEach((c) => used.add(c.id));
+        groups.push({ kind: "tri", cards: grp.slice(0, 4), complete: true });
+      }
+    }
+  };
+  if (preferEsc) { takeRuns(); takeTris(); } else { takeTris(); takeRuns(); }
+
+  const m2 = byRankGroups();
+  for (const r of rotArr(Object.keys(m2))) {
+    const grp = m2[r].filter((c) => !used.has(c.id));
+    if (grp.length === 2) { grp.forEach((c) => used.add(c.id)); groups.push({ kind: "tri", cards: grp, complete: false }); }
+  }
+  const bySuit = {};
+  reals.filter((c) => !used.has(c.id)).forEach((c) => { (bySuit[c.suit] = bySuit[c.suit] || []).push(c); });
+  for (const s of rotArr(Object.keys(bySuit))) {
+    const arr = bySuit[s].sort((a, b) => a.rank - b.rank);
+    for (let i = 0; i < arr.length - 1; i++) {
+      const a = arr[i], b = arr[i + 1];
+      if (used.has(a.id) || used.has(b.id)) continue;
+      if (b.rank - a.rank <= 2) { used.add(a.id); used.add(b.id); groups.push({ kind: "esc", cards: [a, b], complete: false }); }
+    }
+  }
+  const wantTri = contract.tri || 0, wantEsc = contract.esc || 0;
+  const gScore = (x) => (x.complete ? 0 : 10) + ((x.kind === "tri" && wantTri > 0) || (x.kind === "esc" && wantEsc > 0) || contract.poseTout ? 0 : 5);
+  const buckets = {};
+  groups.forEach((x) => { const sc = gScore(x); (buckets[sc] = buckets[sc] || []).push(x); });
+  const arranged = [];
+  Object.keys(buckets).map(Number).sort((a, b) => a - b).forEach((sc) => {
+    const b = buckets[sc];
+    const off = variant % b.length;
+    arranged.push(...b.slice(off), ...b.slice(0, off));
+  });
+
+  const order = [];
+  arranged.forEach((gr) => order.push(...gr.cards));
+  const leftKey = variant % 2 === 0
+    ? (c) => SUITS.indexOf(c.suit) * 20 + c.rank
+    : (c) => c.rank * 8 + SUITS.indexOf(c.suit);
+  hand.filter((c) => !c.joker && !used.has(c.id))
+    .sort((a, b) => leftKey(a) - leftKey(b))
+    .forEach((c) => order.push(c));
+  jokers.forEach((c) => { if (!used.has(c.id)) order.push(c); });
+
+  const nTri = groups.filter((x) => x.kind === "tri" && x.complete).length;
+  const nEsc = groups.filter((x) => x.kind === "esc" && x.complete).length;
+  const pTri = groups.filter((x) => x.kind === "tri" && !x.complete).length;
+  const pEsc = groups.filter((x) => x.kind === "esc" && !x.complete).length;
+  const parts = [];
+  if (nTri) parts.push(nTri + " tri" + (nTri > 1 ? "s" : "") + " complet" + (nTri > 1 ? "s" : ""));
+  if (nEsc) parts.push(nEsc + " escalier" + (nEsc > 1 ? "s" : "") + " complet" + (nEsc > 1 ? "s" : ""));
+  if (pTri) parts.push(pTri + " paire" + (pTri > 1 ? "s" : "") + " (futur tri)");
+  if (pEsc) parts.push(pEsc + " début" + (pEsc > 1 ? "s" : "") + " d'escalier");
+  const summary = parts.length ? "repérés : " + parts.join(" · ") : "rien à regrouper pour l'instant, pioche encore !";
+  return { order, summary };
+}
+
 function isOrderedEscalier(cards) {
   if (cards.length < 3 || cards.length > 13) return false;
   for (let i = 1; i < cards.length; i++) if (cards[i].joker && cards[i - 1].joker) return false;
@@ -599,6 +681,7 @@ function RamiRoyal() {
   const lastAnimSeq = useRef(0);
   const prevMyTurn = useRef(false);
   const introTimer = useRef(null);
+  const helpCount = useRef(0);
 
   function newRound(players, mancheIdx, totals, history) {
     const deck = buildDeck();
@@ -1120,6 +1203,22 @@ function RamiRoyal() {
         i === 0 ? { ...p, hand: p.hand.filter((c) => !selected.includes(c.id)) } : p
       );
       return { ...s, players, staged: [...s.staged, { type, cards: normMeld(type, cards) }] };
+    });
+  }
+
+  function helpSort() {
+    setG((s) => {
+      const cur = s.players[0].hand.map((c) => c.id).join(",");
+      let res = null, changed = false;
+      for (let k = 0; k < 8; k++) {
+        helpCount.current += 1;
+        const r = helpArrangement(s.players[0].hand, MANCHES[s.mancheIdx], helpCount.current);
+        if (!res) res = r;
+        if (r.order.map((c) => c.id).join(",") !== cur) { res = r; changed = true; break; }
+      }
+      const players = s.players.map((p, k2) => (k2 === 0 ? { ...p, hand: res.order } : p));
+      setMsg((changed ? "💡 " : "💡 Pas d'autre classement possible — ") + res.summary);
+      return { ...s, players };
     });
   }
 
@@ -1661,9 +1760,14 @@ function RamiRoyal() {
             <span className="text-[11px] text-red-300 self-center">Ni tri, ni escalier — ajuste ta sélection</span>
           )}
           {!me.posed && !g.roundOver && selected.length < 3 && (
-            <button onClick={autoStage} className="btn-dark px-4 py-2 rounded-xl text-sm font-bold">
-              🪄 Préparer ma pose
-            </button>
+            <>
+              <button onClick={helpSort} className="btn-dark px-4 py-2 rounded-xl text-sm font-bold">
+                💡 Aide
+              </button>
+              <button onClick={autoStage} className="btn-dark px-4 py-2 rounded-xl text-sm font-bold">
+                🪄 Préparer ma pose
+              </button>
+            </>
           )}
           {!me.posed && g.staged.length > 0 && !g.roundOver && (
             <button onClick={pose} disabled={!canPose}
@@ -1750,7 +1854,7 @@ function RamiRoyal() {
             </div>
             <ol className="list-decimal ml-4 space-y-2 text-emerald-100 text-xs">
               <li><b>Pioche</b> une carte (ou prends celle de la défausse, gratuite à ton tour).</li>
-              <li><b>Prépare le contrat</b> de la manche : touche 3+ cartes de même valeur (tri) ou qui se suivent dans la même enseigne (escalier), puis valide. Le bouton 🪄 le fait pour toi !</li>
+              <li><b>Prépare le contrat</b> de la manche : touche 3+ cartes de même valeur (tri) ou qui se suivent dans la même enseigne (escalier), puis valide. Le bouton 💡 Aide classe ta main selon le contrat (appuie plusieurs fois pour d'autres propositions), et 🪄 prépare la pose quand elle est possible !</li>
               <li><b>Pose</b> quand le contrat est complet (bouton doré), en une seule fois.</li>
               <li><b>Jette</b> une carte pour finir ton tour. Premier à vider sa main = gagnant de la manche !</li>
             </ol>
