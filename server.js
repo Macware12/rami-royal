@@ -203,6 +203,8 @@ function handleDraw(room, idx, source) {
   p.timeouts = 0;
   if (source === "discard") {
     if (g.discard.length === 0) return "La défausse est vide.";
+    const topD = g.discard[g.discard.length - 1];
+    if (topD.joker) return "Impossible de récupérer un joker jeté — il est perdu !";
     const card = g.discard.pop();
     p.hand.push(card);
     p.lastTaken = card;
@@ -273,10 +275,12 @@ function handleComplete(room, idx, meldId, cardId) {
   if (!meld || !card) return "Carte ou combinaison introuvable.";
   // Échange de joker : escalier uniquement, si la carte remplace exactement le joker
   if (meld.type === "esc" && !card.joker) {
-    for (const jk of meld.cards.filter((c) => c.joker)) {
-      const swapped = [...meld.cards.filter((c) => c.id !== jk.id), card];
-      if (E.isEscalier(swapped)) {
-        meld.cards = E.sortEscalier(swapped);
+    for (let ji = 0; ji < meld.cards.length; ji++) {
+      if (!meld.cards[ji].joker) continue;
+      const inPlace = meld.cards.map((c, i) => (i === ji ? card : c));
+      if (E.isOrderedEscalier(inPlace)) {
+        const jk = meld.cards[ji];
+        meld.cards = inPlace;
         p.hand = p.hand.filter((c) => c.id !== cardId);
         p.hand.push(jk);
         p.timeouts = 0;
@@ -322,14 +326,64 @@ function handleDiscard(room, idx, cardId) {
 }
 
 // ---------- Fenêtre d'achat (hors tour, priorité dans le sens du jeu) ----------
+function botBuyer(room, discarderIdx, nextIdx) {
+  const g = room.game;
+  const top = g.discard[g.discard.length - 1];
+  if (!top || top.joker) return null;
+  const n = room.players.length;
+  const level = room.options.level;
+  if (level === "facile") return null;
+  let best = null, bestD = 99;
+  room.players.forEach((p, i) => {
+    if (i === discarderIdx || i === nextIdx || p.buysLeft <= 0) return;
+    if (!(p.isBot || p.absent || !p.connected)) return; // seulement les mains jouées par l'IA
+    const nonJ = p.hand.filter((c) => !c.joker);
+    const mates = nonJ.filter((c) => c.rank === top.rank).length;
+    const neigh = nonJ.filter((c) => c.suit === top.suit && Math.abs(c.rank - top.rank) <= 1).length;
+    const wants = level === "difficile" ? mates >= 2 || neigh >= 2 : mates >= 2;
+    if (!wants) return;
+    const d = (i - discarderIdx + n) % n;
+    if (d < bestD) { bestD = d; best = i; }
+  });
+  return best;
+}
+
+function doBuy(room, idx) {
+  const g = room.game;
+  if (g.discard.length === 0) return;
+  const p = room.players[idx];
+  const bought = g.discard.pop();
+  if (g.stock.length === 0) {
+    const t2 = g.discard.pop();
+    g.stock = g.discard.sort(() => Math.random() - 0.5);
+    g.discard = t2 ? [t2] : [];
+  }
+  const penalty = g.stock.pop();
+  p.hand.push(bought, penalty);
+  p.buysLeft--;
+  p.lastTaken = bought;
+  log(room, p.name + " achète " + E.cardName(bought) + " (+1 pénalité)");
+  io.to(room.code).emit("fx", { kind: "buy", idx, card: bought });
+}
+
 function openBuyWindow(room, discarderIdx) {
   const g = room.game;
   clearTimeout(room.turnTimer);
-  const someoneCanBuy = room.players.some((p, i) => i !== discarderIdx && !p.isBot && p.connected && !p.absent && p.buysLeft > 0);
-  if (!someoneCanBuy) { advanceTurn(room, discarderIdx); return; }
+  const n = room.players.length;
+  const nextIdx = (discarderIdx + 1) % n;
+  const top = g.discard[g.discard.length - 1];
+  const bBuyer = botBuyer(room, discarderIdx, nextIdx);
+  const someoneCanBuy = Boolean(top) && !top.joker && room.players.some((p, i) =>
+    i !== discarderIdx && i !== nextIdx && !p.isBot && p.connected && !p.absent && p.buysLeft > 0);
+  if (!someoneCanBuy) {
+    if (bBuyer != null) doBuy(room, bBuyer);
+    advanceTurn(room, discarderIdx);
+    return;
+  }
   g.phase = "buyWindow";
   g.lastDiscarderIdx = discarderIdx;
   g.buyRequests = [];
+  g.botBuyer = bBuyer;
   g.buyWindowUntil = Date.now() + BUY_WINDOW_MS;
   broadcast(room);
   room.buyTimer = setTimeout(() => resolveBuyWindow(room), BUY_WINDOW_MS);
@@ -339,7 +393,10 @@ function handleBuyRequest(room, idx) {
   const g = room.game;
   if (g.phase !== "buyWindow") return "Il n'y a pas d'achat possible en ce moment.";
   const p = room.players[idx];
+  const topD = g.discard[g.discard.length - 1];
+  if (topD && topD.joker) return "Impossible de récupérer un joker jeté — il est perdu !";
   if (idx === g.lastDiscarderIdx) return "Tu ne peux pas racheter ta propre défausse.";
+  if (idx === (g.lastDiscarderIdx + 1) % room.players.length) return "Tu es le joueur suivant : tu prendras la carte gratuitement à ton tour.";
   if (p.buysLeft <= 0) return "Plus d'achats disponibles (3 max par manche).";
   if (!g.buyRequests.includes(idx)) g.buyRequests.push(idx);
   return null;
@@ -349,32 +406,18 @@ function resolveBuyWindow(room) {
   const g = room.game;
   if (!g || g.phase !== "buyWindow") return;
   const n = room.players.length;
-  if (g.buyRequests.length > 0 && g.discard.length > 0) {
-    // Priorité : le plus proche du jeteur dans le sens du jeu
-    const ordered = [...g.buyRequests].sort((a, b) => {
-      const da = (a - g.lastDiscarderIdx + n) % n;
-      const db = (b - g.lastDiscarderIdx + n) % n;
-      return da - db;
-    });
+  const requests = [...new Set(g.buyRequests)];
+  if (g.botBuyer != null && !requests.includes(g.botBuyer)) requests.push(g.botBuyer);
+  if (requests.length > 0 && g.discard.length > 0) {
+    const ordered = requests.sort((a, b) => ((a - g.lastDiscarderIdx + n) % n) - ((b - g.lastDiscarderIdx + n) % n));
     const winnerIdx = ordered[0];
-    const p = room.players[winnerIdx];
-    const bought = g.discard.pop();
-    if (g.stock.length === 0) {
-      const top = g.discard.pop();
-      g.stock = g.discard.sort(() => Math.random() - 0.5);
-      g.discard = top ? [top] : [];
-    }
-    const penalty = g.stock.pop();
-    p.hand.push(bought, penalty);
-    p.buysLeft--;
-    p.lastTaken = bought;
-    log(room, `${p.name} achète ${E.cardName(bought)} (+1 pénalité)`);
-    io.to(room.code).emit("fx", { kind: "buy", idx: winnerIdx, card: bought });
+    doBuy(room, winnerIdx);
     ordered.slice(1).forEach((i) => {
-      const s = room.players[i].socketId;
-      if (s) io.to(s).emit("info", "Achat manqué : un joueur mieux placé dans le sens du jeu l'a emporté.");
+      const so = room.players[i].socketId;
+      if (so) io.to(so).emit("info", room.players[winnerIdx].name + " était mieux placé dans le sens du jeu — achat manqué.");
     });
   }
+  g.botBuyer = null;
   advanceTurn(room, g.lastDiscarderIdx);
 }
 

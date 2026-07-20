@@ -4,7 +4,8 @@
 - `server.js` — le serveur (salons à code, tours, minuteur, achats hors tour, reconnexion)
 - `engine.js` — le moteur de règles (le même que le jeu solo, source de vérité anti-triche)
 - `package.json` — les dépendances (Express + Socket.io)
-- `public/index.html` — le client web multijoueur (servi automatiquement par le serveur)
+- `public/index.html` — le client multijoueur (page d'accueil du site)
+- `public/solo.html` — le jeu solo contre l'IA (accessible depuis l'accueil)
 
 ## Réglages intégrés (modifiables en tête de server.js)
 - Minuteur : 30/45/60 s par tour au choix de l'hôte (défaut 45 s) ; temps écoulé → pioche + défausse automatiques ; 3 timeouts → mode auto avec « Reprendre la main »
@@ -30,4 +31,9 @@ npm start
 Puis ouvre http://localhost:3000
 
 ## Jouer
-L'adresse Render EST le jeu : ouvre-la, entre ton nom, « Créer un salon », partage le code de 5 lettres à tes amis — ils le saisissent sur la même adresse et vous jouez. L'hôte peut compléter la table avec des bots. En cas de déconnexion, on revient avec « Reprendre la partie ».
+L'adresse Render EST le jeu : la première page propose « Jouer en solo contre l'IA » ou le multijoueur. Pour le multijoueur, entre ton nom, « Créer un salon », partage le code de 5 lettres à tes amis — ils le saisissent sur la même adresse et vous jouez. L'hôte peut compléter la table avec des bots. En cas de déconnexion, on revient avec « Reprendre la partie ».
+
+## Mettre à jour une version déjà en ligne
+1. Sur GitHub, remplace les fichiers du dépôt par ceux de cette archive (server.js, engine.js, package.json et TOUT le dossier public)
+2. Sur Render : « Manual Deploy » → « Deploy latest commit »
+Important : si la page en ligne ne montre pas le multijoueur, c'est que le dossier `public` du dépôt ne contient pas le bon index.html.

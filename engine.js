@@ -205,7 +205,22 @@ function aiDiscardChoice(hand, level) {
   return [...nonJ].sort((a, b) => score(a) - score(b))[0];
 }
 
+function isOrderedEscalier(cards) {
+  if (cards.length < 3 || cards.length > 13) return false;
+  for (let i = 1; i < cards.length; i++) if (cards[i].joker && cards[i - 1].joker) return false;
+  const reals = cards.map((c, i) => ({ c, i })).filter((x) => !x.c.joker);
+  if (reals.length < 3) return false;
+  const suit = reals[0].c.suit;
+  if (!reals.every((x) => x.c.suit === suit)) return false;
+  const base = (reals[0].c.rank - 1) - reals[0].i;
+  for (const x of reals) {
+    if (((((x.c.rank - 1) - x.i - base) % 13) + 13) % 13 !== 0) return false;
+  }
+  return true;
+}
+
 function sortEscalier(cards) {
+  if (isOrderedEscalier(cards)) return cards;
   const jokers = cards.filter((c) => c.joker);
   const reals = cards.filter((c) => !c.joker);
   if (reals.length === 0) return cards;
@@ -244,7 +259,7 @@ function sortEscalier(cards) {
 function normMeld(type, cards) { return type === "esc" ? sortEscalier(cards) : cards; }
 
 module.exports = {
-  sortEscalier, normMeld,
+  sortEscalier, normMeld, isOrderedEscalier,
   SUITS, MANCHES, MAX_ACHATS,
   buildDeck, rankLabel, cardName, cardPoints, handPoints,
   isTri, isEscalier, validGroup,
