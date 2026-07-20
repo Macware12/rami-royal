@@ -92,6 +92,20 @@ function vibrate(pattern) {
   try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (_) {}
 }
 
+const SUCCES_LIST = [
+  { id: "premiere_victoire", nom: "Première victoire", desc: "Gagner une partie complète" },
+  { id: "maitre", nom: "Maître du Rami", desc: "Gagner 10 parties" },
+  { id: "serie3", nom: "Invincible", desc: "Gagner 3 parties d'affilée" },
+  { id: "gros_score", nom: "Petit score, grand art", desc: "Gagner une partie avec moins de 100 points" },
+  { id: "pose_tout", nom: "Pose-tout !", desc: "Gagner la manche 8 avec un pose-tout" },
+  { id: "anticipe", nom: "Coup d'éclat", desc: "Réussir un pose-tout anticipé" },
+  { id: "double_joker", nom: "Chasseur de jokers", desc: "Récupérer 2 jokers dans la même manche" },
+  { id: "sans_achat", nom: "Économe", desc: "Gagner une manche sans utiliser d'achat" },
+  { id: "collectionneur", nom: "Acheteur compulsif", desc: "Utiliser ses 3 achats dans une manche" },
+  { id: "premier_pose", nom: "Rapide comme l'éclair", desc: "Poser son contrat avant tous les autres" },
+];
+function readJSON(k) { try { return JSON.parse(store.get(k)) || {}; } catch (_) { return {}; } }
+
 let CARD_ID = 0;
 let ANIM_SEQ = 0;
 
@@ -668,6 +682,9 @@ function RamiRoyal() {
   const [showHelp, setShowHelp] = useState(false);
   const [showQuit, setShowQuit] = useState(false);
   const [showTable, setShowTable] = useState(false);
+  const [succesBanner, setSuccesBanner] = useState(null);
+  const [showSucces, setShowSucces] = useState(false);
+  const [stats, setStats] = useState(readJSON("rami-stats"));
   const [muted, setMuted] = useState(store.get("rami-muted") === "1");
   const [intro, setIntro] = useState(null);
   const [hasSave, setHasSave] = useState(false);
@@ -682,6 +699,7 @@ function RamiRoyal() {
   const prevMyTurn = useRef(false);
   const introTimer = useRef(null);
   const helpCount = useRef(0);
+  const prevPosed = useRef(false);
 
   function newRound(players, mancheIdx, totals, history) {
     const deck = buildDeck();
@@ -822,8 +840,22 @@ function RamiRoyal() {
     if (g && g.roundOver) {
       if (g.roundOver.winnerIdx === 0) { sfx("win"); vibrate([90, 60, 90]); }
       else sfx("pose");
+      const me0 = g.players[0];
+      if (g.roundOver.winnerIdx === 0) {
+        if (g.roundOver.bonusType === "final") award("pose_tout");
+        if (g.roundOver.bonusType === "anticipe") award("anticipe");
+        if (me0.buysLeft === 3) award("sans_achat");
+      }
+      if (me0.buysLeft === 0) award("collectionneur");
+      if ((g.mySwaps || 0) >= 2) award("double_joker");
     }
   }, [g && g.roundOver]);
+
+  useEffect(() => {
+    const p = Boolean(g && g.players[0].posed);
+    if (p && !prevPosed.current && g && !g.players.some((q, i) => i !== 0 && q.posed)) award("premier_pose");
+    prevPosed.current = p;
+  }, [g]);
 
   useEffect(() => {
     if (screen !== "game") return;
@@ -1225,6 +1257,17 @@ function RamiRoyal() {
     });
   }
 
+  function award(id) {
+    const cur = readJSON("rami-succes");
+    if (cur[id]) return;
+    cur[id] = Date.now();
+    store.set("rami-succes", JSON.stringify(cur));
+    const def = SUCCES_LIST.find((x) => x.id === id);
+    setSuccesBanner({ id, nom: def ? def.nom : id });
+    sfx("win");
+    setTimeout(() => setSuccesBanner((b) => (b && b.id === id ? null : b)), 3200);
+  }
+
   function helpSort() {
     setG((s) => {
       const cur = s.players[0].hand.map((c) => c.id).join(",");
@@ -1324,7 +1367,7 @@ function RamiRoyal() {
             const players = s.players.map((p, i) =>
               i === 0 ? { ...p, hand: [...p.hand.filter((c) => c.id !== card.id), jk] } : p
             );
-            let ns = { ...s, melds, players, lastDrawn: [jk.id] };
+            let ns = { ...s, melds, players, lastDrawn: [jk.id], mySwaps: (s.mySwaps || 0) + 1 };
             return addLog(ns, "Tu échanges " + cardName(card) + " contre un Joker !");
           }
         }
@@ -1473,7 +1516,25 @@ function RamiRoyal() {
   }, [g, screen]);
 
   function nextManche() {
-    if (g.mancheIdx + 1 >= MANCHES.length) { store.del("rami-save"); setScreen("final"); return; }
+    if (g.mancheIdx + 1 >= MANCHES.length) {
+      store.del("rami-save");
+      const ranking = [...g.players].sort((a, b) => a.total - b.total);
+      const won = ranking[0] === g.players[0];
+      const st = readJSON("rami-stats");
+      st.games = (st.games || 0) + 1;
+      st.wins = (st.wins || 0) + (won ? 1 : 0);
+      st.streak = won ? (st.streak || 0) + 1 : 0;
+      st.bestStreak = Math.max(st.bestStreak || 0, st.streak);
+      if (won) st.bestScore = st.bestScore == null ? g.players[0].total : Math.min(st.bestScore, g.players[0].total);
+      store.set("rami-stats", JSON.stringify(st));
+      setStats(st);
+      if (won) award("premiere_victoire");
+      if (won && st.wins >= 10) award("maitre");
+      if (st.streak >= 3) award("serie3");
+      if (won && g.players[0].total < 100) award("gros_score");
+      setScreen("final");
+      return;
+    }
     showIntro(g.mancheIdx + 1);
     setG((s) => ({ ...newRound(s.players, s.mancheIdx + 1, s.players.map((p) => p.total), s.history), level: s.level }));
     setSelected([]);
@@ -1533,6 +1594,38 @@ function RamiRoyal() {
             Distribuer les cartes 🎴
           </button>
           <a href="/" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center block">🌐 Multijoueur en ligne</a>
+          {(stats.games || 0) > 0 && (
+            <div className="text-[11px] text-emerald-300 text-center leading-relaxed">
+              🎴 {stats.games} partie{stats.games > 1 ? "s" : ""} · 🏆 {stats.wins || 0} victoire{(stats.wins || 0) > 1 ? "s" : ""}
+              {(stats.streak || 0) > 1 ? ` · 🔥 série de ${stats.streak}` : ""}
+              {stats.bestScore != null ? ` · record : ${stats.bestScore} pts` : ""}
+            </div>
+          )}
+          <button onClick={() => setShowSucces(true)} className="btn-dark font-bold py-2 rounded-xl text-xs">
+            🏆 Mes succès ({Object.keys(readJSON("rami-succes")).length}/{SUCCES_LIST.length})
+          </button>
+          {showSucces && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 flex items-center justify-center p-4" onClick={() => setShowSucces(false)}>
+              <div className="panel rounded-2xl p-4 w-full max-w-sm max-h-[75vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="text-amber-300 font-bold">🏆 Succès</h3>
+                  <button onClick={() => setShowSucces(false)} className="text-emerald-300 px-2">✕</button>
+                </div>
+                {SUCCES_LIST.map((sdef) => {
+                  const un = readJSON("rami-succes")[sdef.id];
+                  return (
+                    <div key={sdef.id} className={`flex items-center gap-2.5 py-2 border-b border-emerald-900 last:border-0 ${un ? "" : "opacity-45"}`}>
+                      <span className="text-xl">{un ? "🏆" : "🔒"}</span>
+                      <div>
+                        <div className="text-sm font-bold text-emerald-100">{sdef.nom}</div>
+                        <div className="text-[11px] text-emerald-300">{sdef.desc}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           {hasSave && (
             <button onClick={resumeGame} className="btn-green font-bold py-2.5 rounded-xl text-sm">
               ▶ Reprendre la partie en cours
@@ -1550,6 +1643,11 @@ function RamiRoyal() {
       <div className="min-h-screen flex flex-col items-center justify-center gap-5 p-6 text-emerald-100" style={bgStyle}>
         {STYLE}
         {ranking[0].name === g.players[0].name && <Confetti />}
+        {succesBanner && (
+          <div className="fixed top-24 left-1/2 -translate-x-1/2 z-50 btn-gold rounded-2xl px-4 py-2 text-sm font-bold shadow-xl" style={{ animation: "floaty 1.2s ease-in-out infinite" }}>
+            🏆 Succès débloqué : {succesBanner.nom} !
+          </div>
+        )}
         <h1 className="text-3xl text-amber-300" style={{ fontFamily: "Georgia, serif", textShadow: "0 3px 10px rgba(0,0,0,.6)" }}>Partie terminée</h1>
         <div className="panel rounded-2xl p-5 w-full max-w-xs">
           {ranking.map((p, i) => (
@@ -1584,6 +1682,11 @@ function RamiRoyal() {
         </div>
       )}
       {g.roundOver && g.roundOver.winnerIdx === 0 && <Confetti />}
+      {succesBanner && (
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-50 btn-gold rounded-2xl px-4 py-2 text-sm font-bold shadow-xl" style={{ animation: "floaty 1.2s ease-in-out infinite" }}>
+          🏆 Succès débloqué : {succesBanner.nom} !
+        </div>
+      )}
       {anims.map((a) => (
         <FlyingCard key={a.key} from={a.from} to={a.to} card={a.card} faceDown={a.faceDown} delay={a.delay} emphasis={a.emphasis}
           onDone={() => setAnims((arr) => arr.filter((x) => x.key !== a.key))} />

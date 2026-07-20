@@ -417,13 +417,16 @@ function CardFan({ count }) {
   );
 }
 
-function OpponentCard({ p, active, seconds }) {
+function OpponentCard({ p, active, seconds, emote }) {
   const emoji = AVATARS[p.idx % AVATARS.length];
   const color = AVATAR_COLORS[p.idx % AVATAR_COLORS.length];
   return (
     <div className={`relative flex flex-col items-center rounded-2xl px-2 pt-2 pb-1 min-w-[92px] transition-all panel ${active ? "pulse-gold" : ""}`}
       style={active ? { borderColor: "#fbbf24" } : {}}>
-      {active && (
+      {emote && (
+        <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-100 text-emerald-950 text-[11px] font-bold px-2 py-0.5 rounded-xl shadow-lg whitespace-nowrap z-20">{emote.text}</span>
+      )}
+      {active && !emote && (
         <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[9px] btn-gold font-bold px-1.5 rounded-full whitespace-nowrap" style={{ animation: "floaty 1.2s ease-in-out infinite" }}>
           joue… {seconds != null ? seconds + "s" : ""}
         </span>
@@ -525,6 +528,8 @@ function App() {
   const [showLog, setShowLog] = useState(false);
   const [showQuit, setShowQuit] = useState(false);
   const [showTable, setShowTable] = useState(false);
+  const [emotes, setEmotes] = useState({});
+  const [showEmotes, setShowEmotes] = useState(false);
   const [toast, setToast] = useState(null);
   const [intro, setIntro] = useState(null);
   const [passedWindow, setPassedWindow] = useState(0);
@@ -546,6 +551,7 @@ function App() {
   const prevMancheRef = useRef(-1);
   const introTimer = useRef(null);
   const helpCount = useRef(0);
+  const lastEmoteSent = useRef(0);
 
   const g = srv && srv.game;
   const youIdx = srv ? srv.youIdx : -1;
@@ -559,6 +565,12 @@ function App() {
     socket.on("state", (st) => { setSrv(st); setConnErr(""); });
     socket.on("info", (m) => setMsg(m));
     socket.on("roomClosed", () => { setSrv(null); setMsg("Le salon a été fermé (inactivité)."); store.del("ramimp-save"); });
+    socket.on("kicked", (m) => { setSrv(null); setMsg(m || "L'hôte t'a retiré du salon."); store.del("ramimp-save"); });
+    socket.on("emote", (e) => {
+      if (!e) return;
+      setEmotes((m) => ({ ...m, [e.idx]: e }));
+      setTimeout(() => setEmotes((m) => (m[e.idx] && m[e.idx].id === e.id ? { ...m, [e.idx]: null } : m)), 3000);
+    });
     socket.on("connect_error", () => setConnErr("Connexion au serveur impossible… nouvelle tentative."));
     socket.on("fx", (e) => {
       if (!e) return;
@@ -567,7 +579,7 @@ function App() {
     const raw = store.get("ramimp-save");
     if (raw) { try { setSaved(JSON.parse(raw)); } catch (_) {} }
     const keepAlive = setInterval(() => { fetch("/ping").catch(() => {}); }, 240000);
-    return () => { clearInterval(keepAlive); socket.off("state"); socket.off("info"); socket.off("fx"); socket.off("roomClosed"); socket.off("connect_error"); };
+    return () => { clearInterval(keepAlive); socket.off("state"); socket.off("info"); socket.off("fx"); socket.off("roomClosed"); socket.off("kicked"); socket.off("emote"); socket.off("connect_error"); };
   }, []);
 
   // Reconnexion automatique après coupure réseau
@@ -722,6 +734,14 @@ function App() {
     setSelected([]); setMsg("");
   }
   function unstage(i) { setStaged((st) => st.filter((_, k) => k !== i)); }
+
+  function sendEmote(text) {
+    const now = Date.now();
+    if (now - lastEmoteSent.current < 1000) return;
+    lastEmoteSent.current = now;
+    socket.emit("emote", text);
+    setShowEmotes(false);
+  }
 
   function helpSort() {
     const cur = visibleHand.map((c) => c.id).join(",");
@@ -986,7 +1006,12 @@ function App() {
             <div key={p.idx} className="flex items-center gap-2 py-1.5 border-b border-emerald-800 last:border-0">
               <span className="text-lg">{p.isBot ? "🤖" : AVATARS[p.idx % AVATARS.length]}</span>
               <span className="font-bold text-sm flex-1">{p.name}{p.idx === youIdx ? " (toi)" : ""}</span>
+              {(p.wins || 0) > 0 && <span className="text-[9px] text-amber-300 font-bold">🏆{p.wins}</span>}
               {p.idx === 0 && <span className="text-[9px] text-amber-300 uppercase">hôte</span>}
+              {isHost && p.idx !== 0 && (
+                <button onClick={() => socket.emit("removePlayer", p.idx)}
+                  className="btn-red rounded-lg px-2 py-0.5 text-xs font-bold" title={"Retirer " + p.name}>✕</button>
+              )}
             </div>
           ))}
           {srv.players.length < 3 && <p className="text-[10px] text-emerald-400 mt-2">Minimum 3 joueurs pour lancer{isHost ? " — ajoute un bot si besoin" : ""}.</p>}
@@ -1017,11 +1042,16 @@ function App() {
           {ranking.map((p, i) => (
             <div key={p.idx} className={`flex justify-between py-2 border-b border-emerald-800 last:border-0 ${i === 0 ? "text-amber-300 font-bold" : ""}`}>
               <span>{i === 0 ? "👑 " : `${i + 1}. `}{p.isBot ? "🤖" : AVATARS[p.idx % AVATARS.length]} {p.name}</span>
-              <span>{p.total} pts</span>
+              <span>{p.total} pts{(p.wins || 0) > 0 ? " · 🏆" + p.wins : ""}</span>
             </div>
           ))}
         </div>
-        <button onClick={quitRoom} className="btn-gold font-bold py-3 px-8 rounded-xl">Retour à l'accueil</button>
+        {isHost ? (
+          <button onClick={() => socket.emit("rematch")} className="btn-gold font-bold py-3 px-8 rounded-xl pulse-gold">🔁 Revanche !</button>
+        ) : (
+          <p className="text-sm text-emerald-300 animate-pulse">L'hôte peut lancer une revanche — le compteur 🏆 continue…</p>
+        )}
+        <button onClick={quitRoom} className="text-xs text-emerald-400 underline">Retour à l'accueil</button>
       </div>
     );
   }
@@ -1047,6 +1077,11 @@ function App() {
         </div>
       )}
       {g.roundOver && g.roundOver.winnerIdx === youIdx && <Confetti />}
+      {emotes[youIdx] && (
+        <div className="fixed bottom-44 left-3 z-40 bg-amber-100 text-emerald-950 text-sm font-bold px-3 py-1.5 rounded-2xl shadow-xl">
+          Toi : {emotes[youIdx].text}
+        </div>
+      )}
       {toast && (
         <div className="fixed top-14 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 panel rounded-2xl px-3 py-2" style={{ borderColor: "#fbbf24" }}>
           <Card card={toast.card} small flat />
@@ -1100,7 +1135,7 @@ function App() {
       <div className="flex gap-2 px-3 py-2 pt-3 overflow-x-auto">
         {opponents.map((p) => (
           <OpponentCard key={p.idx} p={p} active={g.turn === p.idx && !g.roundOver}
-            seconds={g.turn === p.idx && !p.isBot ? turnSec : null} />
+            seconds={g.turn === p.idx && !p.isBot ? turnSec : null} emote={emotes[p.idx]} />
         ))}
       </div>
 
@@ -1203,7 +1238,7 @@ function App() {
       {msg && <div className="px-3 py-1 text-xs text-amber-200 text-center">{msg}</div>}
 
       {/* Main */}
-      <div ref={handRef} className={`px-2 pt-3 pb-2 border-t-2 ${drag && drag.fromDiscard ? "border-amber-300 pulse-gold" : myTurn ? "border-amber-400" : "border-emerald-800"}`}
+      <div ref={handRef} className={`relative px-2 pt-3 pb-2 border-t-2 ${drag && drag.fromDiscard ? "border-amber-300 pulse-gold" : myTurn ? "border-amber-400" : "border-emerald-800"}`}
         style={{ background: "linear-gradient(180deg, rgba(4,35,24,.9), rgba(3,25,17,.97))" }}>
         <div className="flex flex-wrap gap-1.5 justify-center pb-1">
           {visibleHand.map((c) => (
@@ -1218,8 +1253,23 @@ function App() {
           ))}
         </div>
 
+        {showEmotes && (
+          <div className="absolute bottom-full left-2 right-2 mb-1 panel rounded-2xl p-2 z-30" style={{ borderColor: "#fbbf24" }}>
+            <div className="flex gap-3 justify-center text-2xl">
+              {["😂", "👏", "😤", "🔥", "😱", "🤔"].map((e) => (
+                <button key={e} onClick={() => sendEmote(e)} className="active:scale-125 transition-transform">{e}</button>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-1.5 justify-center mt-2">
+              {["Bien joué !", "Tu me l'as volée !", "Aïe aïe aïe…", "Trop lent !", "Chance de débutant !", "On se calme 😄"].map((t) => (
+                <button key={t} onClick={() => sendEmote(t)} className="btn-dark rounded-xl px-2 py-1 text-[11px] font-bold">{t}</button>
+              ))}
+            </div>
+          </div>
+        )}
         {/* Actions */}
         <div className="flex gap-2 justify-center mt-2 flex-wrap">
+          <button onClick={() => setShowEmotes((v) => !v)} className="btn-dark px-3 py-2 rounded-xl text-sm">😊</button>
           {!me.posed && selTriOk && <button onClick={() => stageSelection("tri")} className="btn-green px-4 py-2 rounded-xl text-sm font-bold">✓ C'est un tri !</button>}
           {!me.posed && selEscOk && <button onClick={() => stageSelection("esc")} className="btn-green px-4 py-2 rounded-xl text-sm font-bold">✓ C'est un escalier !</button>}
           {!me.posed && selected.length >= 3 && !selTriOk && !selEscOk && (
