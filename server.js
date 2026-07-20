@@ -112,7 +112,7 @@ function publicPlayer(p, idx) {
   return {
     idx, name: p.name, isBot: p.isBot, connected: p.connected, absent: p.absent,
     handCount: p.hand.length, posed: p.posed, buysLeft: p.buysLeft,
-    lastTaken: p.lastTaken, total: p.total,
+    lastTaken: p.lastTaken, total: p.total, wins: p.wins || 0,
   };
 }
 
@@ -453,6 +453,11 @@ function checkRoundEnd(room, idx) {
   g.history.push({ mancheIdx: g.mancheIdx, summary });
   g.roundOver = { winnerIdx: idx, bonusType, summary };
   room.state = g.mancheIdx + 1 >= E.MANCHES.length ? "over" : "roundEnd";
+  if (room.state === "over") {
+    const champ = room.players.reduce((a, b) => (b.total < a.total ? b : a));
+    champ.wins = (champ.wins || 0) + 1;
+    log(room, "👑 " + champ.name + " remporte la partie !");
+  }
   log(room, `${p.name} gagne la manche !`);
 }
 
@@ -594,6 +599,47 @@ io.on("connection", (socket) => {
     broadcast(myRoom);
   });
 
+  socket.on("removePlayer", (targetIdx) => {
+    if (!myRoom || myRoom.state !== "lobby") return;
+    const me = findMe();
+    if (!me || me.idx !== 0) return socket.emit("info", "Seul l'hôte peut retirer un joueur.");
+    const i = Number(targetIdx);
+    if (!Number.isInteger(i) || i <= 0 || i >= myRoom.players.length) return;
+    const target = myRoom.players[i];
+    if (!target.isBot && target.socketId) {
+      const ts = io.sockets.sockets.get(target.socketId);
+      if (ts) {
+        ts.emit("kicked", "L'hôte t'a retiré du salon.");
+        ts.leave(myRoom.code);
+      }
+    }
+    myRoom.players.splice(i, 1);
+    touch(myRoom);
+    broadcast(myRoom);
+  });
+
+  let lastEmoteAt = 0;
+  socket.on("emote", (text) => {
+    if (!myRoom) return;
+    const me = findMe();
+    if (!me) return;
+    const now = Date.now();
+    if (now - lastEmoteAt < 1000) return; // anti-spam : 1 émote par seconde
+    if (!EMOTES_AUTORISEES.includes(text)) return;
+    lastEmoteAt = now;
+    touch(myRoom);
+    io.to(myRoom.code).emit("emote", { idx: me.idx, text, id: ++EMOTE_SEQ });
+  });
+
+  socket.on("rematch", () => {
+    if (!myRoom || myRoom.state !== "over") return;
+    const me = findMe();
+    if (!me || me.idx !== 0) return socket.emit("info", "Seul l'hôte peut lancer la revanche.");
+    myRoom.players.forEach((p) => { p.total = 0; });
+    touch(myRoom);
+    startRound(myRoom, 0);
+  });
+
   socket.on("startGame", () => {
     if (!myRoom || myRoom.state !== "lobby") return;
     const me = findMe();
@@ -663,6 +709,8 @@ io.on("connection", (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
+let EMOTE_SEQ = 0;
+const EMOTES_AUTORISEES = ["😂", "👏", "😤", "🔥", "😱", "🤔", "Bien joué !", "Tu me l'as volée !", "Aïe aïe aïe…", "Trop lent !", "Chance de débutant !", "On se calme 😄"];
 
 // Robustesse : une erreur imprévue ne doit jamais faire tomber toutes les tables
 process.on("uncaughtException", (e) => console.error("ERREUR NON GÉRÉE:", (e && e.stack) || e));
