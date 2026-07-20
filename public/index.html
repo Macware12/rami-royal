@@ -372,16 +372,36 @@ function OpponentCard({ p, active, seconds }) {
   );
 }
 
+function StackCard({ card, overlap }) {
+  const red = card.suit === "♥" || card.suit === "♦";
+  return (
+    <div className={card.joker ? "joker-glow" : ""} style={{ marginLeft: overlap ? -16 : 0 }}>
+      <div className="rounded-md relative"
+        style={{
+          width: 30, height: 44,
+          background: card.joker ? "linear-gradient(160deg,#faf5ff,#e9dcfc)" : "linear-gradient(160deg,#fffdf6,#f6efdd)",
+          border: card.joker ? "1.5px solid #a78bfa" : "1px solid #d6cdb8",
+          boxShadow: "0 1px 3px rgba(0,0,0,.35)",
+          color: card.joker ? "#7c3aed" : red ? "#C1272D" : "#1c1917",
+        }}>
+        <span className="absolute font-bold leading-none text-center" style={{ top: 3, left: 2, width: 12, fontSize: 9 }}>
+          {rankLabel(card)}<br />{card.joker ? "🤡" : card.suit}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function MeldChip({ meld, ownerName, onClick, highlight, mid }) {
   return (
     <button onClick={onClick} data-mid={mid}
-      className={`flex flex-col items-start gap-1 rounded-xl p-1.5 panel transition-all ${highlight ? "pulse-gold" : ""}`}
+      className={`shrink-0 flex items-center rounded-xl px-1 py-1 panel transition-all ${highlight ? "pulse-gold" : ""}`}
       style={highlight ? { borderColor: "#fbbf24" } : {}}>
-      <span className="text-[10px] uppercase tracking-wide text-emerald-300">{meld.type === "tri" ? "Tri" : "Escalier"} · {ownerName}</span>
-      <div className="flex gap-0.5 flex-wrap">
-        {meld.cards.map((c) => c.joker
-          ? <span key={c.id} className="joker-glow"><Card card={c} small flat /></span>
-          : <Card key={c.id} card={c} small flat />)}
+      <span className="text-[8px] uppercase text-emerald-400 font-bold mr-0.5" style={{ writingMode: "vertical-rl", textOrientation: "upright", letterSpacing: -2 }}>
+        {meld.type === "tri" ? "TRI" : "ESC"}
+      </span>
+      <div className="flex">
+        {meld.cards.map((c, i) => <StackCard key={c.id} card={c} overlap={i > 0} />)}
       </div>
     </button>
   );
@@ -422,6 +442,7 @@ function App() {
   const [showScores, setShowScores] = useState(false);
   const [showLog, setShowLog] = useState(false);
   const [showQuit, setShowQuit] = useState(false);
+  const [showTable, setShowTable] = useState(false);
   const [toast, setToast] = useState(null);
   const [intro, setIntro] = useState(null);
   const [passedWindow, setPassedWindow] = useState(0);
@@ -965,13 +986,24 @@ function App() {
         {lastLogs.map((l, i) => <div key={i} className={i === lastLogs.length - 1 ? "text-amber-200" : "opacity-50"}>{l}</div>)}
       </div>
 
-      {/* Table */}
-      <div className="flex-1 overflow-y-auto px-3 py-1 flex flex-wrap gap-2 content-start">
-        {g.melds.length === 0 && <p className="text-emerald-400 text-xs italic">Les combinaisons posées apparaîtront ici.</p>}
-        {g.melds.map((m) => (
-          <MeldChip key={m.id} mid={m.id} meld={m} ownerName={(srv.players[m.owner] || {}).name || "?"}
-            highlight={(me.posed && selected.length === 1 && myTurn) || (Boolean(drag) && !drag.fromDiscard && me.posed && myTurn && g.phase === "play")}
-            onClick={() => { if (myTurn && selected.length === 1) { completeWith(m.id, selected[0]); setSelected([]); } }} />
+      {/* Table regroupée par joueur */}
+      <div className="flex-1 overflow-y-auto px-2 py-1 flex flex-col gap-1.5 content-start relative">
+        {g.melds.length === 0 && <p className="text-emerald-400 text-xs italic px-1">Les combinaisons posées apparaîtront ici.</p>}
+        {g.melds.length > 0 && (
+          <button onClick={() => setShowTable(true)}
+            className="absolute top-0.5 right-2 z-10 btn-dark rounded-xl px-2 py-1 text-[11px] font-bold">⛶ Agrandir</button>
+        )}
+        {[...new Set(g.melds.map((m) => m.owner))].map((o) => (
+          <div key={o} className="flex items-center gap-1.5 overflow-x-auto" style={{ paddingRight: 84 }}>
+            <span className="shrink-0 text-base" style={{ width: 22 }} title={(srv.players[o] || {}).name}>
+              {(srv.players[o] || {}).isBot ? "🤖" : AVATARS[o % AVATARS.length]}
+            </span>
+            {g.melds.filter((m) => m.owner === o).map((m) => (
+              <MeldChip key={m.id} mid={m.id} meld={m}
+                highlight={(me.posed && selected.length === 1 && myTurn) || (Boolean(drag) && !drag.fromDiscard && me.posed && myTurn && g.phase === "play")}
+                onClick={() => { if (myTurn && selected.length === 1) { completeWith(m.id, selected[0]); setSelected([]); } }} />
+            ))}
+          </div>
         ))}
       </div>
 
@@ -1097,6 +1129,38 @@ function App() {
             : ""}
         </div>
       </div>
+
+      {/* Table en plein écran */}
+      {showTable && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-20 flex flex-col p-3" onClick={() => setShowTable(false)}>
+          <div className="flex justify-between items-center mb-2" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-amber-300 font-bold text-sm">Combinaisons posées</h3>
+            <button onClick={() => setShowTable(false)} className="btn-dark rounded-xl px-3 py-1.5 text-xs font-bold">Fermer ✕</button>
+          </div>
+          <div className="flex-1 overflow-y-auto flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+            {[...new Set(g.melds.map((m) => m.owner))].map((o) => (
+              <div key={o}>
+                <div className="text-xs text-amber-200 font-bold mb-1">
+                  {(srv.players[o] || {}).isBot ? "🤖" : AVATARS[o % AVATARS.length]} {(srv.players[o] || {}).name}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {g.melds.filter((m) => m.owner === o).map((m) => (
+                    <div key={m.id} className="rounded-xl p-1.5 panel">
+                      <div className="text-[9px] uppercase text-emerald-400 font-bold mb-0.5">{m.type === "tri" ? "Tri" : "Escalier"}</div>
+                      <div className="flex gap-0.5 flex-wrap">
+                        {m.cards.map((c) => c.joker
+                          ? <span key={c.id} className="joker-glow"><Card card={c} small flat /></span>
+                          : <Card key={c.id} card={c} small flat />)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-emerald-400 text-center mt-1">Touche n'importe où pour fermer</p>
+        </div>
+      )}
 
       {/* Confirmation de sortie */}
       {showQuit && (
