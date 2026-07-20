@@ -7,6 +7,7 @@ const { Server } = require("socket.io");
 const E = require("./engine");
 
 const app = express();
+app.get("/ping", (req, res) => res.send("ok"));
 app.use(express.static(path.join(__dirname, "public"))); // sert le client web
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
@@ -131,6 +132,7 @@ function broadcast(room) {
         contract: E.MANCHES[g.mancheIdx],
         stockCount: g.stock.length,
         discardTop: g.discard[g.discard.length - 1] || null,
+      discardCount: g.discard.length,
         melds: g.melds,
         turn: g.turn,
         phase: g.phase,
@@ -524,6 +526,10 @@ function aiPlayTurn(room) {
 
 // ---------- Socket.io ----------
 io.on("connection", (socket) => {
+  const _on = socket.on.bind(socket);
+  socket.on = (ev, fn) => _on(ev, (...args) => {
+    try { return fn(...args); } catch (e) { console.error("Erreur (" + ev + "):", (e && e.stack) || e); }
+  });
   let myRoom = null;
   let myToken = null;
 
@@ -657,4 +663,8 @@ io.on("connection", (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
+
+// Robustesse : une erreur imprévue ne doit jamais faire tomber toutes les tables
+process.on("uncaughtException", (e) => console.error("ERREUR NON GÉRÉE:", (e && e.stack) || e));
+process.on("unhandledRejection", (e) => console.error("PROMESSE REJETÉE:", e));
 server.listen(PORT, () => console.log("Serveur Rami Royal sur le port " + PORT));
