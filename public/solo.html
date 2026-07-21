@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2107-E">
+<meta name="version" content="v2108-S">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -1254,6 +1254,10 @@ function RamiRoyal() {
   }
 
 function tapCard(id) {
+    if (pendingDiscard) {
+      setPendingDiscard(null);
+      setMsg("Jet annulé.");
+    }
     setSelected((sel) => (sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id]));
   }
 
@@ -1261,6 +1265,17 @@ function tapCard(id) {
   const dragInfo = useRef(null);
   const lastTargetRef = useRef(-1);
   const [drag, setDrag] = useState(null);
+  const [pendingDiscard, setPendingDiscard] = useState(null);
+
+  // Sécurité : annuler le jet en attente après 8 secondes
+  useEffect(() => {
+    if (!pendingDiscard) return;
+    const timer = setTimeout(() => {
+      setPendingDiscard(null);
+      setMsg("Jet annulé — délai d'attente dépassé.");
+    }, 8000);
+    return () => clearTimeout(timer);
+  }, [pendingDiscard]);
 
   function onCardPointerDown(e, c) {
     dragInfo.current = { origin: "hand", id: c.id, card: c, startX: e.clientX, startY: e.clientY, dragging: false };
@@ -1271,7 +1286,7 @@ function tapCard(id) {
     const d = dragInfo.current;
     if (!d || d.origin !== "hand") return;
     const dx = e.clientX - d.startX, dy = e.clientY - d.startY;
-    if (!d.dragging && Math.hypot(dx, dy) > 8) { d.dragging = true; lastTargetRef.current = -1; }
+    if (!d.dragging && Math.hypot(dx, dy) > 15) { d.dragging = true; lastTargetRef.current = -1; }
     if (d.dragging) {
       const dr = discardRef.current && discardRef.current.getBoundingClientRect();
       const overD = Boolean(dr) && [[e.clientX, e.clientY], [e.clientX, e.clientY - 34], [e.clientX, e.clientY - 58]].some(([px, py]) =>
@@ -1368,6 +1383,15 @@ function tapCard(id) {
   function onDiscardPointerUp(e) {
     const d = dragInfo.current;
     dragInfo.current = null;
+
+    // Sécurité : confirmer le jet en attente
+    if (pendingDiscard) {
+      const pid = pendingDiscard;
+      setPendingDiscard(null);
+      if (myTurn && g.phase === "play") { sfx("discard"); discardById(pid); setMsg("Carte jetée ✓"); }
+      return;
+    }
+
     if (d && d.origin === "discard" && d.dragging) {
       setDrag(null);
       discardDropAt(e.clientX, e.clientY);
@@ -1392,8 +1416,11 @@ function tapCard(id) {
     const dr = discardRef.current && discardRef.current.getBoundingClientRect();
     const sticky = Date.now() - overStickyRef.current < 250; // la défausse vient de grossir : le jet compte
     overStickyRef.current = 0;
-    if (inRect(dr, 24) || sticky) {
-      if (myTurn && g.phase === "play") { sfx("discard"); discardById(card.id); }
+    if (inRect(dr, 12) || sticky) {
+      if (myTurn && g.phase === "play") {
+        setPendingDiscard(card.id);
+        setMsg("⚠️ Appuie sur la défausse pour confirmer le jet");
+      }
       else if (myTurn && g.phase === "draw") setMsg("Pioche d'abord, tu jetteras ensuite.");
       else setMsg("Tu pourras jeter pendant ton tour.");
       return;
@@ -2232,10 +2259,11 @@ function tapCard(id) {
           onPointerUp={onDiscardPointerUp}
           onPointerCancel={endDrag}
           style={{ touchAction: "none" }}
-          className={`flex flex-col items-center gap-1 active:scale-95 transition-transform rounded-xl ${drag && drag.origin !== "discard" && myTurn && g.phase === "play" ? "pulse-gold" : ""}`}>
+          className={`flex flex-col items-center gap-1 active:scale-95 transition-transform rounded-xl relative ${drag && drag.origin !== "discard" && myTurn && g.phase === "play" ? "pulse-gold" : ""} ${pendingDiscard ? "ring-4 ring-red-500 animate-pulse" : ""}`}>
           <div style={{ transform: drag && drag.over === "discard" ? "rotate(4deg) scale(1.18)" : "rotate(4deg)", transition: "transform .12s", opacity: drag && drag.origin === "discard" ? 0.35 : 1 }}>
             {topDiscard ? <Card card={topDiscard} /> : <div style={{ height: 58, width: 40 }} className="rounded-lg border-2 border-dashed border-emerald-600" />}
           </div>
+          {pendingDiscard && <span className="absolute -top-3 -right-3 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full z-10">Confirmer</span>}
           <span className="text-[10px] text-emerald-300 font-bold">
             {g.buyWindow ? `Acheter (${me.buysLeft})` : myTurn && g.phase === "draw" ? "Prendre (gratuit)" : `Défausse · ${g.discard.length}`}
           </span>
