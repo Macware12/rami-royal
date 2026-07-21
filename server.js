@@ -37,7 +37,7 @@ function createRoom(hostName, options) {
     code,
     state: "lobby", // lobby | playing | roundEnd | over
     options: {
-      turnSeconds: [30, 45, 60].includes(options?.turnSeconds) ? options.turnSeconds : 45,
+      turnSeconds: [45, 60, 90].includes(options?.turnSeconds) ? options.turnSeconds : 45,
       level: ["facile", "moyen", "difficile"].includes(options?.level) ? options.level : "moyen",
     },
     players: [], // {token, name, isBot, socketId, connected, absent, timeouts, hand, posed, buysLeft, lastTaken, total, justPosed}

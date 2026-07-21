@@ -7,7 +7,7 @@
 - `public/index.html` — le client web multijoueur (servi automatiquement par le serveur)
 
 ## Réglages intégrés (modifiables en tête de server.js)
-- Minuteur : 30/45/60 s par tour au choix de l'hôte (défaut 45 s) ; temps écoulé → pioche + défausse automatiques ; 3 timeouts → mode auto avec « Reprendre la main »
+- Minuteur : 45/60/90 s par tour au choix de l'hôte (défaut 45 s) ; temps écoulé → pioche + défausse automatiques ; 3 timeouts → mode auto avec « Reprendre la main »
 - Fenêtre d'achat : 3 s après chaque défausse, priorité dans le sens du jeu depuis le jeteur
 - Déconnexion : l'IA joue à la place du joueur, sa main est conservée, reconnexion à tout moment avec le code du salon
 - Départ volontaire : remplacement par l'IA jusqu'à la fin

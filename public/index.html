@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2112-M">
+<meta name="version" content="v2113-T">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -1199,7 +1199,7 @@ function App() {
           <div className="border-t border-emerald-800 pt-3 flex flex-col gap-2">
             <span className="text-xs text-amber-200 font-bold">1 · Crée un salon et partage le code</span>
             <div className="flex gap-2 text-xs">
-              {[30, 45, 60].map((t) => (
+              {[45, 60, 90].map((t) => (
                 <button key={t} onClick={() => setTurnSeconds(t)} className={`flex-1 py-1.5 rounded-xl font-bold ${turnSeconds === t ? "btn-gold" : "btn-dark"}`}>{t}s/tour</button>
               ))}
             </div>
@@ -1250,7 +1250,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2112-M</span>
+          <span className="opacity-60">v2113-T</span>
         </div>
       </div>
     );
