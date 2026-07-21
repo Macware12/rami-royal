@@ -1,4 +1,4 @@
-// Serveur multijoueur Rami Royal — salons privés à code, minuteur, achats hors tour, reconnexion
+// Serveur multijoueur Ramy Gasy — salons privés à code, minuteur, achats hors tour, reconnexion
 const express = require("express");
 const http = require("http");
 const path = require("path");
@@ -567,6 +567,30 @@ function aiPlayTurn(room) {
     }
   }
 
+  // Échange de joker (niveau difficile) : récupérer un joker posé avec la carte exacte
+  if (p.posed && level === "difficile" && !contract.poseTout) {
+    let swapped = true;
+    while (swapped) {
+      swapped = false;
+      for (const m of g.melds) {
+        if (m.type !== "esc") continue;
+        for (let ji = 0; ji < m.cards.length && !swapped; ji++) {
+          if (!m.cards[ji].joker) continue;
+          const c = p.hand.find((h) => !h.joker && E.isOrderedEscalier(m.cards.map((x, i2) => (i2 === ji ? h : x))));
+          if (!c) continue;
+          const jk = m.cards[ji];
+          m.cards = m.cards.map((x, i2) => (i2 === ji ? c : x));
+          p.hand.splice(p.hand.indexOf(c), 1);
+          p.hand.push(jk);
+          log(room, p.name + " échange " + E.cardName(c) + " contre un Joker !");
+          io.to(room.code).emit("fx", { kind: "exchange", idx });
+          swapped = true;
+        }
+        if (swapped) break;
+      }
+    }
+  }
+
   // Compléter
   if (p.posed && !contract.poseTout) {
     let changed = true;
@@ -884,4 +908,4 @@ setInterval(() => {
   }
 }, 10000);
 process.on("unhandledRejection", (e) => console.error("PROMESSE REJETÉE:", e));
-server.listen(PORT, () => console.log("Serveur Rami Royal sur le port " + PORT));
+server.listen(PORT, () => console.log("Serveur Ramy Gasy sur le port " + PORT));

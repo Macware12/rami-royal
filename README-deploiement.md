@@ -1,4 +1,4 @@
-# Serveur multijoueur Rami Royal — guide de mise en ligne
+# Serveur multijoueur Ramy Gasy — guide de mise en ligne
 
 ## Contenu
 - `server.js` — le serveur (salons à code, tours, minuteur, achats hors tour, reconnexion)
