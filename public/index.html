@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2109-R">
+<meta name="version" content="v2111-D">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -982,7 +982,9 @@ function App() {
   }
   function onCardPointerDown(e, c) {
     dragInfo.current = { id: c.id, card: c, startX: e.clientX, startY: e.clientY, dragging: false };
-    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
+    // Capture sur le conteneur de la main (élément stable) : sur iOS, capturer la carte
+    // elle-même tue le geste (pointercancel) dès que le réordonnancement la déplace dans le DOM.
+    try { handRef.current.setPointerCapture(e.pointerId); } catch (_) {}
   }
   function onCardPointerMove(e) {
     const d = dragInfo.current;
@@ -1011,15 +1013,16 @@ function App() {
       }
     }
   }
-  function onCardPointerUp(e, c) {
+  function onCardPointerUp(e) {
     const d = dragInfo.current;
     dragInfo.current = null;
-    if (d && d.dragging) {
+    if (!d) return;
+    if (d.dragging) {
       setDrag(null); lastTargetRef.current = -1;
-      handleDrop(e.clientX, e.clientY, c);
+      handleDrop(e.clientX, e.clientY, d.card);
       return;
     }
-    tapCard(c.id);
+    tapCard(d.id);
   }
   function discardDropAt(x, y) {
     const cont = handRef.current;
@@ -1043,7 +1046,7 @@ function App() {
     const dr = discardRef.current && discardRef.current.getBoundingClientRect();
     const sticky = Date.now() - overStickyRef.current < 250; // la défausse vient de grossir : le jet compte
     overStickyRef.current = 0;
-    if (inRect(dr, 12) || sticky) {
+    if (inRect(dr, 28) || sticky) {
       if (myTurn && g.phase === "play") {
         setPendingDiscard(card.id);
         setMsg("⚠️ Appuie sur la défausse pour confirmer le jet");
@@ -1247,7 +1250,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2109-R</span>
+          <span className="opacity-60">v2111-D</span>
         </div>
       </div>
     );
@@ -1566,15 +1569,16 @@ function App() {
       {msg && <div className="px-3 py-1 text-xs text-amber-200 text-center">{msg}</div>}
 
       {/* Main */}
-      <div ref={handRef} className={`relative px-2 pt-3 pb-2 border-t-2 ${drag && drag.fromDiscard ? "border-amber-300 pulse-gold" : myTurn ? "border-amber-400" : "border-emerald-800"}`}
+      <div ref={handRef}
+        onPointerMove={onCardPointerMove}
+        onPointerUp={onCardPointerUp}
+        onPointerCancel={() => { dragInfo.current = null; setDrag(null); }}
+        className={`relative px-2 pt-3 pb-2 border-t-2 ${drag && drag.fromDiscard ? "border-amber-300 pulse-gold" : myTurn ? "border-amber-400" : "border-emerald-800"}`}
         style={{ background: "linear-gradient(180deg, rgba(4,35,24,.9), rgba(3,25,17,.97))" }}>
         <div className="flex flex-wrap gap-1.5 justify-center pb-1">
           {visibleHand.map((c) => (
             <div key={c.id} data-cid={c.id}
               onPointerDown={(e) => onCardPointerDown(e, c)}
-              onPointerMove={onCardPointerMove}
-              onPointerUp={(e) => onCardPointerUp(e, c)}
-              onPointerCancel={() => { dragInfo.current = null; setDrag(null); }}
               style={{ touchAction: "none", opacity: drag && drag.id === c.id ? 0.35 : 1 }}>
               <Card card={c} selected={selected.includes(c.id)} isNew={newIdsRef.current.includes(c.id)} />
             </div>
