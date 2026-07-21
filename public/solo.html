@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2111-D">
+<meta name="version" content="v2112-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -1997,11 +1997,6 @@ function tapCard(id) {
           <button onClick={startGame} className="btn-gold font-bold py-3 rounded-xl text-base">
             Distribuer les cartes 🎴
           </button>
-          <button onClick={startTuto} className="font-bold py-2.5 rounded-xl text-sm text-cyan-50"
-            style={{ background: "linear-gradient(180deg,#0e7490,#155e75)", boxShadow: "0 3px 0 #164e63, 0 6px 12px rgba(0,0,0,.35)" }}>
-            🎓 Apprendre à jouer — partie guidée
-          </button>
-          <a href="/" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center block">🌐 Multijoueur en ligne</a>
           <a href="/regles.html" className="btn-dark font-bold py-2 rounded-xl text-xs text-center block">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="text-[10px] text-emerald-500 text-center underline">Politique de confidentialité</a>
           {(stats.games || 0) > 0 && (
