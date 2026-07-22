@@ -1,8 +1,10 @@
 // Service worker Ramy Gasy — le solo reste jouable hors connexion
 // Stratégie : réseau d'abord (toujours à jour), cache en secours (hors ligne)
-const CACHE = "ramy-gasy-v1";
-const ASSETS = ["/", "/solo.html", "/regles.html", "/confidentialite.html", "/manifest.json",
-  "/favicon.png", "/icon-180.png", "/icon-192.png", "/icon-512.png"];
+const CACHE = "ramy-gasy-v2";
+const ASSETS = ["/", "/solo.html", "/regles.html", "/confidentialite.html", "/manifest.json", "/config.js",
+  "/favicon.png", "/icon-180.png", "/icon-192.png", "/icon-512.png",
+  "/lib/react.production.min.js", "/lib/react-dom.production.min.js", "/lib/babel.min.js",
+  "/lib/tailwind.css", "/lib/socket.io.min.js"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).catch(() => {}));

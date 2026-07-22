@@ -8,16 +8,17 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2149-S">
+<meta name="version" content="v2150-N">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
 <script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(function () {});</script>
-<script src="/socket.io/socket.io.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
-<script src="https://cdn.tailwindcss.com"></script>
+<script src="/config.js"></script>
+<script src="/lib/socket.io.min.js"></script>
+<script src="/lib/react.production.min.js"></script>
+<script src="/lib/react-dom.production.min.js"></script>
+<script src="/lib/babel.min.js"></script>
+<link rel="stylesheet" href="/lib/tailwind.css">
 <style>
   html, body { margin: 0; padding: 0; background: #052e16; overscroll-behavior: none; }
   * { -webkit-tap-highlight-color: transparent; }
@@ -626,7 +627,9 @@ function Confetti() {
 }
 
 // ---------- Application ----------
-const socket = io();
+// Adresse du serveur : vide sur le web (même origine), absolue dans l'app native (voir config.js)
+const API_BASE = (window.RAMI_CONFIG && window.RAMI_CONFIG.server) || "";
+const socket = API_BASE ? io(API_BASE) : io();
 
 function App() {
   const [srv, setSrv] = useState(null);          // dernier état reçu du serveur
@@ -1409,7 +1412,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2149-S</span>
+          <span className="opacity-60">v2150-N</span>
         </div>
       </div>
     );

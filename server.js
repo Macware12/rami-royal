@@ -93,7 +93,7 @@ try {
     if (compiled.includes("</script>")) return; // sécurité : on garde la version originale
     PRECOMPILED[f] = raw
       .replace(m[0], "<script>\n" + compiled + "\n</script>")
-      .replace(/<script src="https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/babel-standalone[^"]*"><\/script>\s*/, "");
+      .replace(/<script src="\/lib\/babel\.min\.js"><\/script>\s*/, "");
     console.log("Précompilé : " + f);
   });
 } catch (e) { console.error("Précompilation impossible (fallback client) :", e.message); }
@@ -119,6 +119,10 @@ const server = http.createServer(app);
 // Pour autoriser un autre domaine (ex. domaine personnalisé), définir sur Render :
 // ALLOWED_ORIGINS="https://mondomaine.com,https://www.mondomaine.com"
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "").split(",").map((s) => s.trim()).filter(Boolean);
+// Origines des apps natives Capacitor (iOS : capacitor://localhost, Android : https://localhost)
+["capacitor://localhost", "ionic://localhost", "https://localhost", "http://localhost"].forEach((o) => {
+  if (!ALLOWED_ORIGINS.includes(o)) ALLOWED_ORIGINS.push(o);
+});
 const io = new Server(server, {
   maxHttpBufferSize: 16 * 1024, // les actions du jeu sont minuscules : rejette les payloads géants (défaut 1 Mo)
   cors: { origin: true, credentials: false },

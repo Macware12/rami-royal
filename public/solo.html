@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2148-R">
+<meta name="version" content="v2150-N">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -19,18 +19,20 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 // Signal de présence anonyme pour les statistiques temps réel
 (function () {
   var id = Math.random().toString(36).slice(2);
+  var base = (window.RAMI_CONFIG && window.RAMI_CONFIG.server) || "";
   var beat = function () {
     var p = "";
     try { p = (localStorage.getItem("rami-name") || "").slice(0, 20); } catch (e) {}
-    fetch("/presence?id=" + id + "&m=solo&p=" + encodeURIComponent(p)).catch(function () {});
+    fetch(base + "/presence?id=" + id + "&m=solo&p=" + encodeURIComponent(p)).catch(function () {});
   };
   beat(); setInterval(beat, 25000);
 })();
 </script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
-<script src="https://cdn.tailwindcss.com"></script>
+<script src="/config.js"></script>
+<script src="/lib/react.production.min.js"></script>
+<script src="/lib/react-dom.production.min.js"></script>
+<script src="/lib/babel.min.js"></script>
+<link rel="stylesheet" href="/lib/tailwind.css">
 <style>
   html, body { margin: 0; padding: 0; background: #052e16; overscroll-behavior: none; }
   * { -webkit-tap-highlight-color: transparent; }

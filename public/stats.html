@@ -47,7 +47,9 @@
     </div>
   </div>
   <div class="maj"><span class="dot"></span>Dernière mise à jour : <span id="maj">—</span></div>
+<script src="/config.js"></script>
 <script>
+  var API_BASE = (window.RAMI_CONFIG && window.RAMI_CONFIG.server) || "";
   var cle = new URLSearchParams(location.search).get("cle") || "";
   function liste(arr) {
     if (!arr || arr.length === 0) return "<span style='opacity:.5'>personne</span>";
@@ -57,7 +59,7 @@
     }).join(" ");
   }
   function maj() {
-    fetch("/stats.json" + (cle ? "?cle=" + encodeURIComponent(cle) : "")).then(function (r) { return r.json(); }).then(function (d) {
+    fetch(API_BASE + "/stats.json" + (cle ? "?cle=" + encodeURIComponent(cle) : "")).then(function (r) { return r.json(); }).then(function (d) {
       ["total", "connectes", "soloActifs", "salons", "parties", "joueursEnSalon"].forEach(function (k) {
         document.getElementById(k).textContent = d[k];
       });
