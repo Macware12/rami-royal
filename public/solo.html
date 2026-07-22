@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2141-P">
+<meta name="version" content="v2143-F">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -629,7 +629,7 @@ function pickAiBuyer(state, discarderIdx, nextIdx) {
   const top = state.discard[state.discard.length - 1];
   let best = null, bestD = 99;
   state.players.forEach((p, i) => {
-    if (!p.isAI || i === discarderIdx || i === nextIdx || p.buysLeft <= 0) return;
+    if (!p.isAI || i === discarderIdx || i === nextIdx || p.buysLeft <= 0 || p.posed) return;
     if (!aiWantsBuy(p, top, state.level || "moyen", MANCHES[state.mancheIdx])) return;
     const d = (i - discarderIdx + n) % n;
     if (d < bestD) { bestD = d; best = i; }
@@ -965,11 +965,11 @@ function RamiRoyal() {
   }
 
   function quitToHome() {
-    setTuto(false);
     clearTimeout(aiTimer.current);
     clearTimeout(introTimer.current);
-    store.del("rami-save");
-    setHasSave(false);
+    if (!tuto) { store.del("rami-save"); setHasSave(false); } // quitter le tutoriel ne doit pas détruire la sauvegarde d'une vraie partie
+    else setHasSave(Boolean(store.get("rami-save")));
+    setTuto(false);
     setIntro(null);
     setG(null);
     setSelected([]);
@@ -1128,7 +1128,11 @@ function RamiRoyal() {
       const data = JSON.parse(raw);
       if (!data.g || !data.g.players) return;
       ensureAudio();
-      setG({ ...data.g, animEvents: [], animSeq: 0, toast: null, buyWindow: null, phase: data.g.phase === "buyWindow" ? "draw" : data.g.phase });
+      // Sauvegarde faite pendant une fenêtre d'achat : turn pointe encore sur le défausseur — on passe au joueur suivant
+      const wasBuyWindow = data.g.phase === "buyWindow";
+      const resumedTurn = wasBuyWindow && data.g.buyWindow && data.g.buyWindow.nextIdx != null
+        ? data.g.buyWindow.nextIdx : data.g.turn;
+      setG({ ...data.g, animEvents: [], animSeq: 0, toast: null, buyWindow: null, turn: resumedTurn, phase: wasBuyWindow ? "draw" : data.g.phase });
       setSelected([]); setMsg("");
       setScreen("game");
     } catch (_) { setHasSave(false); }
@@ -1155,6 +1159,7 @@ function RamiRoyal() {
 
   function checkWin(state, idx) {
     if (state.players[idx].hand.length > 0) return state;
+    if (!state.players[idx].posed) return state; // impossible de gagner sans avoir posé son contrat (les groupes « Prêt » ne comptent pas)
     const isFinal = MANCHES[state.mancheIdx].poseTout;
     let bonusType = null;
     if (isFinal) bonusType = "final";
@@ -1166,10 +1171,15 @@ function RamiRoyal() {
     stock = [...stock]; discard = [...discard];
     if (source === "stock" && stock.length === 0) {
       const top = discard.pop();
-      stock = discard.sort(() => Math.random() - 0.5);
-      discard = [top];
+      // Mélange de Fisher-Yates (équitable), contrairement à sort(random)
+      for (let i = discard.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [discard[i], discard[j]] = [discard[j], discard[i]];
+      }
+      stock = discard;
+      discard = top ? [top] : [];
     }
-    const card = source === "stock" ? stock.pop() : discard.pop();
+    const card = (source === "stock" ? stock.pop() : discard.pop()) || null; // null si tout est épuisé (jamais undefined)
     return { stock, discard, card };
   }
 
@@ -1193,7 +1203,7 @@ function RamiRoyal() {
       if (i !== idx) return q;
       const hand = [...q.hand];
       const at = idx === 0 && insertAt != null ? Math.max(0, Math.min(insertAt, hand.length)) : hand.length;
-      hand.splice(at, 0, bought.card, penalty.card);
+      hand.splice(at, 0, ...[bought.card, penalty.card].filter(Boolean)); // pas de pénalité si tout est épuisé
       return { ...q, hand, buysLeft: q.buysLeft - 1, lastTaken: bought.card };
     });
     let ns = {
@@ -1206,7 +1216,7 @@ function RamiRoyal() {
       animSeq: ++ANIM_SEQ,
     };
     if (idx === 0) {
-      ns = { ...ns, lastDrawn: [bought.card.id, penalty.card.id] };
+      ns = { ...ns, lastDrawn: [bought.card, penalty.card].filter(Boolean).map((c) => c.id) };
       setMsg("Achat : " + cardName(bought.card) + " + 1 carte de pénalité.");
     } else {
       ns = { ...ns, toast: { id: ++ANIM_SEQ, name: buyerName, card: bought.card, kind: "buy" } };
@@ -1221,7 +1231,7 @@ function RamiRoyal() {
     const nextIdx = (discarderIdx + 1) % n;
     const top = state.discard[state.discard.length - 1];
     const aiBuyer = pickAiBuyer(state, discarderIdx, nextIdx);
-    const humanEligible = discarderIdx !== 0 && nextIdx !== 0 && state.players[0].buysLeft > 0 && Boolean(top) && !top.joker;
+    const humanEligible = discarderIdx !== 0 && nextIdx !== 0 && state.players[0].buysLeft > 0 && !state.players[0].posed && Boolean(top) && !top.joker;
     // Priorité du joueur suivant : si un bot veut acheter alors que TON tour arrive, tu choisis d'abord
     if (!humanEligible && nextIdx === 0 && aiBuyer != null && Boolean(top) && !top.joker) {
       return { ...state, phase: "buyWindow", buyWindow: { discarderIdx, nextIdx, aiBuyer, priority: true, until: Date.now() + BUY_WINDOW_MS } };
@@ -1262,14 +1272,16 @@ function RamiRoyal() {
     const wants = [];
     const topD = s.discard[s.discard.length - 1];
     const nextP = s.players[bw.nextIdx];
+    // Le joueur suivant est prioritaire : s'il veut la carte, personne ne peut l'acheter (ni humain, ni bot)
+    const nextWants = Boolean(nextP && nextP.isAI && aiWantsBuy(nextP, topD, s.level || "moyen", MANCHES[s.mancheIdx]));
     if (humanChoice === "buy" && s.players[0].buysLeft > 0 && topD && !topD.joker) {
-      if (nextP && nextP.isAI && aiWantsBuy(nextP, topD, s.level || "moyen")) {
+      if (nextWants) {
         setMsg(nextP.name + " est le joueur suivant : il est prioritaire et garde la carte pour son tour.");
       } else {
         wants.push({ idx: 0, insertAt });
       }
     }
-    if (bw.aiBuyer != null) wants.push({ idx: bw.aiBuyer });
+    if (bw.aiBuyer != null && !nextWants) wants.push({ idx: bw.aiBuyer });
     let ns = { ...s, buyWindow: null };
     if (wants.length > 0 && ns.discard.length > 0) {
       wants.sort((a, b) => ((a.idx - bw.discarderIdx + n) % n) - ((b.idx - bw.discarderIdx + n) % n));
@@ -1309,6 +1321,7 @@ function RamiRoyal() {
         return addLog(ns, "Tu prends " + cardName(taken.card));
       }
       const res = takeCard(s.stock, s.discard, "stock");
+      if (!res.card) { setMsg("Pioche épuisée — joue sans piocher ce tour-ci."); return { ...s, phase: "play", justPosed: false }; }
       const players = s.players.map((p, i) => (i === 0 ? { ...p, hand: [...p.hand, res.card] } : p));
       setMsg("");
       let ns = {
@@ -1368,7 +1381,8 @@ function tapCard(id) {
     if (!d.dragging && Math.hypot(dx, dy) > 15) { d.dragging = true; lastTargetRef.current = -1; }
     if (d.dragging) {
       const dr = discardRef.current && discardRef.current.getBoundingClientRect();
-      const overD = Boolean(dr) && [[e.clientX, e.clientY], [e.clientX, e.clientY - 34], [e.clientX, e.clientY - 58]].some(([px, py]) =>
+      const chD = UI_PREFS.big ? 72 : 58;
+      const overD = Boolean(dr) && [[e.clientX, e.clientY], [e.clientX, e.clientY - chD / 2 - 5], [e.clientX, e.clientY - chD]].some(([px, py]) =>
         px >= dr.left - 24 && px <= dr.right + 24 && py >= dr.top - 24 && py <= dr.bottom + 24);
       if (overD) overStickyRef.current = Date.now();
       setDrag({ id: d.id, card: d.card, x: e.clientX, y: e.clientY, over: overD ? "discard" : null });
@@ -1433,25 +1447,9 @@ function tapCard(id) {
         let ns = { ...s, stock: taken.stock, discard: taken.discard, players, phase: "play", justPosed: false, lastDrawn: [taken.card.id], takenCards: [...(s.takenCards || []), { idx: 0, card: taken.card }] };
         return addLog(ns, "Tu prends " + cardName(taken.card));
       }
-      if (s.players[0].buysLeft <= 0) { setMsg("Plus d'achats disponibles (" + MAX_ACHATS + " max par manche)."); return s; }
-      const bought = takeCard(s.stock, s.discard, "discard");
-      const penalty = takeCard(bought.stock, bought.discard, "stock");
-      const players = s.players.map((p, i) => {
-        if (i !== 0) return p;
-        const hand = place(p.hand, bought.card);
-        hand.push(penalty.card);
-        return { ...p, hand, buysLeft: p.buysLeft - 1 };
-      });
-      setMsg("Achat hors tour : " + cardName(bought.card) + " + 1 carte de pénalité.");
-      let ns = {
-        ...s, stock: penalty.stock, discard: penalty.discard, players,
-        lastDrawn: [bought.card.id, penalty.card.id],
-        discardLocked: true,
-        takenCards: [...(s.takenCards || []), { idx: 0, card: bought.card }],
-        animEvents: [{ source: "stock", target: "p0", card: null, faceDown: true }],
-        animSeq: ++ANIM_SEQ,
-      };
-      return addLog(ns, "Tu achètes " + cardName(bought.card) + " hors tour (+1 pénalité)");
+      // Hors fenêtre d'achat et hors tour : pas d'achat possible (mêmes règles que le multijoueur)
+      setMsg("L'achat se fait dans la fenêtre qui s'ouvre après chaque défausse.");
+      return s;
     });
   }
 
@@ -1500,7 +1498,11 @@ function tapCard(id) {
   }
 
   function handleDrop(x, y, card) {
-    const pts = [[x, y], [x, y - 34], [x, y - 58]]; // le doigt, le centre et le haut de la carte fantôme
+    // 0) Le doigt DANS la zone de la main = simple reclassement : jamais un jet ni un ajout à un groupe
+    const hr0 = handRef.current && handRef.current.getBoundingClientRect();
+    if (hr0 && y >= hr0.top && x >= hr0.left && x <= hr0.right) { overStickyRef.current = 0; return; }
+    const ch = UI_PREFS.big ? 72 : 58; // hauteur de la carte fantôme (option « grandes cartes »)
+    const pts = [[x, y], [x, y - ch / 2 - 5], [x, y - ch]]; // le doigt, le centre et le haut de la carte fantôme
     const inRect = (r, m) => Boolean(r) && pts.some(([px, py]) => px >= r.left - m && px <= r.right + m && py >= r.top - m && py <= r.bottom + m);
     // 1) Les groupes « Prêt » et les combinaisons de la table D'ABORD : le chemin du doigt
     //    croise souvent la défausse, il ne faut pas confondre avec un jet
@@ -1923,7 +1925,7 @@ function tapCard(id) {
     } else {
       const res = takeCard(stock, discard, "stock");
       stock = res.stock; discard = res.discard;
-      hand.push(res.card);
+      if (res.card) hand.push(res.card); // pioche ET défausse épuisées : l'IA joue sans piocher
       animEvents.push({ source: "stock", target: pKey, card: null, faceDown: true });
       ns = addLog(ns, ai.name + " pioche une carte");
     }
@@ -2219,7 +2221,7 @@ function tapCard(id) {
       {intro && (
         <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
           <div className="panel rounded-3xl px-8 py-5 text-center" style={{ borderColor: "#fbbf24", animation: "introPop 2.2s ease forwards" }}>
-            <div className="text-[11px] uppercase tracking-widest text-emerald-300">Manche {intro.num} / 8</div>
+            <div className="text-[11px] uppercase tracking-widest text-emerald-300">{tuto ? "🎓 Tutoriel" : `Manche ${intro.num} / 8`}</div>
             <div className="text-3xl font-bold text-amber-300" style={{ fontFamily: "Georgia, serif" }}>{intro.label}</div>
           </div>
         </div>
@@ -2252,7 +2254,7 @@ function tapCard(id) {
           <button onClick={() => setShowQuit(true)} className="btn-dark rounded-xl px-2.5 py-1.5 text-base leading-none">🏠</button>
           <div>
             <div className="text-amber-300 font-bold text-sm" style={{ fontFamily: "Georgia, serif" }}>
-              Manche {g.mancheIdx + 1}/8
+              {tuto ? "🎓 Tutoriel" : `Manche ${g.mancheIdx + 1}/8`}
             </div>
             <div className="text-[10px] text-emerald-400">IA {g.level || "moyen"} · {g.stock.length} en pioche</div>
           </div>
@@ -2311,7 +2313,7 @@ function tapCard(id) {
               <span className="shrink-0 text-base" style={{ width: 22 }} title={g.players[o].name}>{g.players[o].avatar || "🙂"}</span>
               {g.melds.filter((m) => m.owner === o).map((m) => (
                 <MeldChip key={m.id} mid={m.id} meld={m} small={g.melds.length > 4}
-                  highlight={(me.posed && selected.length === 1 && myTurn) || (Boolean(drag) && !drag.fromDiscard && me.posed && myTurn && g.phase === "play")}
+                  highlight={(me.posed && selected.length === 1 && myTurn) || (Boolean(drag) && drag.origin !== "discard" && me.posed && myTurn && g.phase === "play")}
                   onClick={() => myTurn && completeMeld(m.id)} />
               ))}
             </div>
@@ -2438,7 +2440,7 @@ function tapCard(id) {
         onPointerUp={onCardPointerUp}
         onPointerCancel={endDrag}
         className={`shrink-0 px-2 pt-3 pb-2 border-t-2 ${drag && drag.origin === "discard" ? "border-amber-400 pulse-gold" : myTurn ? "border-amber-400" : "border-emerald-800"}`}
-        style={{ background: "linear-gradient(180deg, rgba(4,35,24,.9), rgba(3,25,17,.97))" }}>
+        style={{ background: "linear-gradient(180deg, rgba(4,35,24,.9), rgba(3,25,17,.97))", paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))" }}>
         <div className="flex flex-wrap gap-1.5 justify-center pb-1">
           {me.hand.filter((c) => c.id !== pendingDiscard).map((c) => (
             <div key={c.id} data-cid={c.id}
@@ -2451,7 +2453,7 @@ function tapCard(id) {
         </div>
         {drag && (
           <div style={{
-            position: "fixed", left: drag.x - 20, top: drag.y - 62, zIndex: 70, pointerEvents: "none",
+            position: "fixed", left: drag.x - 20, top: drag.y - (UI_PREFS.big ? 76 : 62), zIndex: 70, pointerEvents: "none",
             transform: "scale(1.15) rotate(3deg)",
             filter: "drop-shadow(0 12px 16px rgba(0,0,0,.55))",
           }}>

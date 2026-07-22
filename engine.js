@@ -46,6 +46,8 @@ function isTri(cards) {
   return reals.every((c) => c.rank === reals[0].rank);
 }
 
+// RÈGLE VOULUE : les escaliers « tournent le coin » (ex. D-R-A-2 est valide) — un escalier
+// peut en théorie faire la boucle complète. C'est délibéré (règle maison Ramy Gasy), ne pas « corriger ».
 function isEscalier(cards) {
   const jokers = cards.filter((c) => c.joker).length;
   const reals = cards.filter((c) => !c.joker);

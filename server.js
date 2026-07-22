@@ -14,7 +14,10 @@ const presence = new Map(); // id → { t: dernier signal, m: mode, p: pseudo }
 const STATS_KEY = process.env.STATS_KEY || "gasy2026"; // clé pour voir les pseudos sur /stats.html
 app.get("/presence", (req, res) => {
   const id = String(req.query.id || "").slice(0, 40);
-  if (id) presence.set(id, { t: Date.now(), m: String(req.query.m || "?").slice(0, 10), p: String(req.query.p || "").slice(0, 20) });
+  const now = Date.now();
+  if (presence.size > 300) for (const [k, v] of presence) if (now - v.t > 70000) presence.delete(k); // purge même sans visite de /stats
+  if (id && (presence.has(id) || presence.size < 3000)) // borne dure contre le gonflement malveillant
+    presence.set(id, { t: now, m: String(req.query.m || "?").slice(0, 10), p: String(req.query.p || "").slice(0, 20) });
   res.send("ok");
 });
 app.get("/stats.json", (req, res) => {
@@ -200,6 +203,7 @@ function broadcast(room) {
     if (!p.socketId) return;
     io.to(p.socketId).emit("state", {
       code: room.code,
+      serverNow: Date.now(), // pour que le client corrige le décalage d'horloge dans les comptes à rebours
       state: room.state,
       options: room.options,
       rematch: room.rematch ? { accepted: room.rematch.accepted, declined: room.rematch.declined } : null,
@@ -239,6 +243,7 @@ function startTurn(room) {
     clearTimeout(room.aiTimer);
     room.aiTimer = setTimeout(() => safeRun(() => aiPlayTurn(room)), AI_DELAY_MS);
   } else {
+    clearTimeout(room.aiTimer); // un timer IA périmé ne doit jamais jouer le tour d'un humain
     room.turnTimer = setTimeout(() => safeRun(() => onTurnTimeout(room)), room.options.turnSeconds * 1000);
   }
   broadcast(room);
@@ -262,18 +267,26 @@ function onTurnTimeout(room) {
   }
 }
 
+function shuffleInPlace(a) {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 function drawFromStock(room, idx) {
   const g = room.game;
   if (g.stock.length === 0) {
     const top = g.discard.pop();
-    g.stock = g.discard.sort(() => Math.random() - 0.5);
-    g.discard = [top];
+    g.stock = shuffleInPlace(g.discard);
+    g.discard = top ? [top] : [];
   }
   const card = g.stock.pop();
-  room.players[idx].hand.push(card);
+  if (card) room.players[idx].hand.push(card); // pioche ET défausse épuisées : on joue sans piocher plutôt que planter
   g.phase = "play";
   io.to(room.code).emit("fx", { kind: "draw", source: "stock", idx });
-  return card;
+  return card || null;
 }
 
 // ---------- Actions des joueurs ----------
@@ -460,11 +473,12 @@ function doBuy(room, idx) {
   const bought = g.discard.pop();
   if (g.stock.length === 0) {
     const t2 = g.discard.pop();
-    g.stock = g.discard.sort(() => Math.random() - 0.5);
+    g.stock = shuffleInPlace(g.discard);
     g.discard = t2 ? [t2] : [];
   }
   const penalty = g.stock.pop();
-  p.hand.push(bought, penalty);
+  p.hand.push(bought);
+  if (penalty) p.hand.push(penalty); // pas de pénalité possible si tout est épuisé
   p.buysLeft--;
   p.lastTaken = bought;
   g.takenCards = [...(g.takenCards || []), { idx, card: bought }]; // mémoire pour la défausse défensive des bots
@@ -483,7 +497,7 @@ function openBuyWindow(room, discarderIdx) {
   const nextP = room.players[nextIdx];
   const nextIsHuman = nextP && !nextP.isBot && nextP.connected && !nextP.absent;
   const someoneCanBuy = Boolean(top) && !top.joker && room.players.some((p, i) =>
-    i !== discarderIdx && i !== nextIdx && !p.isBot && p.connected && !p.absent && p.buysLeft > 0);
+    i !== discarderIdx && i !== nextIdx && !p.isBot && p.connected && !p.absent && p.buysLeft > 0 && !p.posed);
   // si un bot veut acheter mais qu'un humain est le prochain joueur, on ouvre la fenêtre
   // pour qu'il puisse faire valoir sa priorité
   if (!someoneCanBuy && !(bBuyer != null && nextIsHuman)) {
@@ -509,6 +523,7 @@ function handleBuyRequest(room, idx) {
   if (topD && topD.joker) return "Impossible de récupérer un joker jeté — il est perdu !";
   if (idx === g.lastDiscarderIdx) return "Tu ne peux pas racheter ta propre défausse.";
   if (idx === (g.lastDiscarderIdx + 1) % room.players.length) return "Tu es le joueur suivant : tu prendras la carte gratuitement à ton tour.";
+  if (p.posed) return "Tu as déjà posé ton contrat — tu pourras compléter à ton tour, sans acheter.";
   if (p.buysLeft <= 0) return "Plus d'achats disponibles (3 max par manche).";
   if (!g.buyRequests.includes(idx)) g.buyRequests.push(idx);
   return null;
@@ -538,8 +553,10 @@ function resolveRematch(room, timedOut) {
   if (room.players.length === 0) return;
   room.players.forEach((p) => { p.total = 0; });
   if (room.players.length >= 3) {
-    log(room, "🔁 Revanche !" + (timedOut ? " (délai écoulé, les silencieux jouent quand même)" : ""));
+    room.game = null; // nouvelle partie : l'historique des manches précédentes ne doit pas être conservé
     startRound(room, 0);
+    log(room, "🔁 Revanche !" + (timedOut ? " (délai écoulé, les silencieux jouent quand même)" : ""));
+    broadcast(room);
   } else {
     room.state = "lobby";
     room.game = null;
@@ -618,12 +635,15 @@ function checkRoundEnd(room, idx) {
 function aiPlayTurn(room) {
   const g = room.game;
   if (!g || g.roundOver || room.state !== "playing") return;
+  if (g.phase === "buyWindow") return; // la fenêtre d'achat se résout par son propre minuteur, jamais ici
   const idx = g.turn;
   const p = room.players[idx];
+  if (!p || !(p.isBot || p.absent || !p.connected)) return; // jamais jouer à la place d'un humain actif (timer périmé)
   const contract = E.MANCHES[g.mancheIdx];
   const level = room.options.level;
 
-  // Piocher ou prendre
+  // Piocher ou prendre — sauf si la carte est déjà en main (phase "play" : relance du chien de garde)
+  if (g.phase === "draw") {
   const top = g.discard[g.discard.length - 1];
   const mates = top && !top.joker ? p.hand.filter((c) => !c.joker && c.rank === top.rank).length : 0;
   const neigh = top && !top.joker ? p.hand.filter((c) => !c.joker && c.suit === top.suit && Math.abs(c.rank - top.rank) <= 1).length : 0;
@@ -645,6 +665,7 @@ function aiPlayTurn(room) {
   } else {
     drawFromStock(room, idx);
     log(room, `${p.name} pioche une carte`);
+  }
   }
 
   // Poser
@@ -762,7 +783,22 @@ io.on("connection", (socket) => {
     return idx >= 0 ? { idx, p: myRoom.players[idx] } : null;
   };
 
+  // Quitter proprement le salon courant avant d'en rejoindre un autre (sinon joueur fantôme double-abonné)
+  const detachFromRoom = () => {
+    if (!myRoom) return;
+    const me = findMe();
+    if (me && me.p.socketId === socket.id) {
+      me.p.connected = false;
+      me.p.socketId = null;
+      if (myRoom.state === "playing") me.p.absent = true;
+      broadcast(myRoom);
+    }
+    socket.leave(myRoom.code);
+    myRoom = null; myToken = null;
+  };
+
   socket.on("createRoom", ({ name, options, avatar }, cb) => {
+    detachFromRoom();
     const room = createRoom(name, options);
     const player = addPlayer(room, name, false, avatar);
     player.socketId = socket.id;
@@ -777,6 +813,7 @@ io.on("connection", (socket) => {
   socket.on("joinRoom", ({ code, name, avatar }, cb) => {
     const room = rooms.get(String(code || "").toUpperCase());
     if (!room) return cb({ ok: false, error: "Salon introuvable. Vérifie le code." });
+    if (room !== myRoom) detachFromRoom();
     if (room.state !== "lobby") return cb({ ok: false, error: "La partie a déjà commencé (utilise « Reprendre » si tu en faisais partie)." });
     if (room.players.length >= 6) return cb({ ok: false, error: "Salon complet (6 joueurs max)." });
     const player = addPlayer(room, name, false, avatar);
@@ -794,6 +831,8 @@ io.on("connection", (socket) => {
     if (!room) return cb({ ok: false, error: "Ce salon n'existe plus." });
     const player = room.players.find((p) => p.token === token);
     if (!player) return cb({ ok: false, error: "Joueur inconnu dans ce salon." });
+    if (room !== myRoom) detachFromRoom();
+    const wasAway = !player.connected; // avant mise à jour : vraie coupure, ou simple re-synchronisation ?
     player.socketId = socket.id;
     player.connected = true;
     if (player.absent) { player.absent = false; player.timeouts = 0; log(room, player.name + " reprend la main"); }
@@ -802,7 +841,15 @@ io.on("connection", (socket) => {
     myRoom = room; myToken = token;
     socket.join(room.code);
     touch(room);
-    if (room.game) log(room, `${player.name} est de retour !`);
+    // Si l'IA s'apprêtait à jouer son tour, on lui rend la main
+    const pIdx = room.players.indexOf(player);
+    if (room.game && room.state === "playing" && room.game.turn === pIdx && room.game.phase === "draw" && !room.game.roundOver) {
+      clearTimeout(room.aiTimer);
+      clearTimeout(room.turnTimer);
+      room.game.turnDeadline = Date.now() + room.options.turnSeconds * 1000;
+      room.turnTimer = setTimeout(() => safeRun(() => onTurnTimeout(room)), room.options.turnSeconds * 1000);
+    }
+    if (room.game && wasAway) log(room, `${player.name} est de retour !`);
     cb({ ok: true, code: room.code });
     broadcast(room);
   });
@@ -871,11 +918,15 @@ io.on("connection", (socket) => {
   socket.on("rematch", () => {
     if (!myRoom || myRoom.state !== "over") return;
     const me = findMe();
-    if (!me || me.idx !== 0) return socket.emit("info", "Seul l'hôte peut proposer la revanche.");
+    if (!me) return;
+    const host = myRoom.players[0];
+    const hostAway = !host || host.isBot || !host.connected;
+    const firstActive = myRoom.players.findIndex((p) => !p.isBot && p.connected);
+    if (me.idx !== 0 && !(hostAway && me.idx === firstActive)) return socket.emit("info", "Seul l'hôte peut proposer la revanche.");
     if (myRoom.rematch) return;
-    // acceptations automatiques : l'hôte, les bots et les déconnectés (l'IA jouera pour eux)
-    const accepted = [0];
-    myRoom.players.forEach((p, i) => { if (i !== 0 && (p.isBot || !p.connected)) accepted.push(i); });
+    // acceptations automatiques : le proposeur, les bots et les déconnectés (l'IA jouera pour eux)
+    const accepted = [me.idx];
+    myRoom.players.forEach((p, i) => { if (i !== me.idx && (p.isBot || !p.connected)) accepted.push(i); });
     myRoom.rematch = { accepted, declined: [] };
     log(myRoom, me.p.name + " propose une revanche !");
     touch(myRoom);
@@ -952,7 +1003,12 @@ io.on("connection", (socket) => {
   socket.on("nextRound", () => {
     if (!myRoom || myRoom.state !== "roundEnd") return;
     const me = findMe();
-    if (!me || me.idx !== 0) return;
+    if (!me) return;
+    // L'hôte lance la manche suivante ; s'il est déconnecté, le premier humain connecté peut le faire
+    const host = myRoom.players[0];
+    const hostAway = !host || host.isBot || !host.connected;
+    const firstActive = myRoom.players.findIndex((p) => !p.isBot && p.connected);
+    if (me.idx !== 0 && !(hostAway && me.idx === firstActive)) return;
     touch(myRoom);
     startRound(myRoom, myRoom.game.mancheIdx + 1);
   });
@@ -984,9 +1040,10 @@ io.on("connection", (socket) => {
     me.p.absent = true;
     me.p.socketId = null;
     log(myRoom, `${me.p.name} a quitté la partie — l'IA le remplace`);
-    if (myRoom.game && myRoom.state === "playing" && myRoom.game.turn === me.idx) {
+    if (myRoom.game && myRoom.state === "playing" && myRoom.game.turn === me.idx && myRoom.game.phase !== "buyWindow") {
       clearTimeout(myRoom.turnTimer);
-      myRoom.aiTimer = setTimeout(() => aiPlayTurn(myRoom), AI_DELAY_MS);
+      clearTimeout(myRoom.aiTimer);
+      myRoom.aiTimer = setTimeout(() => safeRun(() => aiPlayTurn(myRoom)), AI_DELAY_MS);
     }
     broadcast(myRoom);
   });
@@ -995,13 +1052,15 @@ io.on("connection", (socket) => {
     if (!myRoom) return;
     const me = findMe();
     if (!me) return;
+    if (me.p.socketId && me.p.socketId !== socket.id) return; // un socket plus récent a repris ce joueur : ignorer la mort de l'ancien
     me.p.connected = false;
     me.p.socketId = null;
     if (myRoom.state === "playing") {
       log(myRoom, `${me.p.name} est déconnecté — l'IA joue à sa place en attendant son retour`);
-      if (myRoom.game.turn === me.idx && !myRoom.game.roundOver) {
+      if (myRoom.game.turn === me.idx && !myRoom.game.roundOver && myRoom.game.phase !== "buyWindow") {
         clearTimeout(myRoom.turnTimer);
-        myRoom.aiTimer = setTimeout(() => aiPlayTurn(myRoom), AI_DELAY_MS);
+        clearTimeout(myRoom.aiTimer);
+        myRoom.aiTimer = setTimeout(() => safeRun(() => aiPlayTurn(myRoom)), AI_DELAY_MS);
       }
     }
     broadcast(myRoom);

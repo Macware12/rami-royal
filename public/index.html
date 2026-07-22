@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2141-P">
+<meta name="version" content="v2143-F">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -68,6 +68,9 @@ const store = {
 };
 
 // Préférences d'affichage (accessibilité)
+// Décalage horloge serveur/client : mis à jour à chaque état reçu, corrige les comptes à rebours
+let CLOCK_OFFSET = 0;
+const srvNow = () => Date.now() + CLOCK_OFFSET;
 const UI_PREFS = {
   big: store.get("ramimp-big") === "1",
   four: store.get("ramimp-4col") === "1",
@@ -656,7 +659,7 @@ function App() {
     const salon = (params.get("salon") || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5);
     if (salon.length === 5) {
       window.history.replaceState(null, "", window.location.pathname);
-      store.set("ramimp-save", ""); // priorité au salon du lien : on oublie l'ancien salon mémorisé
+      store.del("ramimp-save"); // priorité au salon du lien : on oublie l'ancien salon mémorisé
       setJoinCode(salon);
       setInvite(salon); // l'écran d'invitation s'affiche toujours : tout s'y passe, bien visible
       const savedName = (store.get("ramimp-name") || "").trim();
@@ -724,7 +727,7 @@ function App() {
   useEffect(() => {
     if (!g || !myTurn || !g.turnDeadline) return;
     const iv = setInterval(() => {
-      const remain = (g.turnDeadline - Date.now()) / 1000;
+      const remain = (g.turnDeadline - srvNow()) / 1000;
       const w = warnRef.current;
       if (w.deadline !== g.turnDeadline) { w.deadline = g.turnDeadline; w.fired = {}; }
       if (remain <= 10 && !w.fired[10]) { w.fired[10] = 1; buzz(70); }
@@ -735,10 +738,13 @@ function App() {
   }, [g && g.turnDeadline, myTurn]);
   const contract = g ? g.contract : null;
   const isHost = youIdx === 0;
+  // Si l'hôte est déconnecté, le premier humain connecté hérite de ses commandes (manche suivante, revanche)
+  const actsAsHost = isHost || Boolean(srv && srv.players && srv.players[0] && !srv.players[0].connected &&
+    youIdx === srv.players.findIndex((p) => !p.isBot && p.connected));
 
   // ---------- Connexion & événements serveur ----------
   useEffect(() => {
-    socket.on("state", (st) => { setSrv(st); setConnErr(""); setConnLost(false); });
+    socket.on("state", (st) => { if (st && st.serverNow) CLOCK_OFFSET = st.serverNow - Date.now(); setSrv(st); setConnErr(""); setConnLost(false); });
     socket.on("disconnect", () => setConnLost(true));
     socket.on("info", (m) => setMsg(m));
     socket.on("roomClosed", () => { setSrv(null); setMsg("Le salon a été fermé (inactivité)."); store.del("ramimp-save"); });
@@ -853,7 +859,7 @@ function App() {
     if (g && g.roundOver) {
       if (g.roundOver.winnerIdx === youIdx) { sfx("win"); vibrate([90, 60, 90]); }
     }
-  }, [g && g.roundOver]);
+  }, [g && g.roundOver ? g.mancheIdx : null]); // dépendance stable : sinon rejoué à chaque resync (toutes les 10 s)
 
   // Animations de cartes volantes (pioche, prise, achat, jet)
   useEffect(() => {
@@ -899,6 +905,25 @@ function App() {
 
   // Effacer la préparation une fois posé
   useEffect(() => { if (me && me.posed) setStaged([]); }, [me && me.posed]);
+
+  // Purge des groupes « Prêt » : si le serveur a retiré une carte de la main (temps écoulé, mode absent),
+  // elle ne doit pas rester en fantôme dans un groupe — sinon la pose est refusée sans explication
+  useEffect(() => {
+    if (!srv) return;
+    const inHand = new Set((srv.yourHand || []).map((c) => c.id));
+    setStaged((st) => {
+      let changed = false;
+      const next = st
+        .map((m) => {
+          const cards = m.cards.filter((c) => inHand.has(c.id));
+          if (cards.length !== m.cards.length) changed = true;
+          return { ...m, cards };
+        })
+        .filter((m) => m.cards.length >= 3 && (m.type === "tri" ? isTri(m.cards) : isEscalier(m.cards)));
+      if (next.length !== st.length) changed = true;
+      return changed ? next : st;
+    });
+  }, [srv]);
 
   // ---------- Ordre local de la main ----------
   const serverHand = srv ? srv.yourHand || [] : [];
@@ -1056,7 +1081,7 @@ function App() {
 
   function pose() {
     if (!canPose) return;
-    sfx("pose"); vibrate([60]);
+    vibrate([60]); // le son viendra de l'écho « fx » du serveur (sinon il est joué deux fois)
     act({ type: "pose", melds: staged.map((m) => ({ type: m.type, cardIds: m.cards.map((c) => c.id) })) });
   }
   function discardById(cardId) {
@@ -1100,7 +1125,8 @@ function App() {
     if (!d.dragging && Math.hypot(e.clientX - d.startX, e.clientY - d.startY) > 15) { d.dragging = true; lastTargetRef.current = -1; }
     if (d.dragging) {
       const dr = discardRef.current && discardRef.current.getBoundingClientRect();
-      const overD = Boolean(dr) && [[e.clientX, e.clientY], [e.clientX, e.clientY - 34], [e.clientX, e.clientY - 58]].some(([px, py]) =>
+      const chD = UI_PREFS.big ? 72 : 58;
+      const overD = Boolean(dr) && [[e.clientX, e.clientY], [e.clientX, e.clientY - chD / 2 - 5], [e.clientX, e.clientY - chD]].some(([px, py]) =>
         px >= dr.left - 24 && px <= dr.right + 24 && py >= dr.top - 24 && py <= dr.bottom + 24);
       if (overD) overStickyRef.current = Date.now();
       setDrag({ id: d.id, card: d.card, x: e.clientX, y: e.clientY, over: overD ? "discard" : null });
@@ -1152,7 +1178,11 @@ function App() {
   }
 
   function handleDrop(x, y, card) {
-    const pts = [[x, y], [x, y - 34], [x, y - 58]]; // le doigt, le centre et le haut de la carte fantôme
+    // 0) Le doigt DANS la zone de la main = simple reclassement : jamais un jet ni un ajout à un groupe
+    const hr0 = handRef.current && handRef.current.getBoundingClientRect();
+    if (hr0 && y >= hr0.top && x >= hr0.left && x <= hr0.right) { overStickyRef.current = 0; return; }
+    const ch = UI_PREFS.big ? 72 : 58; // hauteur de la carte fantôme (option « grandes cartes »)
+    const pts = [[x, y], [x, y - ch / 2 - 5], [x, y - ch]]; // le doigt, le centre et le haut de la carte fantôme
     const inRect = (r, m) => Boolean(r) && pts.some(([px, py]) => px >= r.left - m && px <= r.right + m && py >= r.top - m && py <= r.bottom + m);
     // 1) Les groupes « Prêt » et les combinaisons de la table D'ABORD : le chemin du doigt
     //    croise souvent la défausse, il ne faut pas confondre avec un jet
@@ -1233,7 +1263,7 @@ function App() {
     else if (g && !g.roundOver) setMsg("L'achat se fait dans la fenêtre qui suit chaque défausse.");
   }
 
-  const secLeft = (ts) => (ts ? Math.max(0, Math.ceil((ts - Date.now()) / 1000)) : null);
+  const secLeft = (ts) => (ts ? Math.max(0, Math.ceil((ts - srvNow()) / 1000)) : null);
   const bgStyle = { background: "radial-gradient(ellipse at 50% -10%, #1a6b42 0%, #14532d 45%, #052e16 100%)" };
 
   // ---------- Écrans ----------
@@ -1366,7 +1396,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2141-P</span>
+          <span className="opacity-60">v2143-F</span>
         </div>
       </div>
     );
@@ -1473,7 +1503,7 @@ function App() {
               <p className="text-xs text-emerald-300 animate-pulse">En attente des autres joueurs… (30 s max)</p>
             )}
           </div>
-        ) : isHost ? (
+        ) : actsAsHost ? (
           <button onClick={() => socket.emit("rematch")} className="btn-gold font-bold py-3 px-8 rounded-xl pulse-gold">🔁 Proposer une revanche</button>
         ) : (
           <p className="text-sm text-emerald-300 animate-pulse">L'hôte peut proposer une revanche — le compteur 🏆 continue…</p>
@@ -1532,7 +1562,7 @@ function App() {
         </div>
       )}
       {drag && (
-        <div style={{ position: "fixed", left: drag.x - 20, top: drag.y - 62, zIndex: 70, pointerEvents: "none", transform: "scale(1.15) rotate(3deg)", filter: "drop-shadow(0 12px 16px rgba(0,0,0,.55))" }}>
+        <div style={{ position: "fixed", left: drag.x - 20, top: drag.y - (UI_PREFS.big ? 76 : 62), zIndex: 70, pointerEvents: "none", transform: "scale(1.15) rotate(3deg)", filter: "drop-shadow(0 12px 16px rgba(0,0,0,.55))" }}>
           <Card card={drag.card} flat />
         </div>
       )}
@@ -1725,7 +1755,7 @@ function App() {
         onPointerUp={onCardPointerUp}
         onPointerCancel={() => { dragInfo.current = null; setDrag(null); }}
         className={`shrink-0 relative px-2 pt-3 pb-2 border-t-2 ${drag && drag.fromDiscard ? "border-amber-300 pulse-gold" : myTurn ? "border-amber-400" : "border-emerald-800"}`}
-        style={{ background: "linear-gradient(180deg, rgba(4,35,24,.9), rgba(3,25,17,.97))" }}>
+        style={{ background: "linear-gradient(180deg, rgba(4,35,24,.9), rgba(3,25,17,.97))", paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))" }}>
         <div className="flex flex-wrap gap-1.5 justify-center pb-1">
           {visibleHand.map((c) => (
             <div key={c.id} data-cid={c.id}
@@ -1938,7 +1968,7 @@ function App() {
                 </div>
               ))}
             </div>
-            {srv.state === "roundEnd" && (isHost ? (
+            {srv.state === "roundEnd" && (actsAsHost ? (
               <button onClick={() => socket.emit("nextRound")} className="mt-4 w-full btn-gold font-bold py-2.5 rounded-xl">
                 Manche {g.mancheIdx + 2} →
               </button>
