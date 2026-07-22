@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2151-K">
+<meta name="version" content="v2152-D">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -1764,7 +1764,7 @@ function tapCard(id) {
         (suited.includes(card.rank + 1) && suited.includes(card.rank + 2));
       if (same >= 2 && !tutoFlags.tri) return "avec tes deux jumelles, elle complète ton TRI";
       if (completesRun && !tutoFlags.esc) return "elle complète ton ESCALIER";
-      if ((suited.includes(card.rank - 1) || suited.includes(card.rank + 1)) && !tutoFlags.esc) return "elle prolonge ta suite " + card.suit;
+      // (pas de conseil pour un gain faible « elle prolonge ta suite » : la pioche scriptée du tutoriel fait mieux)
       return null;
     };
     if (pendingDiscard) return "🔒 Tu veux jeter cette carte ? Touche la DÉFAUSSE (badge rouge) pour confirmer — ou touche une carte de ta main pour annuler. Cette sécurité évite les jets accidentels !";
@@ -1831,10 +1831,23 @@ function tapCard(id) {
 
   // cibles à illuminer pour la mission en cours
   const tutoHi = React.useMemo(() => {
-    if (!tuto || !g || !me) return { ids: new Set(), stock: false, pose: false };
+    if (!tuto || !g || !me) return { ids: new Set(), stock: false, pose: false, discard: false };
     const h = me.hand;
     const ids = new Set();
-    if (!tutoFlags.drew) return { ids, stock: myTurn && g.phase === "draw", pose: false };
+    // La carte du dessus de la défausse offre-t-elle un vrai gain ? (mêmes critères que le coach)
+    const topD = g.discard[g.discard.length - 1];
+    const strongD = (() => {
+      if (!topD || topD.joker || g.discardLocked || !tutoFlags.drew) return false;
+      const same = h.filter((c) => !c.joker && c.rank === topD.rank).length;
+      const suited = h.filter((c) => !c.joker && c.suit === topD.suit).map((c) => c.rank);
+      const run = (suited.includes(topD.rank - 2) && suited.includes(topD.rank - 1)) ||
+        (suited.includes(topD.rank - 1) && suited.includes(topD.rank + 1)) ||
+        (suited.includes(topD.rank + 1) && suited.includes(topD.rank + 2));
+      return (same >= 2 && !tutoFlags.tri) || (run && !tutoFlags.esc);
+    })();
+    const drawNow = myTurn && g.phase === "draw";
+    const stockGlow = drawNow && !strongD, discardGlow = drawNow && strongD;
+    if (!tutoFlags.drew) return { ids, stock: drawNow, pose: false, discard: false };
     if (!tutoFlags.esc) {
       const trio = findRuns(h)[0];
       if (trio) {
@@ -1852,16 +1865,16 @@ function tapCard(id) {
           }
         }
       }
-      return { ids, stock: myTurn && g.phase === "draw", pose: false };
+      return { ids, stock: stockGlow, pose: false, discard: discardGlow };
     }
     if (!tutoFlags.tri) {
       const byRank = {};
       h.filter((c) => !c.joker).forEach((c) => { (byRank[c.rank] = byRank[c.rank] || []).push(c); });
       const best = Object.values(byRank).sort((a, b) => b.length - a.length)[0];
       if (best) best.slice(0, 3).forEach((c) => ids.add(c.id));
-      return { ids, stock: myTurn && g.phase === "draw", pose: false };
+      return { ids, stock: stockGlow, pose: false, discard: discardGlow };
     }
-    return { ids, stock: false, pose: !me.posed };
+    return { ids, stock: false, pose: !me.posed, discard: false };
   }, [tuto, g, tutoFlags, myTurn]);
 
   const overStickyRef = useRef(0);
@@ -2473,7 +2486,7 @@ function tapCard(id) {
           onPointerMove={onDiscardPointerMove}
           onPointerUp={onDiscardPointerUp}
           onPointerCancel={endDrag}
-          style={{ touchAction: "none" }}
+          style={{ touchAction: "none", ...(tuto && tutoHi.discard ? { boxShadow: "0 0 18px 6px #22d3ee", animation: "pulse 1s infinite" } : {}) }}
           className={`flex flex-col items-center gap-1 active:scale-95 transition-transform rounded-xl relative ${drag && drag.origin !== "discard" && myTurn && g.phase === "play" ? "pulse-gold" : ""} ${pendingDiscard ? "ring-4 ring-red-500 animate-pulse" : ""}`}>
           <div style={{ transform: drag && drag.over === "discard" ? "rotate(4deg) scale(1.18)" : "rotate(4deg)", transition: "transform .12s", opacity: drag && drag.origin === "discard" ? 0.35 : 1 }}>
             {pendingDiscard && me.hand.find((c) => c.id === pendingDiscard)
