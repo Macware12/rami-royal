@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2124-U">
+<meta name="version" content="v2125-L">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -603,7 +603,7 @@ function App() {
   // arrivée par un lien d'invitation : /?salon=ABCDE
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const salon = (params.get("salon") || "").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 5);
+    const salon = (params.get("salon") || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5);
     if (salon.length === 5) {
       window.history.replaceState(null, "", window.location.pathname);
       store.set("ramimp-save", ""); // priorité au salon du lien : on oublie l'ancien salon mémorisé
@@ -1243,7 +1243,7 @@ function App() {
                 Rejoindre
               </button>
             </div>
-            {!joinReady && <span className="text-[10px] text-emerald-500">Saisis le code de 5 lettres pour activer le bouton.</span>}
+            {!joinReady && <span className="text-[10px] text-emerald-500">Saisis le code de 5 caractères pour activer le bouton.</span>}
           </div>
         </div>
         )}
@@ -1272,7 +1272,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2124-U</span>
+          <span className="opacity-60">v2125-L</span>
         </div>
       </div>
     );
