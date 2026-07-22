@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2131-P">
+<meta name="version" content="v2132-C">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -1494,7 +1494,7 @@ function tapCard(id) {
     const meldEls = document.querySelectorAll("[data-mid]");
     for (const el of meldEls) {
       const r = el.getBoundingClientRect();
-      if (inRect(r, 4)) {
+      if (inRect(r, 14)) {
         const mid = Number(el.getAttribute("data-mid"));
         if (myTurn && g.phase === "play" && me.posed) { sfx("draw"); completeMeldWith(mid, card.id); }
         else setMsg(me.posed ? "Attends ton tour pour compléter." : "Pose d'abord ton contrat avant de compléter.");
