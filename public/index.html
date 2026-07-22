@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2123-U">
+<meta name="version" content="v2124-U">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -1148,6 +1148,9 @@ function App() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6" style={bgStyle}>
         {STYLE}
+        {showMp && (
+          <button onClick={() => setShowMp(false)} className="self-start btn-dark rounded-xl px-3 py-1.5 text-xs font-bold -mb-3">← Accueil</button>
+        )}
         <div className="text-center" style={{ textShadow: "0 3px 10px rgba(0,0,0,.6)" }}>
           <h1 className="text-5xl text-amber-300" style={{ fontFamily: "Georgia, serif" }}>Ramy Gasy</h1>
           <p className="text-emerald-200 text-sm mt-1">Le rami à contrats de Madagascar</p>
@@ -1195,7 +1198,6 @@ function App() {
               <span className="block font-bold text-base text-amber-300">Multijoueur en ligne</span>
               <span className="block text-[11px] text-emerald-300">Avec tes amis, chacun sur son téléphone</span>
             </div>
-            <button onClick={() => setShowMp(false)} className="btn-dark rounded-xl px-3 py-1.5 text-xs font-bold">← Accueil</button>
           </div>
           <label className="flex flex-col gap-2 text-sm">
             Ton nom
@@ -1270,7 +1272,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2123-U</span>
+          <span className="opacity-60">v2124-U</span>
         </div>
       </div>
     );
