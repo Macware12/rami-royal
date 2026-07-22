@@ -9,6 +9,31 @@ const E = require("./engine");
 const app = express();
 app.get("/ping", (req, res) => res.send("ok"));
 
+// ---------- Statistiques temps réel ----------
+const presence = new Map(); // id → { t: dernier signal, m: mode }
+app.get("/presence", (req, res) => {
+  const id = String(req.query.id || "").slice(0, 40);
+  if (id) presence.set(id, { t: Date.now(), m: String(req.query.m || "?").slice(0, 10) });
+  res.send("ok");
+});
+app.get("/stats.json", (req, res) => {
+  const now = Date.now();
+  for (const [id, v] of presence) if (now - v.t > 70000) presence.delete(id);
+  let salons = 0, parties = 0, joueursEnSalon = 0;
+  for (const room of rooms.values()) {
+    salons++;
+    if (room.state === "playing" || room.state === "roundEnd") parties++;
+    joueursEnSalon += room.players.filter((p) => p.connected && !p.isBot).length;
+  }
+  const soloActifs = [...presence.values()].filter((v) => v.m === "solo").length;
+  res.json({
+    connectes: io.engine.clientsCount,
+    salons, parties, joueursEnSalon, soloActifs,
+    total: io.engine.clientsCount + soloActifs,
+    heure: new Date().toISOString(),
+  });
+});
+
 // ---------- Précompilation Babel au démarrage : chargement bien plus rapide côté client ----------
 const PRECOMPILED = {};
 try {

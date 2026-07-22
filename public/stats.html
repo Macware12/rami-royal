@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ramy Gasy — Tableau de bord</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<style>
+  body { margin: 0; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at 50% -10%, #1a6b42 0%, #14532d 45%, #052e16 100%);
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif; color: #d1fae5; padding: 24px; box-sizing: border-box; }
+  h1 { color: #fcd34d; font-family: Georgia, serif; margin: 0 0 4px; }
+  .sub { font-size: 13px; color: #6ee7b7; margin-bottom: 28px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; width: 100%; max-width: 640px; }
+  .card { background: linear-gradient(180deg, rgba(6,58,42,.92), rgba(4,40,28,.95)); border: 1px solid #14705266;
+    border-radius: 18px; padding: 18px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+  .big { font-size: 44px; font-weight: 800; color: #fcd34d; line-height: 1.1; }
+  .lbl { font-size: 12px; color: #6ee7b7; margin-top: 6px; }
+  .total { grid-column: 1 / -1; border-color: #fbbf2488; }
+  .total .big { font-size: 64px; }
+  .maj { margin-top: 22px; font-size: 12px; color: #34d399; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 99px; background: #4ade80; margin-right: 6px;
+    animation: pulse 1.5s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+  a { color: #fcd34d; }
+</style>
+</head>
+<body>
+  <h1>🎴 Ramy Gasy</h1>
+  <div class="sub">Tableau de bord — mise à jour automatique</div>
+  <div class="grid">
+    <div class="card total"><div class="big" id="total">…</div><div class="lbl">JOUEURS EN LIGNE MAINTENANT</div></div>
+    <div class="card"><div class="big" id="connectes">…</div><div class="lbl">🌐 Multijoueur (connectés)</div></div>
+    <div class="card"><div class="big" id="soloActifs">…</div><div class="lbl">🎮 Solo (dernière minute)</div></div>
+    <div class="card"><div class="big" id="salons">…</div><div class="lbl">🚪 Salons ouverts</div></div>
+    <div class="card"><div class="big" id="parties">…</div><div class="lbl">▶️ Parties en cours</div></div>
+    <div class="card"><div class="big" id="joueursEnSalon">…</div><div class="lbl">🧑‍🤝‍🧑 Humains dans les salons</div></div>
+  </div>
+  <div class="maj"><span class="dot"></span>Dernière mise à jour : <span id="maj">—</span></div>
+<script>
+  function maj() {
+    fetch("/stats.json").then(function (r) { return r.json(); }).then(function (d) {
+      ["total", "connectes", "soloActifs", "salons", "parties", "joueursEnSalon"].forEach(function (k) {
+        document.getElementById(k).textContent = d[k];
+      });
+      document.getElementById("maj").textContent = new Date().toLocaleTimeString("fr-FR");
+    }).catch(function () { document.getElementById("maj").textContent = "serveur injoignable…"; });
+  }
+  maj(); setInterval(maj, 3000);
+</script>
+</body>
+</html>
