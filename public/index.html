@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2134-G">
+<meta name="version" content="v2135-A">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -66,6 +66,19 @@ const store = {
   set(k, v) { try { window.localStorage.setItem(k, v); } catch (_) {} },
   del(k) { try { window.localStorage.removeItem(k); } catch (_) {} },
 };
+
+// Préférences d'affichage (accessibilité)
+const UI_PREFS = {
+  big: store.get("ramimp-big") === "1",
+  four: store.get("ramimp-4col") === "1",
+};
+function suitInk(card) {
+  if (card.joker) return "#7c3aed";
+  if (card.suit === "♥") return "#C1272D";
+  if (card.suit === "♦") return UI_PREFS.four ? "#2563eb" : "#C1272D";
+  if (card.suit === "♣") return UI_PREFS.four ? "#15803d" : "#1c1917";
+  return "#1c1917";
+}
 
 let SFX_MUTED = false;
 let audioCtx = null;
@@ -455,18 +468,18 @@ function Card({ card, selected, isNew, onClick, small, tiny, faceDown, flat }) {
         style={{ height: 52, width: 36, background: "repeating-linear-gradient(45deg,#7f1d1d,#7f1d1d 4px,#991b1b 4px,#991b1b 8px)", boxShadow: flat ? "none" : "0 2px 0 #450a0a, 0 4px 8px rgba(0,0,0,.4)" }} />
     );
   }
-  const red = card.suit === "♥" || card.suit === "♦";
-  const h = tiny ? 30 : small ? 44 : 58;
-  const w = tiny ? 21 : small ? 30 : 40;
-  const f = tiny ? 8 : small ? 11 : 14;
-  const f2 = tiny ? 9 : small ? 12 : 16;
+  const big = UI_PREFS.big && !small && !tiny;
+  const h = tiny ? 30 : small ? 44 : big ? 72 : 58;
+  const w = tiny ? 21 : small ? 30 : big ? 50 : 40;
+  const f = tiny ? 8 : small ? 11 : big ? 17 : 14;
+  const f2 = tiny ? 9 : small ? 12 : big ? 20 : 16;
   return (
     <button onClick={onClick}
       className="relative rounded-lg flex flex-col items-center justify-center font-bold select-none transition-all duration-150"
       style={{
         height: h, width: w,
         background: card.joker ? "linear-gradient(160deg, #faf5ff 0%, #e9dcfc 100%)" : "linear-gradient(160deg, #fffdf6 0%, #f6efdd 100%)",
-        color: card.joker ? "#7c3aed" : red ? "#C1272D" : "#1c1917",
+        color: suitInk(card),
         fontSize: f,
         border: selected ? "2px solid #fbbf24" : isNew ? "2px solid #67e8f9" : card.joker ? "2px solid #a78bfa" : "1px solid #d6cdb8",
         transform: selected ? "translateY(-10px)" : "none",
@@ -495,11 +508,11 @@ function CardFan({ count }) {
   );
 }
 
-function OpponentCard({ p, active, seconds, emote }) {
+function OpponentCard({ p, active, seconds, emote, refCb }) {
   const emoji = p.avatar || AVATARS[p.idx % AVATARS.length];
   const color = AVATAR_COLORS[p.idx % AVATAR_COLORS.length];
   return (
-    <div className={`relative flex flex-col items-center rounded-2xl px-2 pt-2 pb-1 min-w-[92px] transition-all panel ${active ? "pulse-gold" : ""}`}
+    <div ref={refCb} className={`relative flex flex-col items-center rounded-2xl px-2 pt-2 pb-1 min-w-[92px] transition-all panel ${active ? "pulse-gold" : ""}`}
       style={active ? { borderColor: "#fbbf24" } : {}}>
       {active && (
         <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[9px] btn-gold font-bold px-1.5 rounded-full whitespace-nowrap" style={{ animation: "floaty 1.2s ease-in-out infinite" }}>
@@ -533,7 +546,6 @@ function OpponentCard({ p, active, seconds, emote }) {
 }
 
 function StackCard({ card, overlap, small }) {
-  const red = card.suit === "♥" || card.suit === "♦";
   const w = small ? 24 : 30, h = small ? 35 : 44;
   return (
     <div className={card.joker ? "joker-glow" : ""} style={{ marginLeft: overlap ? (small ? -13 : -16) : 0 }}>
@@ -543,7 +555,7 @@ function StackCard({ card, overlap, small }) {
           background: card.joker ? "linear-gradient(160deg,#faf5ff,#e9dcfc)" : "linear-gradient(160deg,#fffdf6,#f6efdd)",
           border: card.joker ? "1.5px solid #a78bfa" : "1px solid #d6cdb8",
           boxShadow: "0 1px 3px rgba(0,0,0,.35)",
-          color: card.joker ? "#7c3aed" : red ? "#C1272D" : "#1c1917",
+          color: suitInk(card),
         }}>
         <span className="absolute font-bold leading-none text-center" style={{ top: 2, left: 2, width: small ? 10 : 12, fontSize: small ? 8 : 9 }}>
           {rankLabel(card)}<br />{card.joker ? "🤡" : card.suit}
@@ -565,6 +577,28 @@ function MeldChip({ meld, ownerName, onClick, highlight, mid, small }) {
         {meld.cards.map((c, i) => <StackCard key={c.id} card={c} overlap={i > 0} small={small} />)}
       </div>
     </button>
+  );
+}
+
+function FlyingCard({ from, to, card, faceDown, delay, emphasis, onDone }) {
+  const [moved, setMoved] = useState(false);
+  const dur = emphasis ? 1000 : 600;
+  useEffect(() => {
+    const t1 = setTimeout(() => setMoved(true), 40 + delay);
+    const t2 = setTimeout(onDone, dur + 180 + delay);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, []);
+  const dx = to.x - from.x, dy = to.y - from.y;
+  return (
+    <div style={{
+      position: "fixed", left: from.x - 19, top: from.y - 28, zIndex: 60, pointerEvents: "none",
+      transition: `transform ${dur}ms cubic-bezier(.35,.15,.25,1), opacity ${dur}ms`,
+      transform: moved ? `translate(${dx}px, ${dy}px) scale(${emphasis ? 1.1 : 0.85})` : `translate(0px, 0px) scale(${emphasis ? 1.45 : 1.05})`,
+      opacity: moved ? 0.9 : 1,
+      filter: "drop-shadow(0 8px 10px rgba(0,0,0,.5))",
+    }}>
+      <Card card={card || {}} faceDown={faceDown} flat />
+    </div>
   );
 }
 
@@ -651,6 +685,10 @@ function App() {
   const [pendingDiscard, setPendingDiscard] = useState(null);
   const [tableOverflow, setTableOverflow] = useState(false);
   const tableScrollRef = useRef(null);
+  const [anims, setAnims] = useState([]);
+  const stockRef = useRef(null);
+  const oppRefs = useRef({});
+  const animSeqRef = useRef(0);
 
   const orderRef = useRef([]);          // ordre local des cartes de la main
   const prevIdsRef = useRef([]);
@@ -814,6 +852,34 @@ function App() {
       if (g.roundOver.winnerIdx === youIdx) { sfx("win"); vibrate([90, 60, 90]); }
     }
   }, [g && g.roundOver]);
+
+  // Animations de cartes volantes (pioche, prise, achat, jet)
+  useEffect(() => {
+    const rectFor = (key) => {
+      let el = null;
+      if (key === "stock") el = stockRef.current;
+      else if (key === "discard") el = discardRef.current;
+      else if (key === "me") el = handRef.current;
+      else el = oppRefs.current[key];
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    };
+    const onFxAnim = (e) => {
+      if (!e) return;
+      const pKey = e.idx === youIdx ? "me" : e.idx;
+      let from = null, to = null, card = null, faceDown = false, emphasis = false;
+      if (e.kind === "draw") { from = rectFor("stock"); to = rectFor(pKey); faceDown = true; }
+      else if (e.kind === "take" || e.kind === "buy") { from = rectFor("discard"); to = rectFor(pKey); card = e.card; emphasis = e.kind === "buy"; }
+      else if (e.kind === "discard") { from = rectFor(pKey); to = rectFor("discard"); card = e.card; }
+      else return;
+      if (!from || !to) return;
+      const key = "a" + (++animSeqRef.current);
+      setAnims((a) => [...a.slice(-8), { key, from, to, card, faceDown, emphasis }]);
+    };
+    socket.on("fx", onFxAnim);
+    return () => socket.off("fx", onFxAnim);
+  }, [youIdx]);
 
   // Toasts pour les prises/achats des autres
   useEffect(() => {
@@ -1295,7 +1361,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2134-G</span>
+          <span className="opacity-60">v2135-A</span>
         </div>
       </div>
     );
@@ -1465,6 +1531,10 @@ function App() {
           <Card card={drag.card} flat />
         </div>
       )}
+      {anims.map((a) => (
+        <FlyingCard key={a.key} from={a.from} to={a.to} card={a.card} faceDown={a.faceDown} delay={0} emphasis={a.emphasis}
+          onDone={() => setAnims((arr) => arr.filter((x) => x.key !== a.key))} />
+      ))}
 
       {/* En-tête */}
       <div className="shrink-0 flex items-center justify-between px-3 py-2 border-b border-amber-500/20"
@@ -1504,7 +1574,8 @@ function App() {
       <div className="shrink-0 flex gap-2 px-3 py-2 pt-3 overflow-x-auto">
         {opponents.map((p) => (
           <OpponentCard key={p.idx} p={p} active={g.turn === p.idx && !g.roundOver}
-            seconds={g.turn === p.idx && !p.isBot ? turnSec : null} emote={emotes[p.idx]} />
+            seconds={g.turn === p.idx && !p.isBot ? turnSec : null} emote={emotes[p.idx]}
+            refCb={(el) => { oppRefs.current[p.idx] = el; }} />
         ))}
       </div>
 
@@ -1595,7 +1666,7 @@ function App() {
 
       {/* Pioche et défausse */}
       <div className="shrink-0 flex items-center justify-center gap-8 py-2">
-        <button onClick={() => myTurn && g.phase === "draw" && act({ type: "draw", source: "stock" })} className="flex flex-col items-center gap-1 active:scale-95 transition-transform">
+        <button ref={stockRef} onClick={() => myTurn && g.phase === "draw" && act({ type: "draw", source: "stock" })} className="flex flex-col items-center gap-1 active:scale-95 transition-transform">
           <div className="relative" style={{ width: 42, height: 58 }}>
             <div className="absolute" style={{ left: 4, top: 4 }}><Card faceDown card={{}} flat /></div>
             <div className="absolute" style={{ left: 2, top: 2 }}><Card faceDown card={{}} flat /></div>
@@ -1766,6 +1837,12 @@ function App() {
             <div className="flex justify-between items-center mb-2">
               <h3 className="text-amber-300 font-bold">Comment jouer</h3>
               <button onClick={() => setShowHelp(false)} className="text-emerald-300 px-2">✕</button>
+            </div>
+            <div className="flex gap-2 mb-3">
+              <button onClick={() => { UI_PREFS.big = !UI_PREFS.big; store.set("ramimp-big", UI_PREFS.big ? "1" : "0"); setTick((x) => x + 1); }}
+                className={`flex-1 py-2 rounded-xl text-xs font-bold ${UI_PREFS.big ? "btn-gold" : "btn-dark"}`}>🔍 Grandes cartes</button>
+              <button onClick={() => { UI_PREFS.four = !UI_PREFS.four; store.set("ramimp-4col", UI_PREFS.four ? "1" : "0"); setTick((x) => x + 1); }}
+                className={`flex-1 py-2 rounded-xl text-xs font-bold ${UI_PREFS.four ? "btn-gold" : "btn-dark"}`}>🎨 4 couleurs</button>
             </div>
             <ol className="list-decimal ml-4 space-y-2 text-emerald-100 text-xs">
               <li><b>Pioche</b> une carte (ou prends celle de la défausse, gratuite à ton tour).</li>
