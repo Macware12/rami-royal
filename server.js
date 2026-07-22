@@ -571,7 +571,15 @@ function aiPlayTurn(room) {
   // Poser
   if (!p.posed) {
     const plan = contract.poseTout ? E.aiPlanFullHand(p.hand) : E.aiPlanContract(p.hand, contract, level);
-    const planOk = plan && (!contract.poseTout || plan.reduce((s, m) => s + m.cards.length, 0) === p.hand.length);
+    let planOk = plan && (!contract.poseTout || plan.reduce((s, m) => s + m.cards.length, 0) === p.hand.length);
+    // Difficile : on retient la pose pour ne rien dévoiler et viser une fin éclair —
+    // sauf si quelqu'un a déjà posé (la course est lancée) ou si la pioche s'épuise
+    if (planOk && level === "difficile" && !contract.poseTout) {
+      const othersPosed = room.players.some((q, i2) => i2 !== idx && q.posed);
+      const leftover = p.hand.length - plan.reduce((s, m) => s + m.cards.length, 0);
+      const lowStock = g.stock.length < room.players.length * 4;
+      if (!othersPosed && leftover > 3 && !lowStock) planOk = false;
+    }
     if (planOk) {
       plan.forEach((m, i) => g.melds.push({ id: Date.now() + idx * 100 + i, type: m.type, cards: E.normMeld(m.type, m.cards), owner: idx }));
       const usedIds = new Set(plan.flatMap((m) => m.cards.map((c) => c.id)));

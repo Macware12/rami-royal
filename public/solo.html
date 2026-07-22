@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2127-V">
+<meta name="version" content="v2129-B">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -1665,6 +1665,7 @@ function tapCard(id) {
     if (me.posed) return "🏁 Dernière ligne droite : pose tes cartes restantes sur les combinaisons de la table (glisse-les dessus) et jette. Main vide = victoire !";
     if (canPose) return "🌟 CONTRAT COMPLET ! Appuie sur le gros bouton doré « Poser ! »";
     if (g.phase === "draw") {
+      if (g.discardLocked) return "🚫 La défausse est BLOQUÉE : quelqu'un vient d'acheter ! La carte révélée en dessous ne peut pas être prise — règle du jeu. Pioche dans le tas.";
       const tip = advise(topDiscard);
       if (tip) return "👉 Regarde la défausse : " + tip + " ! Glisse-la dans ta main — gratuite à ton tour.";
       if (!tutoFlags.drew) return "👉 Touche le tas qui brille pour piocher ta carte !";
@@ -1874,7 +1875,15 @@ function tapCard(id) {
 
     if (!posed) {
       const plan = contract.poseTout ? aiPlanFullHand(hand) : aiPlanContract(hand, contract, level);
-      const planOk = plan && (!contract.poseTout || plan.reduce((n, m) => n + m.cards.length, 0) === hand.length);
+      let planOk = plan && (!contract.poseTout || plan.reduce((n, m) => n + m.cards.length, 0) === hand.length);
+      // Difficile : on retient la pose pour ne rien dévoiler et viser une fin éclair —
+      // sauf si quelqu'un a déjà posé (la course est lancée) ou si la pioche s'épuise
+      if (planOk && level === "difficile" && !contract.poseTout) {
+        const othersPosed = s.players.some((q, i2) => i2 !== idx && q.posed);
+        const leftover = hand.length - plan.reduce((n, m) => n + m.cards.length, 0);
+        const lowStock = stock.length < s.players.length * 4;
+        if (!othersPosed && leftover > 3 && !lowStock) planOk = false;
+      }
       if (planOk) {
         plan.forEach((m, i) => melds.push({ ...m, id: Date.now() + idx * 100 + i, owner: idx, cards: normMeld(m.type, m.cards) }));
         const usedIds = new Set(plan.flatMap((m) => m.cards.map((c) => c.id)));
@@ -2485,7 +2494,7 @@ function tapCard(id) {
               <li><b>Pose</b> quand le contrat est complet (bouton doré), en une seule fois.</li>
               <li><b>Jette</b> une carte pour finir ton tour : glisse-la sur la défausse, puis <b>touche la défausse pour confirmer</b> 🔒 (touche une carte de ta main pour annuler). Premier à vider sa main = gagnant de la manche !</li>
             </ol>
-            <p className="text-[11px] text-emerald-300 mt-3"><a href="/regles.html" className="text-amber-300 underline">📖 Règles complètes</a>. Un groupe « Prêt » n'est pas figé : touche-le avec une carte sélectionnée (ou glisse-la dessus) pour l'y ajouter. Gestes : glisse la carte de la défausse dans ta main pour la prendre à l'endroit voulu, glisse une carte sur la défausse pour la jeter, sur une combinaison pour la compléter, ou dans ta main pour la réorganiser. Après chaque défausse, une fenêtre de 5 secondes s'ouvre : chacun peut demander à <b>acheter</b> la carte jetée (+1 carte de pénalité, 3 achats max par manche). Priorité dans le sens du jeu ; sans réponse avant la fin du décompte, personne n'achète. Le joueur dont c'est le tour ensuite est prioritaire sur tous les acheteurs : s'il veut la carte, il la prend gratuitement et aucun achat ne peut la lui souffler (bandeau vert « Je la prends »). Le joker remplace n'importe quelle carte (min. 3 vraies cartes par combinaison, jamais 2 jokers côte à côte). Un joker jeté dans la défausse est perdu : personne ne peut le prendre ni l'acheter. Échange : si un escalier posé contient un joker (halo violet) et que tu as la carte correspondant à sa position exacte, glisse-la sur cet escalier pour récupérer le joker — possible seulement après avoir posé ton contrat, et jamais sur un tri. Cartes restantes = points : 2-9 → 5 · 10-R → 10 · As → 15 · Joker → 20. Le plus petit total après 8 manches gagne !</p>
+            <p className="text-[11px] text-emerald-300 mt-3"><a href="/regles.html" className="text-amber-300 underline">📖 Règles complètes</a>. Un groupe « Prêt » n'est pas figé : touche-le avec une carte sélectionnée (ou glisse-la dessus) pour l'y ajouter. Gestes : glisse la carte de la défausse dans ta main pour la prendre à l'endroit voulu, glisse une carte sur la défausse pour la jeter, sur une combinaison pour la compléter, ou dans ta main pour la réorganiser. Après chaque défausse, une fenêtre de 5 secondes s'ouvre : chacun peut demander à <b>acheter</b> la carte jetée (+1 carte de pénalité, 3 achats max par manche). Priorité dans le sens du jeu ; sans réponse avant la fin du décompte, personne n'achète. Le joueur dont c'est le tour ensuite est prioritaire sur tous les acheteurs : s'il veut la carte, il la prend gratuitement et aucun achat ne peut la lui souffler (bandeau vert « Je la prends »). 🚫 Après un achat, la défausse est bloquée : la carte révélée en dessous ne peut être ni prise ni achetée, jusqu'à la prochaine carte jetée. Le joker remplace n'importe quelle carte (min. 3 vraies cartes par combinaison, jamais 2 jokers côte à côte). Un joker jeté dans la défausse est perdu : personne ne peut le prendre ni l'acheter. Échange : si un escalier posé contient un joker (halo violet) et que tu as la carte correspondant à sa position exacte, glisse-la sur cet escalier pour récupérer le joker — possible seulement après avoir posé ton contrat, et jamais sur un tri. Cartes restantes = points : 2-9 → 5 · 10-R → 10 · As → 15 · Joker → 20. Le plus petit total après 8 manches gagne !</p>
             <div className="mt-3 text-[11px] text-emerald-200">
               <b className="text-amber-200">Les 8 manches :</b> {MANCHES.map((m, i) => `${i + 1}. ${m.label}`).join(" · ")}
             </div>
