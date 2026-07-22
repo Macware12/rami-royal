@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2121-J">
+<meta name="version" content="v2122-P">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -140,7 +140,7 @@ const STYLE = (
     @keyframes jokerpulse { 0%,100% { box-shadow: 0 0 4px 1px rgba(167,139,250,.65); } 50% { box-shadow: 0 0 13px 5px rgba(167,139,250,.95); } }
     .joker-glow { animation: jokerpulse 1.5s ease-in-out infinite; border-radius: 8px; display: inline-flex; }
     @keyframes introPop { 0% { transform: scale(.6); opacity: 0; } 15% { transform: scale(1.06); opacity: 1; } 80% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.02); opacity: 0; } }
-    .fit-screen { height: 100vh; height: 100dvh; overflow: hidden; }
+    .fit-screen { height: 100vh; height: 100dvh; overflow-y: auto; overflow-x: hidden; }
   `}</style>
 );
 
@@ -2199,7 +2199,7 @@ function tapCard(id) {
       </div>
 
       {/* Table regroupée par joueur */}
-      <div className="flex-1 overflow-y-auto px-2 py-1 flex flex-col gap-1.5 content-start relative">
+      <div className="flex-1 overflow-y-auto px-2 py-1 flex flex-col gap-1.5 content-start relative" style={{ minHeight: 56 }}>
         {g.melds.length === 0 && <p className="text-emerald-400 text-xs italic px-1">Les combinaisons posées apparaîtront ici.</p>}
         {g.melds.length > 0 && (
           <button onClick={() => setShowTable(true)}

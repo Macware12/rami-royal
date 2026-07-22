@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2121-J">
+<meta name="version" content="v2122-P">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -52,7 +52,7 @@ const STYLE = (
     .btn-red:active { transform: translateY(2px); }
     .pulse-gold { animation: goldpulse 1.6s ease-in-out infinite; }
     .panel { background: linear-gradient(180deg, rgba(6,58,42,.92), rgba(4,40,28,.95)); border: 1px solid #14705266; box-shadow: 0 10px 30px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.06); }
-    .fit-screen { height: 100vh; height: 100dvh; overflow: hidden; }
+    .fit-screen { height: 100vh; height: 100dvh; overflow-y: auto; overflow-x: hidden; }
   `}</style>
 );
 
@@ -1270,7 +1270,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2121-J</span>
+          <span className="opacity-60">v2122-P</span>
         </div>
       </div>
     );
@@ -1489,7 +1489,7 @@ function App() {
       </div>
 
       {/* Table regroupée par joueur */}
-      <div className="flex-1 overflow-y-auto px-2 py-1 flex flex-col gap-1.5 content-start relative">
+      <div className="flex-1 overflow-y-auto px-2 py-1 flex flex-col gap-1.5 content-start relative" style={{ minHeight: 56 }}>
         {g.melds.length === 0 && <p className="text-emerald-400 text-xs italic px-1">Les combinaisons posées apparaîtront ici.</p>}
         {g.melds.length > 0 && (
           <button onClick={() => setShowTable(true)}
