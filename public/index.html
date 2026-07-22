@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2159-K">
+<meta name="version" content="v2160-I">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -637,7 +637,12 @@ const socket = API_BASE ? io(API_BASE) : io();
 
 function App() {
   const [srv, setSrv] = useState(null);          // dernier état reçu du serveur
-  const [name, setName] = useState(store.get("ramimp-name") || "");
+  // Pseudo pré-rempli : celui du multijoueur, sinon celui du compte ou du solo (zéro friction pour l'invité)
+  const comptePseudo = (() => {
+    try { return JSON.parse(store.get("rami-account") || "{}").pseudo || store.get("rami-name") || ""; } catch (_) { return ""; }
+  })();
+  const [name, setName] = useState(store.get("ramimp-name") || comptePseudo);
+  const [inviteInfo, setInviteInfo] = useState(null);
   const [avatar, setAvatar] = useState(store.get("ramimp-avatar") || AVATARS_POOL[0]);
   const [joinCode, setJoinCode] = useState("");
 
@@ -669,10 +674,16 @@ function App() {
       store.del("ramimp-save"); // priorité au salon du lien : on oublie l'ancien salon mémorisé
       setJoinCode(salon);
       setInvite(salon); // l'écran d'invitation s'affiche toujours : tout s'y passe, bien visible
-      const savedName = (store.get("ramimp-name") || "").trim();
+      const savedName = (store.get("ramimp-name") || comptePseudo || "").trim();
       if (savedName) inviteJoin(salon, savedName); // et s'il a déjà un pseudo, l'entrée se fait toute seule
     }
   }, []);
+
+  // Aperçu du salon sur l'écran d'invitation : qui invite, combien de joueurs déjà là
+  useEffect(() => {
+    if (!invite) { setInviteInfo(null); return; }
+    fetch(API_BASE + "/salon-info?code=" + invite).then((r) => r.json()).then(setInviteInfo).catch(() => {});
+  }, [invite]);
   const [turnSeconds, setTurnSeconds] = useState(45);
   const [level, setLevel] = useState("moyen");
   const [msg, setMsg] = useState("");
@@ -1396,7 +1407,17 @@ function App() {
           <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-6">
             <div className="panel rounded-2xl p-6 w-full max-w-xs text-center flex flex-col gap-3" style={{ borderColor: "#fbbf24" }}>
               <div className="text-4xl">🎴</div>
-              <div className="text-amber-300 font-bold text-lg" style={{ fontFamily: "Georgia, serif" }}>Tu es invité !</div>
+              <div className="text-amber-300 font-bold text-lg" style={{ fontFamily: "Georgia, serif" }}>
+                {inviteInfo && inviteInfo.ok ? `${inviteInfo.hote} t'invite à sa table !` : "Tu es invité !"}
+              </div>
+              {inviteInfo && !inviteInfo.ok && (
+                <div className="text-xs text-red-300">Ce salon n'existe plus — il a peut-être expiré. Demande un nouveau lien, ou crée ton propre salon !</div>
+              )}
+              {inviteInfo && inviteInfo.ok && inviteInfo.joueurs > 0 && (
+                <div className="text-[11px] text-emerald-300">
+                  {inviteInfo.joueurs} joueur{inviteInfo.joueurs > 1 ? "s" : ""} déjà à table{inviteInfo.enPartie ? " — partie en cours, tu pourras entrer à la prochaine manche" : ""}
+                </div>
+              )}
               <div className="text-xs text-emerald-300">Salon <b className="text-amber-300 tracking-widest">{invite}</b> — choisis ton pseudo :</div>
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ton pseudo" maxLength={14}
                 onKeyDown={(e) => e.key === "Enter" && inviteJoin(invite, name)}
@@ -1416,7 +1437,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2159-K</span>
+          <span className="opacity-60">v2160-I</span>
         </div>
       </div>
     );
@@ -1432,7 +1453,8 @@ function App() {
           <div className="text-4xl font-bold text-amber-300 tracking-[.3em]" style={{ fontFamily: "Georgia, serif" }}>{srv.code}</div>
           <button onClick={() => {
             const url = window.location.origin + "/?salon=" + srv.code;
-            const texte = "Viens jouer au Ramy Gasy avec moi ! Salon " + srv.code + " → " + url;
+            const moi = (srv.players[youIdx] && srv.players[youIdx].name) || "Un ami";
+            const texte = "🎴 " + moi + " t'invite à une partie de Ramy Gasy ! Touche le lien pour entrer directement dans le salon " + srv.code + " → " + url;
             if (navigator.share) {
               navigator.share({ title: "Ramy Gasy", text: texte, url }).catch(() => {
                 if (navigator.clipboard) navigator.clipboard.writeText(texte).then(() => setMsg("Lien d'invitation copié — colle-le à tes amis !")).catch(() => setMsg(url));

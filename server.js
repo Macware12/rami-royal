@@ -43,6 +43,20 @@ const presence = new Map(); // id → { t: dernier signal, m: mode, p: pseudo }
 // Clé pour voir les pseudos sur /stats.html — à définir dans les variables d'environnement Render.
 // Pas de valeur par défaut : un secret en dur dans un dépôt GitHub public n'est pas un secret.
 const STATS_KEY = process.env.STATS_KEY || null;
+// Aperçu d'un salon pour l'écran d'invitation : qui invite, combien de joueurs (rien de sensible)
+app.get("/salon-info", (req, res) => {
+  const code = String(req.query.code || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5);
+  const room = code.length === 5 ? rooms.get(code) : null;
+  if (!room) return res.json({ ok: false });
+  const humains = room.players.filter((p) => !p.isBot);
+  res.json({
+    ok: true,
+    hote: (humains[0] && humains[0].name) || "un joueur",
+    joueurs: humains.filter((p) => p.connected).length,
+    enPartie: room.state === "playing" || room.state === "roundEnd",
+  });
+});
+
 app.get("/presence", (req, res) => {
   const id = String(req.query.id || "").slice(0, 40);
   const now = Date.now();
