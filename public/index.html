@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2154-C">
+<meta name="version" content="v2155-U">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -20,6 +20,10 @@
 <script src="/lib/babel.min.js"></script>
 <link rel="stylesheet" href="/lib/tailwind.css">
 <style>
+/* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
+html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+input, textarea { -webkit-user-select: text; user-select: text; }
+
   html, body { margin: 0; padding: 0; background: #052e16; overscroll-behavior: none; }
   * { -webkit-tap-highlight-color: transparent; }
 </style>
@@ -1412,7 +1416,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2154-C</span>
+          <span className="opacity-60">v2155-U</span>
         </div>
       </div>
     );

@@ -6,6 +6,10 @@
 <title>Ramy Gasy — Tableau de bord</title>
 <link rel="icon" type="image/png" href="/favicon.png">
 <style>
+/* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
+html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+input, textarea { -webkit-user-select: text; user-select: text; }
+
   body { margin: 0; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center;
     background: radial-gradient(ellipse at 50% -10%, #1a6b42 0%, #14532d 45%, #052e16 100%);
     font-family: -apple-system, "Segoe UI", Roboto, sans-serif; color: #d1fae5; padding: 24px; box-sizing: border-box; }

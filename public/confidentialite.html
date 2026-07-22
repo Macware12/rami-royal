@@ -8,6 +8,10 @@
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <style>
+/* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
+html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+input, textarea { -webkit-user-select: text; user-select: text; }
+
   body { margin: 0; font-family: -apple-system, "Segoe UI", Roboto, sans-serif; color: #d1fae5;
     background: radial-gradient(ellipse at 50% -10%, #1a6b42 0%, #14532d 45%, #052e16 100%); min-height: 100vh; }
   .wrap { max-width: 640px; margin: 0 auto; padding: 20px 18px 60px; }
