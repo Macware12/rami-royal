@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2157-R">
+<meta name="version" content="v2158-A">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -1287,7 +1287,7 @@ function RamiRoyal() {
     if (tuto && !tutoFlags.esc) return { ...state, turn: nextIdx, phase: "draw", justPosed: false };
     const top = state.discard[state.discard.length - 1];
     const aiBuyer = pickAiBuyer(state, discarderIdx, nextIdx);
-    const humanEligible = discarderIdx !== 0 && nextIdx !== 0 && state.players[0].buysLeft > 0 && !state.players[0].posed && Boolean(top) && !top.joker;
+    const humanEligible = discarderIdx !== 0 && nextIdx !== 0 && state.players[0].buysLeft > 0 && Boolean(top) && !top.joker; // un humain posé peut encore acheter (seuls les bots s'en privent)
     // Priorité du joueur suivant : si un bot veut acheter alors que TON tour arrive, tu choisis d'abord
     if (!humanEligible && nextIdx === 0 && aiBuyer != null && Boolean(top) && !top.joker) {
       return { ...state, phase: "buyWindow", buyWindow: { discarderIdx, nextIdx, aiBuyer, priority: true, until: Date.now() + BUY_WINDOW_MS } };
@@ -2691,7 +2691,7 @@ function tapCard(id) {
               <li><b>Pose</b> quand le contrat est complet (bouton doré), en une seule fois.</li>
               <li><b>Jette</b> une carte pour finir ton tour : glisse-la sur la défausse, puis <b>touche la défausse pour confirmer</b> 🔒 (touche une carte de ta main pour annuler). Premier à vider sa main = gagnant de la manche !</li>
             </ol>
-            <p className="text-[11px] text-emerald-300 mt-3"><a href="/regles.html" className="text-amber-300 underline">📖 Règles complètes</a>. Un groupe « Prêt » n'est pas figé : touche-le avec une carte sélectionnée (ou glisse-la dessus) pour l'y ajouter. Gestes : glisse la carte de la défausse dans ta main pour la prendre à l'endroit voulu, glisse une carte sur la défausse pour la jeter, sur une combinaison pour la compléter, ou dans ta main pour la réorganiser. Après chaque défausse, une fenêtre de 5 secondes s'ouvre : chacun peut demander à <b>acheter</b> la carte jetée (+1 carte de pénalité, 3 achats max par manche, interdit une fois son contrat posé). Priorité dans le sens du jeu ; sans réponse avant la fin du décompte, personne n'achète. Le joueur dont c'est le tour ensuite est prioritaire sur tous les acheteurs : s'il veut la carte, il la prend gratuitement et aucun achat ne peut la lui souffler (bandeau vert « Je la prends »). 🚫 Après un achat, la défausse est bloquée : la carte révélée en dessous ne peut être ni prise ni achetée, jusqu'à la prochaine carte jetée. Le joker remplace n'importe quelle carte (min. 3 vraies cartes par combinaison, jamais 2 jokers côte à côte). Un joker jeté dans la défausse est perdu : personne ne peut le prendre ni l'acheter. Échange : si un escalier posé contient un joker (halo violet) et que tu as la carte correspondant à sa position exacte, glisse-la sur cet escalier pour récupérer le joker — possible seulement après avoir posé ton contrat, et jamais sur un tri. Cartes restantes = points : 2-9 → 5 · 10-R → 10 · As → 15 · Joker → 20. Le plus petit total après 8 manches gagne !</p>
+            <p className="text-[11px] text-emerald-300 mt-3"><a href="/regles.html" className="text-amber-300 underline">📖 Règles complètes</a>. Un groupe « Prêt » n'est pas figé : touche-le avec une carte sélectionnée (ou glisse-la dessus) pour l'y ajouter. Gestes : glisse la carte de la défausse dans ta main pour la prendre à l'endroit voulu, glisse une carte sur la défausse pour la jeter, sur une combinaison pour la compléter, ou dans ta main pour la réorganiser. Après chaque défausse, une fenêtre de 5 secondes s'ouvre : chacun peut demander à <b>acheter</b> la carte jetée (+1 carte de pénalité, 3 achats max par manche). Priorité dans le sens du jeu ; sans réponse avant la fin du décompte, personne n'achète. Le joueur dont c'est le tour ensuite est prioritaire sur tous les acheteurs : s'il veut la carte, il la prend gratuitement et aucun achat ne peut la lui souffler (bandeau vert « Je la prends »). 🚫 Après un achat, la défausse est bloquée : la carte révélée en dessous ne peut être ni prise ni achetée, jusqu'à la prochaine carte jetée. Le joker remplace n'importe quelle carte (min. 3 vraies cartes par combinaison, jamais 2 jokers côte à côte). Un joker jeté dans la défausse est perdu : personne ne peut le prendre ni l'acheter. Échange : si un escalier posé contient un joker (halo violet) et que tu as la carte correspondant à sa position exacte, glisse-la sur cet escalier pour récupérer le joker — possible seulement après avoir posé ton contrat, et jamais sur un tri. Cartes restantes = points : 2-9 → 5 · 10-R → 10 · As → 15 · Joker → 20. Le plus petit total après 8 manches gagne !</p>
             <div className="mt-3 text-[11px] text-emerald-200">
               <b className="text-amber-200">Les 8 manches :</b> {MANCHES.map((m, i) => `${i + 1}. ${m.label}`).join(" · ")}
             </div>

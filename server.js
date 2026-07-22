@@ -579,7 +579,7 @@ function openBuyWindow(room, discarderIdx) {
   const nextP = room.players[nextIdx];
   const nextIsHuman = nextP && !nextP.isBot && nextP.connected && !nextP.absent;
   const someoneCanBuy = Boolean(top) && !top.joker && room.players.some((p, i) =>
-    i !== discarderIdx && i !== nextIdx && !p.isBot && p.connected && !p.absent && p.buysLeft > 0 && !p.posed);
+    i !== discarderIdx && i !== nextIdx && !p.isBot && p.connected && !p.absent && p.buysLeft > 0); // un humain posé peut encore acheter (seuls les bots s'en privent)
   // si un bot veut acheter mais qu'un humain est le prochain joueur, on ouvre la fenêtre
   // pour qu'il puisse faire valoir sa priorité
   if (!someoneCanBuy && !(bBuyer != null && nextIsHuman)) {
@@ -605,7 +605,6 @@ function handleBuyRequest(room, idx) {
   if (topD && topD.joker) return "Impossible de récupérer un joker jeté — il est perdu !";
   if (idx === g.lastDiscarderIdx) return "Tu ne peux pas racheter ta propre défausse.";
   if (idx === (g.lastDiscarderIdx + 1) % room.players.length) return "Tu es le joueur suivant : tu prendras la carte gratuitement à ton tour.";
-  if (p.posed) return "Tu as déjà posé ton contrat — tu pourras compléter à ton tour, sans acheter.";
   if (p.buysLeft <= 0) return "Plus d'achats disponibles (3 max par manche).";
   if (!g.buyRequests.includes(idx)) g.buyRequests.push(idx);
   return null;
