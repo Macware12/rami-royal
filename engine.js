@@ -153,7 +153,7 @@ function aiPlanContract(hand, contract, level) {
   for (const r in byRank) {
     if (triNeed <= 0) break;
     if (byRank[r].length >= 3) {
-      const cards = byRank[r].slice(0, 3);
+      const cards = byRank[r]; // toutes les cartes identiques : chaque carte posée = une de moins en main
       cards.forEach((c) => used.add(c.id));
       melds.push({ type: "tri", cards });
       triNeed--;
