@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2126-T">
+<meta name="version" content="v2127-V">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -1148,6 +1148,7 @@ function RamiRoyal() {
     });
     let ns = {
       ...state, stock: penalty.stock, discard: penalty.discard, players,
+      discardLocked: true, // après un achat, la carte du dessous ne peut pas être prise
       animEvents: [
         { source: "discard", target: "p" + idx, card: bought.card, faceDown: false, emphasis: true },
         { source: "stock", target: "p" + idx, card: null, faceDown: true },
@@ -1242,6 +1243,7 @@ function RamiRoyal() {
       if (s.phase !== "draw") return s;
       if (source === "discard") {
         if (s.discard.length === 0) return s;
+        if (s.discardLocked) { setMsg("Une carte vient d'être achetée — pioche dans le tas."); return s; }
         const topD = s.discard[s.discard.length - 1];
         if (topD.joker) { setMsg("Impossible de récupérer un joker jeté — il est perdu !"); return s; }
         const taken = takeCard(s.stock, s.discard, "discard");
@@ -1362,6 +1364,7 @@ function tapCard(id) {
     sfx("take");
     setG((s) => {
       if (s.roundOver || s.discard.length === 0) return s;
+      if (s.discardLocked) { setMsg("Une carte vient d'être achetée — pioche dans le tas."); return s; }
       const topD = s.discard[s.discard.length - 1];
       if (topD.joker) { setMsg("Impossible de récupérer un joker jeté — il est perdu !"); return s; }
       if (s.buyWindow) return resolveBuyNow(s, "buy", insertIdx);
@@ -1808,7 +1811,7 @@ function tapCard(id) {
       );
       setSelected([]); setMsg("");
       let ns = {
-        ...s, players, discard: [...s.discard, card], lastDrawn: [],
+        ...s, players, discard: [...s.discard, card], lastDrawn: [], discardLocked: false,
         animEvents: [{ source: "p0", target: "discard", card, faceDown: false }],
         animSeq: ++ANIM_SEQ,
       };
@@ -1844,6 +1847,7 @@ function tapCard(id) {
     // Une fois posé : prendre la défausse seulement si la carte complète une combinaison de la table
     const fitsMeld = (card) => Boolean(card) && !card.joker && s.melds.some((m) => validGroup(m.type, [...m.cards, card]));
     const wantsTake =
+      s.discardLocked ? false :
       ai.posed ? Boolean(level !== "facile" && !contract.poseTout && fitsMeld(top)) :
       level === "facile" ? false :
       level === "difficile" ? Boolean(top && !top.joker && (mates >= 2 || neigh >= 2)) :
@@ -1936,7 +1940,7 @@ function tapCard(id) {
     hand = hand.filter((c) => c.id !== toss.id);
     players = ns.players.map((p, i) => (i === idx ? { ...p, hand } : p));
     animEvents.push({ source: pKey, target: "discard", card: toss, faceDown: false });
-    ns = { ...ns, players, discard: [...ns.discard, toss] };
+    ns = { ...ns, players, discard: [...ns.discard, toss], discardLocked: false };
     ns = addLog(ns, ai.name + " jette " + cardName(toss));
     ns = checkWin(ns, idx);
     if (!ns.roundOver) ns = afterDiscard(ns, idx);
@@ -2314,7 +2318,7 @@ function tapCard(id) {
           </div>
           {pendingDiscard && <span className="absolute -top-3 -right-3 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full z-10">Confirmer</span>}
           <span className="text-[10px] text-emerald-300 font-bold">
-            {g.buyWindow ? `Acheter (${me.buysLeft})` : myTurn && g.phase === "draw" ? "Prendre (gratuit)" : `Défausse · ${g.discard.length}`}
+            {g.buyWindow ? `Acheter (${me.buysLeft})` : g.discardLocked && myTurn && g.phase === "draw" ? "Bloquée (achat) 🚫" : myTurn && g.phase === "draw" ? "Prendre (gratuit)" : `Défausse · ${g.discard.length}`}
           </span>
         </button>
       </div>
