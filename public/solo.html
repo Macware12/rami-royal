@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2144-M">
+<meta name="version" content="v2145-T">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -873,6 +873,16 @@ function RamiRoyal() {
       lastTaken: null,
       total: totals ? totals[i] : 0,
     }));
+    // Mode test : avec le pseudo « triche », le joueur reçoit toujours au moins 1 joker en début de manche
+    if ((ps[0].name || "").trim().toLowerCase() === "triche" && !ps[0].hand.some((c) => c.joker)) {
+      const ji = deck.findIndex((c) => c.joker);
+      if (ji !== -1) {
+        const swapAt = Math.floor(Math.random() * ps[0].hand.length);
+        const out = ps[0].hand[swapAt];
+        ps[0].hand[swapAt] = deck[ji];
+        deck[ji] = out;
+      }
+    }
     const discard = [deck.pop()];
     return {
       players: ps, stock: deck, discard, melds: [], mancheIdx,
