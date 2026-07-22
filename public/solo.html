@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2160-I">
+<meta name="version" content="v2161-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -887,6 +887,7 @@ function RamiRoyal() {
   const [account, setAccount] = useState(readJSON("rami-account")); // {} = mode invité
   const [stats, setStats] = useState(() => (readJSON("rami-account").code ? readJSON("rami-stats") : {}));
   const [showLogin, setShowLogin] = useState(false);
+  const [loginMode, setLoginMode] = useState("choix"); // "choix" | "creer" | "reconnecter"
   const [loginCode, setLoginCode] = useState("");
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginErr, setLoginErr] = useState("");
@@ -2207,12 +2208,12 @@ function tapCard(id) {
       .then((d) => { activerCompte(d); setNewCode(d.code); })
       .catch((e) => { setLoginBusy(false); setLoginErr(e.message || "Serveur injoignable — réessaie."); });
   }
-  function connecterCompte() {
-    const pseudo = playerName.trim();
-    if (pseudo.length < 2) { setLoginErr("Entre ton pseudo (celui du compte)."); return; }
+  function connecterParCode() {
+    if (loginCode.trim().length !== 6) { setLoginErr("Le code doit faire 6 chiffres."); return; }
     setLoginBusy(true); setLoginErr("");
-    compteApi("connexion", { pseudo, code: loginCode.trim() })
+    compteApi("info", { code: loginCode.trim() })
       .then((d) => {
+        setPlayerName(d.pseudo); // on pré-remplit avec le pseudo du compte
         // On fusionne les éventuelles stats locales avec celles du serveur
         const locales = statsLocalesAFusionner();
         if (locales.games) {
@@ -2349,7 +2350,7 @@ function tapCard(id) {
           {showLogin && (
             <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 flex items-center justify-center p-4" onClick={() => !loginBusy && setShowLogin(false)}>
               <div className="panel rounded-2xl p-5 w-full max-w-sm flex flex-col gap-3 relative" onClick={(e) => e.stopPropagation()}>
-              <button onClick={() => !loginBusy && setShowLogin(false)}
+              <button onClick={() => { !loginBusy && setShowLogin(false); setLoginMode("choix"); setLoginErr(""); setNewCode(null); }}
                 className="absolute top-3 right-3 text-emerald-500 hover:text-emerald-300 text-xl">✕</button>
                 {newCode ? (
                   <React.Fragment>
@@ -2358,25 +2359,39 @@ function tapCard(id) {
                     <div className="text-4xl font-bold text-amber-300 tracking-[.3em] text-center" style={{ fontFamily: "Georgia, serif" }}>{newCode}</div>
                     <button onClick={() => { if (navigator.clipboard) navigator.clipboard.writeText(newCode).catch(() => {}); }}
                       className="btn-dark font-bold py-2 rounded-xl text-xs">📋 Copier le code</button>
-                    <button onClick={() => { setShowLogin(false); setNewCode(null); }} className="btn-gold font-bold py-2.5 rounded-xl text-sm">C'est noté !</button>
+                    <button onClick={() => { setShowLogin(false); setNewCode(null); setLoginMode("choix"); }} className="btn-gold font-bold py-2.5 rounded-xl text-sm">C'est noté !</button>
                   </React.Fragment>
-                ) : (
+                ) : loginMode === "choix" ? (
                   <React.Fragment>
                     <h3 className="text-amber-300 font-bold text-center">👤 Mon compte</h3>
-                    <p className="text-[11px] text-emerald-300 leading-relaxed">Un compte = ton pseudo + un code secret à 6 chiffres. Tes stats et succès te suivent sur tous tes appareils (téléphone, ordinateur…).</p>
+                    <p className="text-[11px] text-emerald-300 leading-relaxed">Un compte = ton pseudo + un code secret à 6 chiffres. Tes stats te suivent partout (téléphone, ordinateur…).</p>
+                    <button onClick={() => setLoginMode("creer")} className="btn-gold font-bold py-2.5 rounded-xl text-sm">✨ Créer un compte</button>
+                    <div className="text-center text-[10px] text-emerald-500">— ou —</div>
+                    <button onClick={() => { setLoginMode("reconnecter"); setLoginCode(""); setLoginErr(""); }} className="btn-dark font-bold py-2.5 rounded-xl text-sm">🔑 Me reconnecter</button>
+                  </React.Fragment>
+                ) : loginMode === "creer" ? (
+                  <React.Fragment>
+                    <h3 className="text-amber-300 font-bold text-center">✨ Créer mon compte</h3>
                     <label className="flex flex-col gap-1 text-xs text-emerald-200">Pseudo
                       <input value={playerName} onChange={(e) => setPlayerName(e.target.value.slice(0, 20))} maxLength={20}
                         className="bg-emerald-950/70 border border-emerald-600 rounded-xl p-2.5 text-sm text-emerald-100" placeholder="Ton pseudo" />
                     </label>
                     <button onClick={creerCompte} disabled={loginBusy}
-                      className="btn-gold font-bold py-2.5 rounded-xl text-sm">{loginBusy ? "…" : "✨ Créer mon compte"}</button>
-                    <div className="text-center text-[10px] text-emerald-500">— déjà un compte ? —</div>
-                    <label className="flex flex-col gap-1 text-xs text-emerald-200">Code secret (6 chiffres)
-                      <input inputMode="numeric" value={loginCode} onChange={(e) => setLoginCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                        className="bg-emerald-950/70 border border-emerald-600 rounded-xl p-2.5 text-sm text-emerald-100 tracking-[.3em]" placeholder="******" />
+                      className="btn-gold font-bold py-2.5 rounded-xl text-sm">{loginBusy ? "…" : "Créer"}</button>
+                    <button onClick={() => setLoginMode("choix")} disabled={loginBusy} className="text-[11px] text-emerald-400 underline">← Retour</button>
+                    {loginErr && <div className="text-red-300 text-xs text-center">{loginErr}</div>}
+                  </React.Fragment>
+                ) : (
+                  <React.Fragment>
+                    <h3 className="text-amber-300 font-bold text-center">🔑 Reconnecter mon compte</h3>
+                    <p className="text-[11px] text-emerald-300 leading-relaxed">Entre ton code secret à 6 chiffres. C'est tout ce qu'il faut pour retrouver ton compte.</p>
+                    <label className="flex flex-col gap-1 text-xs text-emerald-200">Code secret
+                      <input inputMode="numeric" value={loginCode} onChange={(e) => { const v = e.target.value.replace(/\D/g, "").slice(0, 6); setLoginCode(v); setLoginErr(""); }}
+                        className="bg-emerald-950/70 border border-emerald-600 rounded-xl p-2.5 text-sm text-emerald-100 tracking-[.3em] text-center text-lg" placeholder="000000" autoFocus />
                     </label>
-                    <button onClick={connecterCompte} disabled={loginBusy || loginCode.length !== 6}
-                      className="btn-dark font-bold py-2.5 rounded-xl text-sm disabled:opacity-40">{loginBusy ? "…" : "🔑 Me connecter"}</button>
+                    <button onClick={connecterParCode} disabled={loginBusy || loginCode.length !== 6}
+                      className="btn-dark font-bold py-2.5 rounded-xl text-sm disabled:opacity-40">{loginBusy ? "…" : "Me connecter"}</button>
+                    <button onClick={() => setLoginMode("choix")} disabled={loginBusy} className="text-[11px] text-emerald-400 underline">← Retour</button>
                     {loginErr && <div className="text-red-300 text-xs text-center">{loginErr}</div>}
                   </React.Fragment>
                 )}

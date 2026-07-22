@@ -188,6 +188,17 @@ app.post("/compte/connexion", (req, res) => {
   res.json({ code: c.code, pseudo: c.pseudo, stats: c.stats || {}, succes: c.succes || {} });
 });
 
+// Lookup par code seul (pour reconnexion multi-appareil) : retourne le compte complet si code valide
+app.post("/compte/info", (req, res) => {
+  if (tropDEssais(req, res)) return;
+  const code = (req.body && req.body.code) || "";
+  if (!/^[0-9]{6}$/.test(String(code).trim())) return res.status(400).json({ erreur: "Code invalide." });
+  const c = comptes.get(String(code).trim());
+  if (!c) return res.status(404).json({ erreur: "Code inexistant." });
+  c.lastSeen = Date.now(); saveComptes();
+  res.json({ code: c.code, pseudo: c.pseudo, stats: c.stats || {}, succes: c.succes || {} });
+});
+
 app.post("/compte/stats", (req, res) => {
   const c = trouveCompte(req);
   if (!c) return res.status(404).json({ erreur: "Pseudo ou code incorrect." });
