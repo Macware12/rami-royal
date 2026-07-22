@@ -426,6 +426,31 @@ function handleDiscard(room, idx, cardId) {
 }
 
 // ---------- Fenêtre d'achat (hors tour, priorité dans le sens du jeu) ----------
+// Difficile : à quel point la carte intéresse UN adversaire, d'après les cartes qu'il a prises
+// ou achetées (mémoire takenCards). Sert au blocage : prendre la carte avant lui.
+// +3 s'il collectionne ce rang (tri), +2 s'il construit dans cette couleur autour (escalier).
+function hotForOpponents(top, takenCards, selfIdx, players) {
+  if (!top || top.joker) return 0;
+  const byPlayer = {};
+  (takenCards || []).forEach((t) => {
+    if (t.idx === selfIdx || !t.card) return;
+    if (players && players[t.idx] && players[t.idx].posed) return; // déjà posé : plus de contrat à bloquer
+    (byPlayer[t.idx] = byPlayer[t.idx] || []).push(t.card);
+  });
+  let best = 0;
+  Object.keys(byPlayer).forEach((k) => {
+    let s = 0;
+    byPlayer[k].forEach((c) => {
+      if (c.joker) return;
+      const dd = Math.min(Math.abs(c.rank - top.rank), 13 - Math.abs(c.rank - top.rank)); // distance circulaire (K-A-2)
+      if (c.rank === top.rank) s += 3;
+      if (c.suit === top.suit && dd <= 2) s += 2;
+    });
+    best = Math.max(best, s);
+  });
+  return best;
+}
+
 function wantsTop(p, top, level, contract) {
   if (!top || top.joker || level === "facile") return false;
   if (p.posed) return false; // déjà posé : acheter ne sert plus à rien
@@ -457,7 +482,9 @@ function botBuyer(room, discarderIdx, nextIdx) {
     if (i === discarderIdx || i === nextIdx || p.buysLeft <= 0 || p.posed) return;
     if (!(p.isBot || p.absent || !p.connected)) return; // seulement les mains jouées par l'IA
     const wants = level === "difficile"
-      ? wantsTop(p, top, level, contract)
+      ? (wantsTop(p, top, level, contract) ||
+        // Achat de blocage : carte très convoitée par un adversaire — s'il lui reste des achats de réserve
+        (p.buysLeft >= 2 && hotForOpponents(top, g.takenCards, i, room.players) >= 5))
       : p.hand.filter((c) => !c.joker && c.rank === top.rank).length >= 2;
     if (!wants) return;
     const d = (i - discarderIdx + n) % n;
@@ -652,7 +679,11 @@ function aiPlayTurn(room) {
   const wantsTake = g.discardLocked ? false
     : p.posed ? Boolean(level !== "facile" && !contract.poseTout && fitsMeld(top))
     : level === "facile" ? false
-    : level === "difficile" ? wantsTop(p, top, level, contract)
+    : level === "difficile" ? (wantsTop(p, top, level, contract) ||
+        // Blocage : la carte ne lui sert pas, mais un adversaire la collectionne — il la prend pour l'en priver
+        // (garde-fous : jamais en fin de pioche, ni avec une main déjà chargée — son jeu reste la priorité)
+        (Boolean(top) && !top.joker && g.stock.length > room.players.length * 2 && p.hand.length <= 16 &&
+          hotForOpponents(top, g.takenCards, idx, room.players) >= 3))
     : Boolean(top && !top.joker && mates >= 2);
   if (wantsTake) {
     const card = g.discard.pop();

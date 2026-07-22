@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2146-J">
+<meta name="version" content="v2147-B">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -605,6 +605,31 @@ function aiDiscardChoice(hand, level) {
   return [...nonJ].sort((a, b) => score(a) - score(b))[0];
 }
 
+// Difficile : à quel point la carte intéresse UN adversaire, d'après les cartes qu'il a prises
+// ou achetées (mémoire takenCards). Sert au blocage : prendre la carte avant lui.
+// +3 s'il collectionne ce rang (tri), +2 s'il construit dans cette couleur autour (escalier).
+function hotForOpponents(top, takenCards, selfIdx, players) {
+  if (!top || top.joker) return 0;
+  const byPlayer = {};
+  (takenCards || []).forEach((t) => {
+    if (t.idx === selfIdx || !t.card) return;
+    if (players && players[t.idx] && players[t.idx].posed) return; // déjà posé : plus de contrat à bloquer
+    (byPlayer[t.idx] = byPlayer[t.idx] || []).push(t.card);
+  });
+  let best = 0;
+  Object.keys(byPlayer).forEach((k) => {
+    let s = 0;
+    byPlayer[k].forEach((c) => {
+      if (c.joker) return;
+      const dd = Math.min(Math.abs(c.rank - top.rank), 13 - Math.abs(c.rank - top.rank)); // distance circulaire (K-A-2)
+      if (c.rank === top.rank) s += 3;
+      if (c.suit === top.suit && dd <= 2) s += 2;
+    });
+    best = Math.max(best, s);
+  });
+  return best;
+}
+
 function aiWantsBuy(p, top, level, contract) {
   if (!top || top.joker) return false;
   if (p.posed) return false; // déjà posé : acheter ne sert plus à rien
@@ -630,7 +655,11 @@ function pickAiBuyer(state, discarderIdx, nextIdx) {
   let best = null, bestD = 99;
   state.players.forEach((p, i) => {
     if (!p.isAI || i === discarderIdx || i === nextIdx || p.buysLeft <= 0 || p.posed) return;
-    if (!aiWantsBuy(p, top, state.level || "moyen", MANCHES[state.mancheIdx])) return;
+    const wants = aiWantsBuy(p, top, state.level || "moyen", MANCHES[state.mancheIdx]) ||
+      // Achat de blocage (difficile) : carte très convoitée par un adversaire — s'il lui reste des achats de réserve
+      ((state.level || "moyen") === "difficile" && p.buysLeft >= 2 &&
+        hotForOpponents(top, state.takenCards, i, state.players) >= 5);
+    if (!wants) return;
     const d = (i - discarderIdx + n) % n;
     if (d < bestD) { bestD = d; best = i; }
   });
@@ -1941,7 +1970,11 @@ function tapCard(id) {
       s.discardLocked ? false :
       ai.posed ? Boolean(level !== "facile" && !contract.poseTout && fitsMeld(top)) :
       level === "facile" ? false :
-      level === "difficile" ? aiWantsBuy(ai, top, level, contract) :
+      level === "difficile" ? (aiWantsBuy(ai, top, level, contract) ||
+        // Blocage : la carte ne lui sert pas, mais un adversaire la collectionne — il la prend pour l'en priver
+        // (garde-fous : jamais en fin de pioche, ni avec une main déjà chargée — son jeu reste la priorité)
+        (Boolean(top) && !top.joker && stock.length > s.players.length * 2 && hand.length <= 16 &&
+          hotForOpponents(top, ns.takenCards, idx, s.players) >= 3)) :
       Boolean(top && !top.joker && mates >= 2);
     let tookCard = null;
     if (wantsTake) {
