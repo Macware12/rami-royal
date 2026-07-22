@@ -10,10 +10,11 @@ const app = express();
 app.get("/ping", (req, res) => res.send("ok"));
 
 // ---------- Statistiques temps réel ----------
-const presence = new Map(); // id → { t: dernier signal, m: mode }
+const presence = new Map(); // id → { t: dernier signal, m: mode, p: pseudo }
+const STATS_KEY = process.env.STATS_KEY || "gasy2026"; // clé pour voir les pseudos sur /stats.html
 app.get("/presence", (req, res) => {
   const id = String(req.query.id || "").slice(0, 40);
-  if (id) presence.set(id, { t: Date.now(), m: String(req.query.m || "?").slice(0, 10) });
+  if (id) presence.set(id, { t: Date.now(), m: String(req.query.m || "?").slice(0, 10), p: String(req.query.p || "").slice(0, 20) });
   res.send("ok");
 });
 app.get("/stats.json", (req, res) => {
@@ -26,12 +27,23 @@ app.get("/stats.json", (req, res) => {
     joueursEnSalon += room.players.filter((p) => p.connected && !p.isBot).length;
   }
   const soloActifs = [...presence.values()].filter((v) => v.m === "solo").length;
-  res.json({
+  const out = {
     connectes: io.engine.clientsCount,
     salons, parties, joueursEnSalon, soloActifs,
     total: io.engine.clientsCount + soloActifs,
     heure: new Date().toISOString(),
-  });
+  };
+  // Détail des pseudos : uniquement avec la bonne clé (la page est publique)
+  if (String(req.query.cle || "") === STATS_KEY) {
+    out.pseudosMulti = [];
+    for (const room of rooms.values())
+      for (const p of room.players)
+        if (p.connected && !p.isBot) out.pseudosMulti.push(p.name);
+    out.pseudosSolo = [...presence.values()]
+      .filter((v) => v.m === "solo" && v.p)
+      .map((v) => v.p);
+  }
+  res.json(out);
 });
 
 // ---------- Précompilation Babel au démarrage : chargement bien plus rapide côté client ----------

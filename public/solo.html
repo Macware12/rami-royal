@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2139-C">
+<meta name="version" content="v2140-S">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -19,7 +19,11 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 // Signal de présence anonyme pour les statistiques temps réel
 (function () {
   var id = Math.random().toString(36).slice(2);
-  var beat = function () { fetch("/presence?id=" + id + "&m=solo").catch(function () {}); };
+  var beat = function () {
+    var p = "";
+    try { p = (localStorage.getItem("rami-name") || "").slice(0, 20); } catch (e) {}
+    fetch("/presence?id=" + id + "&m=solo&p=" + encodeURIComponent(p)).catch(function () {});
+  };
   beat(); setInterval(beat, 25000);
 })();
 </script>
