@@ -345,6 +345,22 @@ function startRound(room, mancheIdx) {
     p.hand = deck.splice(0, 13);
     p.posed = false; p.buysLeft = E.MAX_ACHATS; p.lastTaken = null; p.justPosed = false; p.timeouts = 0;
   });
+  // Mode court : 3 manches aléatoires parmi les 7 premières (exclut Pose-tout)
+  let manchesFinales = room.game?.manches; // Garde les manches si on passe à la manche suivante
+  if (!manchesFinales) {
+    if (room.options.shortMode) {
+      const indices = [];
+      for (let i = 0; i < 7; i++) indices.push(i); // 0-6 (exclut 7 = Pose-tout)
+      manchesFinales = [];
+      for (let i = 0; i < 3 && indices.length > 0; i++) {
+        const idx = Math.floor(Math.random() * indices.length);
+        manchesFinales.push(E.MANCHES[indices[idx]]);
+        indices.splice(idx, 1);
+      }
+    } else {
+      manchesFinales = E.MANCHES;
+    }
+  }
   room.game = {
     mancheIdx,
     stock: deck,
@@ -355,10 +371,11 @@ function startRound(room, mancheIdx) {
     buyRequests: [],
     lastDiscarderIdx: null,
     history: room.game ? room.game.history : [],
-    log: [`— Manche ${mancheIdx + 1} : ${E.MANCHES[mancheIdx].label} —`],
+    log: [`— Manche ${mancheIdx + 1} : ${manchesFinales[mancheIdx].label} —`],
     turnDeadline: null,
     roundOver: null,
     shortMode: room.options.shortMode, // Mode court : 3 manches au lieu de 8
+    manches: manchesFinales, // Manches à jouer (8 normales ou 3 aléatoires)
   };
   room.state = "playing";
   log(room, `La manche ${mancheIdx + 1} commence (contrat : ${E.MANCHES[mancheIdx].label})`);
@@ -831,8 +848,8 @@ function checkRoundEnd(room, idx) {
   });
   g.history.push({ mancheIdx: g.mancheIdx, summary });
   g.roundOver = { winnerIdx: idx, bonusType, summary };
-  const nbManches = g.shortMode ? 3 : E.MANCHES.length; // Mode court : 3 manches, sinon 8
-  room.state = g.mancheIdx + 1 >= nbManches ? "over" : "roundEnd";
+  const manches = g.manches || E.MANCHES;
+  room.state = g.mancheIdx + 1 >= manches.length ? "over" : "roundEnd";
   if (room.state === "over") {
     const champ = room.players.reduce((a, b) => (b.total < a.total ? b : a));
     champ.wins = (champ.wins || 0) + 1;

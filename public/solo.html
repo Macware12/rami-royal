@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2162-S">
+<meta name="version" content="v2163-R">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -158,6 +158,24 @@ function compteApi(chemin, body) {
   return fetch(API_BASE + "/compte/" + chemin, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
   }).then((r) => r.json().then((d) => { if (!r.ok) throw new Error(d.erreur || "Erreur serveur"); return d; }));
+}
+// Mode court : 3 manches aléatoires parmi les 7 premières (exclut Pose-tout)
+function genererManchesAleatoires() {
+  const indices = [];
+  for (let i = 0; i < 7; i++) indices.push(i); // 0-6 (exclut l'index 7 = Pose-tout)
+  const trois = [];
+  while (trois.length < 3 && indices.length > 0) {
+    const idx = Math.floor(Math.random() * indices.length);
+    trois.push(indices[idx]);
+    indices.splice(idx, 1);
+  }
+  return trois;
+}
+// Récupère le contrat courant selon le mode (normal ou court)
+function getContrat(g) {
+  if (!g) return null;
+  const manches = g.manches || MANCHES;
+  return manches[g.mancheIdx] || null;
 }
 
 let CARD_ID = 0;
@@ -1026,7 +1044,8 @@ function RamiRoyal() {
     store.set("rami-name", name);
     store.set("rami-avatar", myAvatar);
     store.set("rami-level", level);
-    setG({ ...newRound(players, startManche - 1, null), level, shortMode });
+    const manchesFinales = shortMode ? genererManchesAleatoires().map((i) => MANCHES[i]) : MANCHES;
+    setG({ ...newRound(players, startManche - 1, null), level, shortMode, manches: manchesFinales });
     setSelected([]);
     setMsg("");
     showIntro(startManche - 1);
@@ -1047,7 +1066,7 @@ function RamiRoyal() {
     setScreen("setup");
   }
 
-  const contract = g ? MANCHES[g.mancheIdx] : null;
+  const contract = g ? getContrat(g) : null;
   const me = g ? g.players[0] : null;
   const current = g ? g.players[g.turn] : null;
   const myTurn = g && g.turn === 0 && !g.roundOver;
@@ -2234,8 +2253,8 @@ function tapCard(id) {
   }
 
   function nextManche() {
-    const nbManches = g.shortMode ? 3 : MANCHES.length; // Mode court : 3 manches, sinon 8
-    if (g.mancheIdx + 1 >= nbManches) {
+    const manches = g.manches || MANCHES;
+    if (g.mancheIdx + 1 >= manches.length) {
       store.del("rami-save");
       const ranking = [...g.players].sort((a, b) => a.total - b.total);
       const won = ranking[0] === g.players[0];
@@ -2318,10 +2337,18 @@ function tapCard(id) {
               ))}
             </div>
           </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={shortMode} onChange={(e) => setShortMode(e.target.checked)}
-              className="w-4 h-4 cursor-pointer" />
-            <span>⚡ Mode court (3 manches rapides au lieu de 8)</span>
+          <label className="flex flex-col gap-2 text-sm">
+            Mode
+            <div className="flex gap-2">
+              <button onClick={() => setShortMode(false)}
+                className={`flex-1 py-2 rounded-xl text-xs font-bold ${!shortMode ? "btn-gold" : "btn-dark"}`}>
+                Normal (8 manches)
+              </button>
+              <button onClick={() => setShortMode(true)}
+                className={`flex-1 py-2 rounded-xl text-xs font-bold ${shortMode ? "btn-gold" : "btn-dark"}`}>
+                ⚡ Court (3 aléatoires)
+              </button>
+            </div>
           </label>
           <label className="flex flex-col gap-2 text-sm">
             Commencer à la manche (pour tester)
