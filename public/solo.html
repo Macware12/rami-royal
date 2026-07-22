@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2150-N">
+<meta name="version" content="v2151-K">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -1276,6 +1276,9 @@ function RamiRoyal() {
     if (state.roundOver) return state;
     const n = state.players.length;
     const nextIdx = (discarderIdx + 1) % n;
+    // Tutoriel : l'achat n'est introduit qu'après la mission escalier — on apprend d'abord
+    // à piocher dans le tas puis à prendre dans la défausse, l'achat vient ensuite
+    if (tuto && !tutoFlags.esc) return { ...state, turn: nextIdx, phase: "draw", justPosed: false };
     const top = state.discard[state.discard.length - 1];
     const aiBuyer = pickAiBuyer(state, discarderIdx, nextIdx);
     const humanEligible = discarderIdx !== 0 && nextIdx !== 0 && state.players[0].buysLeft > 0 && !state.players[0].posed && Boolean(top) && !top.joker;
@@ -1772,14 +1775,17 @@ function tapCard(id) {
     }
     if (g.buyWindow) {
       const tip = advise(topDiscard);
-      return tip ? "💰 ACHÈTE-LA : " + tip + " ! La carte de pénalité vaut largement le coup." : "🤔 Cette carte ne t'aide pas → « Passer ». On n'achète que ce qui sert le contrat !";
+      return "💰 NOUVEAU : l'ACHAT ! Quand un adversaire jette une carte, tu peux l'acheter même hors de ton tour (3 par manche max, +1 carte de pénalité). " +
+        (tip ? "Et là, fonce : " + tip + " !" : "Mais celle-ci ne t'aide pas → « Passer ». On n'achète que ce qui sert le contrat !");
     }
     if (!myTurn) {
       // pendant les tours adverses : la visite des outils
       if (tutoFlags.drew && !tutoFlags.aide) return "🧰 Pendant que " + g.players[g.turn].name + " joue, découvre tes outils ! Touche 💡 Aide (il brille) : je classe ta main selon le contrat.";
       if (tutoFlags.aide && !tutoFlags.scores) return "📊 Maintenant touche « Scores » en haut : les points de chacun. Chaque carte restante en main coûte : 2-9 → 5 pts · 10-R → 10 · As → 15 · Joker 🤡 → 20. Et le plus PETIT total gagne !";
       if (tutoFlags.scores && !tutoFlags.regles) return "❓ Dernier outil : touche « ? » en haut — ton antisèche des règles, disponible à tout moment.";
-      return "👀 " + g.players[g.turn].name + " joue… Chaque carte jetée peut s'acheter, reste attentif !";
+      return tutoFlags.esc
+        ? "👀 " + g.players[g.turn].name + " joue… Chaque carte jetée peut s'acheter, reste attentif !"
+        : "👀 " + g.players[g.turn].name + " joue… Observe la défausse : à ton tour, tu pourras y prendre la carte du dessus gratuitement si elle t'aide.";
     }
     if (me.posed && !tutoFlags.complete) return "🧩 Nouvelle mission : COMPLÈTE une combinaison de la table ! Glisse une de tes cartes sur un tri ou un escalier posé (le tien ou celui d'un autre) si elle peut s'y ajouter. Chaque carte placée = une de moins en main !";
     if (me.posed) return "🏁 Dernière ligne droite : continue à compléter quand tu peux, et jette une carte à chaque tour. Main vide = victoire !";
