@@ -2348,7 +2348,9 @@ function tapCard(id) {
           )}
           {showLogin && (
             <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 flex items-center justify-center p-4" onClick={() => !loginBusy && setShowLogin(false)}>
-              <div className="panel rounded-2xl p-5 w-full max-w-sm flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+              <div className="panel rounded-2xl p-5 w-full max-w-sm flex flex-col gap-3 relative" onClick={(e) => e.stopPropagation()}>
+              <button onClick={() => !loginBusy && setShowLogin(false)}
+                className="absolute top-3 right-3 text-emerald-500 hover:text-emerald-300 text-xl">✕</button>
                 {newCode ? (
                   <React.Fragment>
                     <h3 className="text-amber-300 font-bold text-center">✨ Compte créé !</h3>
