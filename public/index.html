@@ -1388,12 +1388,14 @@ function App() {
             </div>
             <div className="flex gap-2 text-xs">
               <button onClick={() => setShortMode(false)}
-                className={`flex-1 py-1.5 rounded-xl font-bold ${!shortMode ? "btn-gold" : "btn-dark"}`}>
-                Normal (8)
+                className={`flex-1 py-1.5 rounded-xl font-bold flex flex-col items-center gap-0.5 ${!shortMode ? "btn-gold" : "btn-dark"}`}>
+                <span>Normal (8)</span>
+                <span className="text-[9px] opacity-75">~30 min</span>
               </button>
               <button onClick={() => setShortMode(true)}
-                className={`flex-1 py-1.5 rounded-xl font-bold ${shortMode ? "btn-gold" : "btn-dark"}`}>
-                ⚡ Court (3)
+                className={`flex-1 py-1.5 rounded-xl font-bold flex flex-col items-center gap-0.5 ${shortMode ? "btn-gold" : "btn-dark"}`}>
+                <span>⚡ Court (3)</span>
+                <span className="text-[9px] opacity-75">~10 min</span>
               </button>
             </div>
             <span className="text-[10px] text-emerald-400">Le niveau s'applique aux bots ajoutés pour compléter la table.</span>
