@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2155-U">
+<meta name="version" content="v2156-P">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -1416,7 +1416,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2155-U</span>
+          <span className="opacity-60">v2156-P</span>
         </div>
       </div>
     );
@@ -1442,6 +1442,13 @@ function App() {
               navigator.clipboard.writeText(texte).then(() => setMsg("Lien d'invitation copié — colle-le à tes amis !")).catch(() => setMsg(url));
             } else setMsg(url);
           }} className="btn-gold font-bold py-2 px-6 rounded-xl text-sm mt-1">📤 Inviter des amis</button>
+          <button onClick={() => {
+            const doneMsg = "Code " + srv.code + " copié ✓ — colle-le où tu veux !";
+            if (navigator.clipboard) navigator.clipboard.writeText(srv.code).then(() => setMsg(doneMsg)).catch(() => {
+              window.prompt("Copie le code du salon :", srv.code);
+            });
+            else window.prompt("Copie le code du salon :", srv.code);
+          }} className="btn-dark font-bold py-2 px-4 rounded-xl text-sm mt-1 ml-2">📋 Copier le code</button>
           <div className="text-[10px] text-emerald-400 mt-1">{srv.options.turnSeconds}s par tour · bots {srv.options.level}</div>
         </div>
         <div className="panel rounded-2xl p-4 w-full max-w-xs">
