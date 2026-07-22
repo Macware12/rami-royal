@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2143-F">
+<meta name="version" content="v2144-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -1194,15 +1194,28 @@ function App() {
         return;
       }
     }
-    const meldEls = document.querySelectorAll("[data-mid]");
-    for (const el of meldEls) {
-      const r = el.getBoundingClientRect();
-      if (inRect(r, 14)) {
-        const mid = Number(el.getAttribute("data-mid"));
-        if (me && me.posed) completeWith(mid, card.id);
-        else setMsg("Pose d'abord ton contrat avant de compléter.");
-        return;
+    // Combinaisons de la table : priorité au point le plus proche du doigt, et si plusieurs sont
+    // touchées (rangées voisines), on choisit celle que la carte peut réellement compléter
+    const meldEls = [...document.querySelectorAll("[data-mid]")];
+    const hits = [];
+    for (const [px, py] of pts) {
+      for (const el of meldEls) {
+        const r = el.getBoundingClientRect();
+        if (px >= r.left - 14 && px <= r.right + 14 && py >= r.top - 14 && py <= r.bottom + 14) {
+          const mid = Number(el.getAttribute("data-mid"));
+          if (!hits.includes(mid)) hits.push(mid);
+        }
       }
+    }
+    if (hits.length > 0) {
+      if (me && me.posed) {
+        const canUse = (m) => m && ((m.type === "tri" ? isTri([...m.cards, card]) : isEscalier([...m.cards, card])) ||
+          (m.type === "esc" && !card.joker && m.cards.some((c, i) => c.joker && isOrderedEscalier(m.cards.map((x, j) => (j === i ? card : x))))));
+        const fit = hits.find((mid) => canUse((g.melds || []).find((mm) => mm.id === mid)));
+        completeWith(fit != null ? fit : hits[0], card.id);
+      }
+      else setMsg("Pose d'abord ton contrat avant de compléter.");
+      return;
     }
     // 2) Ensuite seulement, la défausse
     const dr = discardRef.current && discardRef.current.getBoundingClientRect();
@@ -1396,7 +1409,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2143-F</span>
+          <span className="opacity-60">v2144-M</span>
         </div>
       </div>
     );
