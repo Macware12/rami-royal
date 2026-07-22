@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2152-D">
+<meta name="version" content="v2154-C">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -411,47 +411,46 @@ function helpArrangement(hand, contract, variant) {
 }
 
 function rigTutoDeal(state) {
-  // Main d'apprentissage : une paire (2/3 du tri), deux cartes qui se suivent (2/3 de l'escalier), un joker
-  const pool = [...state.players[0].hand, ...state.stock];
-  const pick = [];
-  const remove = (card) => { pool.splice(pool.indexOf(card), 1); pick.push(card); };
-  // deux cartes qui se suivent (la 3e viendra en piochant — c'est la leçon !)
-  outerEsc: for (const s of SUITS) {
-    for (let r = 4; r <= 8; r++) {
-      const a = pool.find((c) => !c.joker && c.suit === s && c.rank === r);
-      const b = pool.find((c) => !c.joker && c.suit === s && c.rank === r + 1);
-      const d = pool.find((c) => !c.joker && c.suit === s && c.rank === r + 2);
-      if (a && b && d) { remove(a); remove(b); break outerEsc; } // la 3e existe, on ne la donne pas
+  // Tutoriel 100 % scénarisé : mains fixes, leçons garanties — aucune distribution aléatoire.
+  // Le joueur reçoit 6♣-7♣ (escalier à finir), 9♥-9♠ (tri à finir) et un joker.
+  //  · Leçon pioche   : sa 1re pioche est un 3♦ neutre, puis la pioche scriptée (tutoDestiny) prend le relais
+  //  · Leçon défausse : Joueur 3 jettera le 8♣ → à prendre gratuitement pour finir l'escalier
+  //  · Leçon achat    : Joueur 2 jettera le 9♦ → à acheter pour finir le tri
+  const all = [...state.players.flatMap((p) => p.hand), ...state.stock, ...state.discard];
+  const take = (pred) => { const i = all.findIndex(pred); return i === -1 ? null : all.splice(i, 1)[0]; };
+  const card = (rank, suit) => take((c) => !c.joker && c.rank === rank && c.suit === suit);
+  const hand0 = [card(6, "♣"), card(7, "♣"), card(9, "♥"), card(9, "♠"), take((c) => c.joker),
+    card(2, "♠"), card(4, "♥"), card(5, "♦"), card(10, "♦"), card(11, "♠"), card(13, "♥"), card(1, "♦"), card(12, "♣")].filter(Boolean);
+  const key9 = card(9, "♦"); // ira chez Joueur 2 (leçon achat)
+  const key8 = card(8, "♣"); // ira chez Joueur 3 (leçon défausse) — l'autre 8♣ reste en pioche (filet tutoDestiny)
+  // Mains des bots : jamais 2 cartes voisines de même couleur (aucun escalier possible → ils ne
+  // poseront pas pendant la leçon, le contrat en exige un) ; les rangs 8 et 9 restent en pioche
+  const junk = (seed) => {
+    const out = [...seed];
+    for (let i = 0; i < all.length && out.length < 13; i++) {
+      const c = all[i];
+      if (c.joker || c.rank === 8 || c.rank === 9) continue;
+      const clash = out.some((o) => !o.joker && o.suit === c.suit &&
+        Math.min(Math.abs(o.rank - c.rank), 13 - Math.abs(o.rank - c.rank)) <= 2);
+      const dup = out.filter((o) => !o.joker && o.rank === c.rank).length >= 2;
+      if (clash || dup) continue;
+      out.push(all.splice(i, 1)[0]); i--;
     }
-  }
-  // une paire de même valeur, enseignes différentes
-  outerTri: for (let i = 0; i < pool.length; i++) {
-    for (let j = i + 1; j < pool.length; j++) {
-      const a = pool[i], b = pool[j];
-      if (!a.joker && !b.joker && a.rank === b.rank && a.suit !== b.suit && !pick.includes(a)) {
-        remove(a); remove(b); break outerTri;
-      }
-    }
-  }
-  // un joker — si les IA les ont tous, on en emprunte un contre une carte banale
-  let aiHands = state.players.map((p) => p.hand);
-  const jk = pool.find((c) => c.joker);
-  if (jk) {
-    remove(jk);
-  } else {
-    for (let pi = 1; pi < aiHands.length; pi++) {
-      const j2 = aiHands[pi].find((c) => c.joker);
-      if (j2) {
-        const swap = pool.pop();
-        aiHands = aiHands.map((h, k) => (k === pi ? h.map((c) => (c === j2 ? swap : c)) : h));
-        pick.push(j2);
-        break;
-      }
-    }
-  }
-  while (pick.length < 13 && pool.length) pick.push(pool.shift());
-  const players = state.players.map((p, i) => ({ ...p, hand: i === 0 ? pick : aiHands[i] }));
-  return { ...state, players, stock: pool };
+    while (out.length < 13) out.push(all.pop()); // filet de sécurité (n'arrive pas en pratique)
+    return out;
+  };
+  const hand1 = junk(key9 ? [key9] : []);
+  const hand2 = junk(key8 ? [key8] : []);
+  const discard0 = card(3, "♥") || take((c) => !c.joker); // défausse de départ neutre
+  // Ordre de pioche : Joueur 2 et Joueur 3 piochent d'abord, le joueur reçoit ensuite le 3♦
+  const first = card(3, "♦");
+  const n2 = take((c) => !c.joker && c.rank !== 8 && c.rank !== 9);
+  const n1 = take((c) => !c.joker && c.rank !== 8 && c.rank !== 9);
+  if (first) all.push(first);
+  if (n2) all.push(n2);
+  if (n1) all.push(n1); // stock.pop() : n1 → Joueur 2, n2 → Joueur 3, 3♦ → joueur
+  const players = state.players.map((p, i) => ({ ...p, hand: i === 0 ? hand0 : i === 1 ? hand1 : hand2 }));
+  return { ...state, players, stock: all, discard: discard0 ? [discard0] : state.discard };
 }
 
 function isOrderedEscalier(cards) {
@@ -956,6 +955,9 @@ function RamiRoyal() {
       h.filter((x) => !x.joker).forEach((x) => { (byRank[x.rank] = byRank[x.rank] || []).push(x); });
       const pairRank = Object.keys(byRank).find((r) => byRank[r].length >= 2);
       if (pairRank) wanted = stock.find((c) => !c.joker && c.rank === Number(pairRank));
+    } else if (s.players[0].posed && !tutoFlags.complete) {
+      // Leçon « compléter » : dès la pose faite, la pioche livre une carte qui s'ajoute à une combinaison de la table
+      wanted = stock.find((c) => !c.joker && (s.melds || []).some((m) => validGroup(m.type, [...m.cards, c])));
     }
     if (!wanted) return s;
     stock.splice(stock.indexOf(wanted), 1);
@@ -1874,6 +1876,12 @@ function tapCard(id) {
       if (best) best.slice(0, 3).forEach((c) => ids.add(c.id));
       return { ids, stock: stockGlow, pose: false, discard: discardGlow };
     }
+    if (me.posed && !tutoFlags.complete) {
+      // Leçon « compléter » : faire briller la carte de la main qui s'ajoute à une combinaison de la table
+      const fit = h.find((c) => !c.joker && (g.melds || []).some((m) => validGroup(m.type, [...m.cards, c])));
+      if (fit) ids.add(fit.id);
+      return { ids, stock: false, pose: false, discard: false };
+    }
     return { ids, stock: false, pose: !me.posed, discard: false };
   }, [tuto, g, tutoFlags, myTurn]);
 
@@ -2088,7 +2096,18 @@ function tapCard(id) {
 
     const nonJokers = hand.filter((c) => !c.joker);
     let toss;
-    if (posed && nonJokers.length > 0) {
+    if (tuto && nonJokers.length > 0) {
+      // Défausse scénarisée du tutoriel : chaque leçon arrive au bon moment, rien d'aléatoire.
+      // Joueur 3 jette le 8♣ (leçon « prends dans la défausse ») dès que le joueur a appris à piocher ;
+      // Joueur 2 jette le 9♦ (leçon « achat ») dès que l'escalier est acquis.
+      const scripted =
+        idx === 2 && tutoFlags.drew && !tutoFlags.esc ? nonJokers.find((c) => c.rank === 8 && c.suit === "♣")
+        : idx === 1 && tutoFlags.esc && !tutoFlags.tri ? nonJokers.find((c) => c.rank === 9 && c.suit === "♦")
+        : null;
+      // Sinon : la plus chère, mais jamais une carte-leçon (rangs 8 et 9) ni une utile au joueur
+      toss = scripted || [...nonJokers].sort((a, b) => cardPoints(b) - cardPoints(a))
+        .find((c) => c.rank !== 8 && c.rank !== 9) || nonJokers[0];
+    } else if (posed && nonJokers.length > 0) {
       // Une fois posé : jeter les cartes les plus chères (limiter les points en fin de manche)
       toss = [...nonJokers].sort((a, b) => cardPoints(b) - cardPoints(a))[0];
     } else if (level === "difficile" && nonJokers.length > 0) {
