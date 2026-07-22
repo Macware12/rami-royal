@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2140-S">
+<meta name="version" content="v2141-P">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -752,7 +752,7 @@ function OpponentCard({ p, active, refCb }) {
   const color = p.color || "#f59e0b";
   return (
     <div ref={refCb}
-      className={`relative flex flex-col items-center rounded-2xl px-2 pt-2 pb-1 min-w-[88px] transition-all panel ${active ? "pulse-gold" : ""}`}
+      className={`relative flex flex-col items-center rounded-2xl px-1.5 pt-1.5 pb-1 min-w-[80px] transition-all panel ${active ? "pulse-gold" : ""}`}
       style={active ? { borderColor: "#fbbf24" } : {}}>
       {active && (
         <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[9px] btn-gold font-bold px-1.5 rounded-full whitespace-nowrap" style={{ animation: "floaty 1.2s ease-in-out infinite" }}>
@@ -763,28 +763,28 @@ function OpponentCard({ p, active, refCb }) {
         <span className="absolute -top-2 right-1 text-[9px] bg-red-600 text-white font-bold px-1.5 rounded-full animate-pulse">⚠ {p.hand.length}</span>
       )}
       <div className="flex items-center gap-1.5">
-        <span className="flex items-center justify-center rounded-full text-base shrink-0"
-          style={{ width: 30, height: 30, background: color + "33", border: `2px solid ${active ? "#fbbf24" : color}`, boxShadow: "0 2px 5px rgba(0,0,0,.4)" }}>
+        <span className="flex items-center justify-center rounded-full text-sm shrink-0"
+          style={{ width: 26, height: 26, background: color + "33", border: `2px solid ${active ? "#fbbf24" : color}`, boxShadow: "0 2px 5px rgba(0,0,0,.4)" }}>
           {emoji}
         </span>
         <CardFan count={p.hand.length} />
       </div>
-      <span className="text-[11px] font-bold mt-0.5">{p.name}</span>
-      <div className="flex items-center gap-1.5 text-[9px] text-emerald-300 mt-0.5">
-        <span className="bg-emerald-900/80 border border-emerald-700 rounded px-1">{p.total} pts</span>
-        {p.posed ? <span className="text-amber-300 font-bold">posé ✓</span> : (
+      <span className="text-[10px] font-bold leading-tight">{p.name}</span>
+      <div className="flex items-center gap-1 text-[9px] text-emerald-300">
+        <span className="bg-emerald-900/80 border border-emerald-700 rounded px-1">{p.total}</span>
+        {p.posed ? <span className="text-amber-300 font-bold">✓</span> : (
           <span className="flex gap-0.5 items-center">
             {Array.from({ length: MAX_ACHATS }).map((_, k) => (
               <span key={k} style={{ width: 5, height: 5, borderRadius: 99, background: k < p.buysLeft ? "#a3e635" : "#3f3f46" }} />
             ))}
           </span>
         )}
+        {p.lastTaken && (
+          <span className="text-amber-200 font-bold whitespace-nowrap">
+            pris {p.lastTaken.joker ? "🤡" : rankLabel(p.lastTaken) + p.lastTaken.suit}
+          </span>
+        )}
       </div>
-      {p.lastTaken && (
-        <span className="flex items-center gap-1 text-[9px] text-amber-200 mt-1">
-          a pris <Card card={p.lastTaken} tiny />
-        </span>
-      )}
     </div>
   );
 }
@@ -2290,7 +2290,7 @@ function tapCard(id) {
       </div>
 
       {/* Adversaires */}
-      <div className="shrink-0 flex gap-2 px-3 py-2 pt-3 overflow-x-auto">
+      <div className="shrink-0 flex gap-2 px-3 pb-1 pt-3 overflow-x-auto">
         {g.players.slice(1).map((p, i) => (
           <OpponentCard key={p.name} p={p} active={g.turn === i + 1 && !g.roundOver}
             refCb={(el) => { oppRefs.current["p" + (i + 1)] = el; }} />
