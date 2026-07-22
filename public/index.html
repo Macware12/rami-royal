@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2161-M">
+<meta name="version" content="v2162-S">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -686,6 +686,7 @@ function App() {
   }, [invite]);
   const [turnSeconds, setTurnSeconds] = useState(45);
   const [level, setLevel] = useState("moyen");
+  const [shortMode, setShortMode] = useState(false); // Mode court : 3 manches
   const [msg, setMsg] = useState("");
   const [selected, setSelected] = useState([]);
   const [staged, setStaged] = useState([]);
@@ -975,7 +976,7 @@ function App() {
     const n = name.trim() || "Joueur";
     store.set("ramimp-name", n);
     store.set("ramimp-avatar", avatar);
-    socket.emit("createRoom", { name: n, options: { turnSeconds, level }, avatar }, (res) => {
+    socket.emit("createRoom", { name: n, options: { turnSeconds, level, shortMode }, avatar }, (res) => {
       if (!res.ok) return setMsg(res.error || "Erreur.");
       store.set("ramimp-save", JSON.stringify({ code: res.code, token: res.token, name: n }));
       setSaved(null);
@@ -1385,6 +1386,11 @@ function App() {
                 <button key={l} onClick={() => setLevel(l)} className={`flex-1 py-1.5 rounded-xl font-bold ${level === l ? "btn-gold" : "btn-dark"}`}>{l}</button>
               ))}
             </div>
+            <label className="flex items-center gap-2 text-xs">
+              <input type="checkbox" checked={shortMode} onChange={(e) => setShortMode(e.target.checked)}
+                className="w-3 h-3 cursor-pointer" />
+              <span>⚡ Mode court (3 manches rapides)</span>
+            </label>
             <span className="text-[10px] text-emerald-400">Le niveau s'applique aux bots ajoutés pour compléter la table.</span>
             <button onClick={createRoom} className="btn-gold font-bold py-3 rounded-xl">Créer un salon 🎴</button>
           </div>
@@ -1437,7 +1443,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2161-M</span>
+          <span className="opacity-60">v2162-S</span>
         </div>
       </div>
     );

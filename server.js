@@ -286,6 +286,7 @@ function createRoom(hostName, options) {
     options: {
       turnSeconds: [45, 60, 90].includes(options?.turnSeconds) ? options.turnSeconds : 45,
       level: ["facile", "moyen", "difficile"].includes(options?.level) ? options.level : "moyen",
+      shortMode: options?.shortMode === true, // Mode court : 3 manches au lieu de 8
     },
     players: [], // {token, name, isBot, socketId, connected, absent, timeouts, hand, posed, buysLeft, lastTaken, total, justPosed}
     game: null,
@@ -357,6 +358,7 @@ function startRound(room, mancheIdx) {
     log: [`— Manche ${mancheIdx + 1} : ${E.MANCHES[mancheIdx].label} —`],
     turnDeadline: null,
     roundOver: null,
+    shortMode: room.options.shortMode, // Mode court : 3 manches au lieu de 8
   };
   room.state = "playing";
   log(room, `La manche ${mancheIdx + 1} commence (contrat : ${E.MANCHES[mancheIdx].label})`);
@@ -829,7 +831,8 @@ function checkRoundEnd(room, idx) {
   });
   g.history.push({ mancheIdx: g.mancheIdx, summary });
   g.roundOver = { winnerIdx: idx, bonusType, summary };
-  room.state = g.mancheIdx + 1 >= E.MANCHES.length ? "over" : "roundEnd";
+  const nbManches = g.shortMode ? 3 : E.MANCHES.length; // Mode court : 3 manches, sinon 8
+  room.state = g.mancheIdx + 1 >= nbManches ? "over" : "roundEnd";
   if (room.state === "over") {
     const champ = room.players.reduce((a, b) => (b.total < a.total ? b : a));
     champ.wins = (champ.wins || 0) + 1;

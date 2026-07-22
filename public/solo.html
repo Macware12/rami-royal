@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2161-M">
+<meta name="version" content="v2162-S">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -874,6 +874,7 @@ function RamiRoyal() {
   const [tutoParty, setTutoParty] = useState(0); // confettis de mission
   const [playerName, setPlayerName] = useState("");
   const [level, setLevel] = useState("moyen");
+  const [shortMode, setShortMode] = useState(false); // Mode court : 3 manches au lieu de 8
   const [g, setG] = useState(null);
   const [selected, setSelected] = useState([]);
   const [msg, setMsg] = useState("");
@@ -1025,7 +1026,7 @@ function RamiRoyal() {
     store.set("rami-name", name);
     store.set("rami-avatar", myAvatar);
     store.set("rami-level", level);
-    setG({ ...newRound(players, startManche - 1, null), level });
+    setG({ ...newRound(players, startManche - 1, null), level, shortMode });
     setSelected([]);
     setMsg("");
     showIntro(startManche - 1);
@@ -2233,7 +2234,8 @@ function tapCard(id) {
   }
 
   function nextManche() {
-    if (g.mancheIdx + 1 >= MANCHES.length) {
+    const nbManches = g.shortMode ? 3 : MANCHES.length; // Mode court : 3 manches, sinon 8
+    if (g.mancheIdx + 1 >= nbManches) {
       store.del("rami-save");
       const ranking = [...g.players].sort((a, b) => a.total - b.total);
       const won = ranking[0] === g.players[0];
@@ -2315,6 +2317,11 @@ function tapCard(id) {
                 </button>
               ))}
             </div>
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={shortMode} onChange={(e) => setShortMode(e.target.checked)}
+              className="w-4 h-4 cursor-pointer" />
+            <span>⚡ Mode court (3 manches rapides au lieu de 8)</span>
           </label>
           <label className="flex flex-col gap-2 text-sm">
             Commencer à la manche (pour tester)
