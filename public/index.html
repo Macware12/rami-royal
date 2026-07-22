@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2138-K">
+<meta name="version" content="v2139-C">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -1364,7 +1364,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2138-K</span>
+          <span className="opacity-60">v2139-C</span>
         </div>
       </div>
     );
@@ -1557,18 +1557,19 @@ function App() {
         </div>
       </div>
 
-      {/* Contrat */}
-      <div className="shrink-0 flex justify-center px-3 pt-2">
-        <div className="panel rounded-2xl px-6 py-1.5 text-center" style={{ borderColor: "#f59e0b88" }}>
-          <div className="text-[9px] uppercase tracking-widest text-emerald-300">🎯 Contrat de la manche</div>
-          <div className="text-2xl font-bold text-amber-300 leading-tight" style={{ fontFamily: "Georgia, serif", textShadow: "0 2px 8px rgba(0,0,0,.6)" }}>{contract.label}</div>
-          {me.posed ? <div className="text-[10px] text-lime-300 font-bold">Contrat posé ✓</div>
+      {/* Contrat — une seule ligne compacte */}
+      <div className="shrink-0 flex justify-center px-3 pt-1.5">
+        <div className="panel rounded-full px-4 py-1 flex items-center gap-2" style={{ borderColor: "#f59e0b88" }}>
+          <span className="text-[10px]">🎯</span>
+          <span className="text-sm font-bold text-amber-300 leading-none whitespace-nowrap"
+            style={{ fontFamily: "Georgia, serif", textShadow: "0 2px 8px rgba(0,0,0,.6)" }}>{contract.label}</span>
+          {me.posed ? <span className="text-[10px] text-lime-300 font-bold whitespace-nowrap">posé ✓</span>
             : !contract.poseTout && (
-              <div className="text-[10px] text-emerald-300">
-                {contract.tri > 0 && `Tri : ${Math.min(stagedTri, contract.tri)}/${contract.tri}`}
+              <span className="text-[10px] text-emerald-300 whitespace-nowrap">
+                {contract.tri > 0 && `Tri ${Math.min(stagedTri, contract.tri)}/${contract.tri}`}
                 {contract.tri > 0 && contract.esc > 0 && " · "}
-                {contract.esc > 0 && `Escalier${contract.esc > 1 ? "s" : ""} : ${Math.min(stagedEsc, contract.esc)}/${contract.esc}`}
-              </div>
+                {contract.esc > 0 && `Esc ${Math.min(stagedEsc, contract.esc)}/${contract.esc}`}
+              </span>
             )}
         </div>
       </div>
