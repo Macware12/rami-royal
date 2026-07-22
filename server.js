@@ -8,6 +8,34 @@ const E = require("./engine");
 
 const app = express();
 app.get("/ping", (req, res) => res.send("ok"));
+
+// ---------- Précompilation Babel au démarrage : chargement bien plus rapide côté client ----------
+const PRECOMPILED = {};
+try {
+  const fsBoot = require("fs");
+  const Babel = require("@babel/standalone");
+  ["index.html", "solo.html"].forEach((f) => {
+    const raw = fsBoot.readFileSync(path.join(__dirname, "public", f), "utf8");
+    const m = raw.match(/<script type="text\/babel" data-presets="react">([\s\S]*?)<\/script>/);
+    if (!m) return;
+    const compiled = Babel.transform(m[1], { presets: ["react"] }).code;
+    if (compiled.includes("</script>")) return; // sécurité : on garde la version originale
+    PRECOMPILED[f] = raw
+      .replace(m[0], "<script>\n" + compiled + "\n</script>")
+      .replace(/<script src="https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/babel-standalone[^"]*"><\/script>\s*/, "");
+    console.log("Précompilé : " + f);
+  });
+} catch (e) { console.error("Précompilation impossible (fallback client) :", e.message); }
+const serveCompiled = (f) => (req, res, next) => {
+  if (!PRECOMPILED[f]) return next();
+  res.setHeader("Cache-Control", "no-cache, must-revalidate");
+  res.setHeader("Content-Type", "text/html; charset=UTF-8");
+  res.send(PRECOMPILED[f]);
+};
+app.get("/", serveCompiled("index.html"));
+app.get("/index.html", serveCompiled("index.html"));
+app.get("/solo.html", serveCompiled("solo.html"));
+
 app.use(express.static(path.join(__dirname, "public"), {
   setHeaders: (res, filePath) => {
     if (filePath.endsWith(".html")) res.setHeader("Cache-Control", "no-cache, must-revalidate");
@@ -972,4 +1000,66 @@ setInterval(() => {
   }
 }, 10000);
 process.on("unhandledRejection", (e) => console.error("PROMESSE REJETÉE:", e));
+
+// ---------- Persistance des salons : les parties survivent aux redémarrages ----------
+const fs = require("fs");
+const SAVE_FILE = process.env.ROOMS_FILE || path.join(__dirname, "rooms-save.json");
+
+function saveRooms() {
+  try {
+    const data = Array.from(rooms.values()).map((room) => ({
+      code: room.code,
+      state: room.state,
+      options: room.options,
+      lastActivity: room.lastActivity,
+      players: room.players.map((p) => ({ ...p, socketId: null, connected: false })),
+      game: room.game,
+    }));
+    fs.writeFileSync(SAVE_FILE, JSON.stringify(data));
+  } catch (e) { console.error("Sauvegarde des salons impossible:", e.message); }
+}
+
+function loadRooms() {
+  try {
+    if (!fs.existsSync(SAVE_FILE)) return;
+    const data = JSON.parse(fs.readFileSync(SAVE_FILE, "utf8"));
+    let n = 0;
+    data.forEach((r) => {
+      if (!r || !r.code || rooms.has(r.code)) return;
+      if (Date.now() - (r.lastActivity || 0) > ROOM_IDLE_LIMIT_MS) return;
+      const room = { ...r, rematch: null, turnTimer: null, buyTimer: null, aiTimer: null, rematchTimer: null };
+      rooms.set(room.code, room);
+      n++;
+      // Relance en douceur : les joueurs non revenus sont couverts par l'IA jusqu'à leur reconnexion
+      if (room.state === "playing" && room.game && !room.game.roundOver) {
+        setTimeout(() => safeRun(() => {
+          const g = room.game;
+          if (!g || room.state !== "playing" || g.roundOver) return;
+          if (g.phase === "buyWindow") { resolveBuyWindow(room); return; }
+          g.turnDeadline = Date.now() + room.options.turnSeconds * 1000;
+          const p = room.players[g.turn];
+          if (p && (p.isBot || p.absent || !p.connected)) {
+            if (g.phase === "play") {
+              // il avait déjà pioché : on termine son tour par un jet
+              const toss = E.aiDiscardChoice(p.hand, "moyen");
+              doDiscard(room, g.turn, toss.id, true);
+            } else {
+              aiPlayTurn(room);
+            }
+          } else {
+            room.turnTimer = setTimeout(() => safeRun(() => onTurnTimeout(room)), room.options.turnSeconds * 1000);
+          }
+          broadcast(room);
+        }), 3000);
+      }
+    });
+    if (n > 0) console.log(n + " salon(s) restauré(s) après redémarrage");
+  } catch (e) { console.error("Restauration des salons impossible:", e.message); }
+}
+
+loadRooms();
+setInterval(saveRooms, 15000);
+process.on("SIGTERM", () => { saveRooms(); process.exit(0); });
+process.on("SIGINT", () => { saveRooms(); process.exit(0); });
+
 server.listen(PORT, () => console.log("Serveur Ramy Gasy sur le port " + PORT));

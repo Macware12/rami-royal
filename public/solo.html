@@ -10,10 +10,11 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2133-M">
+<meta name="version" content="v2134-G">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
+<script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(function () {});</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
@@ -112,7 +113,9 @@ const SUCCES_LIST = [
   { id: "gros_score", nom: "Petit score, grand art", desc: "Gagner une partie avec moins de 100 points" },
   { id: "pose_tout", nom: "Pose-tout !", desc: "Gagner la manche 8 avec un pose-tout" },
   { id: "anticipe", nom: "Coup d'éclat", desc: "Réussir un pose-tout anticipé" },
+  { id: "echange_joker", nom: "Prestidigitateur", desc: "Récupérer un joker posé en l'échangeant contre sa carte" },
   { id: "double_joker", nom: "Chasseur de jokers", desc: "Récupérer 2 jokers dans la même manche" },
+  { id: "dompteur", nom: "Dompteur d'IA", desc: "Gagner une partie complète contre des bots difficiles" },
   { id: "sans_achat", nom: "Économe", desc: "Gagner une manche sans utiliser d'achat" },
   { id: "collectionneur", nom: "Acheteur compulsif", desc: "Utiliser ses 3 achats dans une manche" },
   { id: "premier_pose", nom: "Rapide comme l'éclair", desc: "Poser son contrat avant tous les autres" },
@@ -141,6 +144,9 @@ const STYLE = (
     .joker-glow { animation: jokerpulse 1.5s ease-in-out infinite; border-radius: 8px; display: inline-flex; }
     @keyframes introPop { 0% { transform: scale(.6); opacity: 0; } 15% { transform: scale(1.06); opacity: 1; } 80% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.02); opacity: 0; } }
     .fit-screen { height: 100vh; height: 100dvh; overflow-y: auto; overflow-x: hidden; }
+    @media (min-width: 900px) {
+      .fit-screen { max-width: 860px; margin: 0 auto; border-left: 1px solid #14705244; border-right: 1px solid #14705244; box-shadow: 0 0 60px rgba(0,0,0,.5); }
+    }
   `}</style>
 );
 
@@ -1050,6 +1056,7 @@ function RamiRoyal() {
         if (me0.buysLeft === 3) award("sans_achat");
       }
       if (me0.buysLeft === 0) award("collectionneur");
+      if ((g.mySwaps || 0) >= 1) award("echange_joker");
       if ((g.mySwaps || 0) >= 2) award("double_joker");
     }
   }, [g && g.roundOver]);
@@ -2025,6 +2032,7 @@ function tapCard(id) {
       store.set("rami-stats", JSON.stringify(st));
       setStats(st);
       if (won) award("premiere_victoire");
+      if (won && g.level === "difficile") award("dompteur");
       if (won && st.wins >= 10) award("maitre");
       if (st.streak >= 3) award("serie3");
       if (won && g.players[0].total < 100) award("gros_score");
