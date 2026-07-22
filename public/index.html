@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2113-T">
+<meta name="version" content="v2116-A">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -197,25 +197,34 @@ function helpArrangement(hand, contract, variant) {
       }
     }
   };
-  const preferEsc = contract.poseTout ? variant % 2 === 1 : (contract.esc || 0) >= (contract.tri || 0) ? variant % 2 === 0 : variant % 2 === 1;
+  // Priorité guidée par le contrat : 100% escaliers → toujours escaliers d'abord, 100% tris → toujours tris d'abord
+  const preferEsc = contract.poseTout ? variant % 2 === 1
+    : (contract.tri || 0) === 0 ? true
+    : (contract.esc || 0) === 0 ? false
+    : (contract.esc || 0) >= (contract.tri || 0) ? variant % 2 === 0 : variant % 2 === 1;
   if (preferEsc) { takeRuns(); takeJokerRuns(); takeTris(); } else { takeTris(); takeRuns(); takeJokerRuns(); }
 
-  // Ébauches : paires (futur tri) et voisins de suite (futur escalier)
-  const m2 = byRankGroups();
-  for (const r of rotArr(Object.keys(m2))) {
-    const grp = m2[r].filter((c) => !used.has(c.id));
-    if (grp.length === 2) { grp.forEach((c) => used.add(c.id)); groups.push({ kind: "tri", cards: grp, complete: false }); }
-  }
-  const bySuit = {};
-  reals.filter((c) => !used.has(c.id)).forEach((c) => { (bySuit[c.suit] = bySuit[c.suit] || []).push(c); });
-  for (const s of rotArr(Object.keys(bySuit))) {
-    const arr = bySuit[s].sort((a, b) => a.rank - b.rank);
-    for (let i = 0; i < arr.length - 1; i++) {
-      const a = arr[i], b = arr[i + 1];
-      if (used.has(a.id) || used.has(b.id)) continue;
-      if (b.rank - a.rank <= 2) { used.add(a.id); used.add(b.id); groups.push({ kind: "esc", cards: [a, b], complete: false }); }
+  // Ébauches : paires (futur tri) et voisins de suite (futur escalier) — dans l'ordre du contrat
+  const draftPairs = () => {
+    const m2 = byRankGroups();
+    for (const r of rotArr(Object.keys(m2))) {
+      const grp = m2[r].filter((c) => !used.has(c.id));
+      if (grp.length === 2) { grp.forEach((c) => used.add(c.id)); groups.push({ kind: "tri", cards: grp, complete: false }); }
     }
-  }
+  };
+  const draftSuites = () => {
+    const bySuit = {};
+    reals.filter((c) => !used.has(c.id)).forEach((c) => { (bySuit[c.suit] = bySuit[c.suit] || []).push(c); });
+    for (const s of rotArr(Object.keys(bySuit))) {
+      const arr = bySuit[s].sort((a, b) => a.rank - b.rank);
+      for (let i = 0; i < arr.length - 1; i++) {
+        const a = arr[i], b = arr[i + 1];
+        if (used.has(a.id) || used.has(b.id)) continue;
+        if (b.rank - a.rank <= 2) { used.add(a.id); used.add(b.id); groups.push({ kind: "esc", cards: [a, b], complete: false }); }
+      }
+    }
+  };
+  if (preferEsc) { draftSuites(); draftPairs(); } else { draftPairs(); draftSuites(); }
   // Les jokers libres rejoignent les ébauches (escaliers d'abord, puis paires)
   for (const grp of [...groups.filter((x) => !x.complete && x.kind === "esc"), ...groups.filter((x) => !x.complete && x.kind === "tri")]) {
     const jk = jokers.find((c) => !used.has(c.id));
@@ -474,10 +483,7 @@ function OpponentCard({ p, active, seconds, emote }) {
   return (
     <div className={`relative flex flex-col items-center rounded-2xl px-2 pt-2 pb-1 min-w-[92px] transition-all panel ${active ? "pulse-gold" : ""}`}
       style={active ? { borderColor: "#fbbf24" } : {}}>
-      {emote && (
-        <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-100 text-emerald-950 text-[11px] font-bold px-2 py-0.5 rounded-xl shadow-lg whitespace-nowrap z-20">{emote.text}</span>
-      )}
-      {active && !emote && (
+      {active && (
         <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[9px] btn-gold font-bold px-1.5 rounded-full whitespace-nowrap" style={{ animation: "floaty 1.2s ease-in-out infinite" }}>
           joue… {seconds != null ? seconds + "s" : ""}
         </span>
@@ -819,7 +825,8 @@ function App() {
   const byId = {};
   serverHand.forEach((c) => { byId[c.id] = c; });
   const stagedIds = new Set(staged.flatMap((m) => m.cards.map((c) => c.id)));
-  const visibleHand = orderRef.current.map((id) => byId[id]).filter((c) => c && !stagedIds.has(c.id));
+  const visibleHand = orderRef.current.map((id) => byId[id]).filter((c) => c && !stagedIds.has(c.id) && c.id !== pendingDiscard);
+  const pendCard = pendingDiscard != null ? serverHand.find((c) => c.id === pendingDiscard) : null;
 
   // ---------- Actions ----------
   function act(a) { socket.emit("action", a); }
@@ -906,17 +913,22 @@ function App() {
   }
 
   function helpSort() {
+    // Le contrat restant tient compte des groupes déjà préparés dans « Prêt »
+    const remaining = contract && !contract.poseTout
+      ? { ...contract, tri: Math.max(0, (contract.tri || 0) - stagedTri), esc: Math.max(0, (contract.esc || 0) - stagedEsc) }
+      : contract;
+    const contractReady = remaining && !remaining.poseTout && (remaining.tri || 0) === 0 && (remaining.esc || 0) === 0;
     const cur = visibleHand.map((c) => c.id).join(",");
     let res = null, changed = false;
     for (let k = 0; k < 8; k++) {
       helpCount.current += 1;
-      const r = helpArrangement(visibleHand, contract, helpCount.current);
+      const r = helpArrangement(visibleHand, remaining, helpCount.current);
       if (!res) res = r;
       if (r.order.map((c) => c.id).join(",") !== cur) { res = r; changed = true; break; }
     }
     const visibleSet = new Set(visibleHand.map((c) => c.id));
     orderRef.current = [...res.order.map((c) => c.id), ...orderRef.current.filter((id) => !visibleSet.has(id))];
-    setMsg((changed ? "💡 " : "💡 Pas d'autre classement possible — ") + res.summary);
+    setMsg((changed ? "💡 " : "💡 Pas d'autre classement possible — ") + (contractReady ? "🎯 ton contrat est prêt — pose-le ! " : "") + res.summary);
     setTick((x) => x + 1);
   }
 
@@ -998,9 +1010,12 @@ function App() {
       setDrag({ id: d.id, card: d.card, x: e.clientX, y: e.clientY, over: overD ? "discard" : null });
       const hr = handRef.current && handRef.current.getBoundingClientRect();
       if (!(hr && e.clientY >= hr.top - 10 && e.clientY <= hr.bottom + 10)) return;
+      // Anti-oscillation : on attend que le doigt ait bougé un peu depuis le dernier reclassement
+      if (d.lastRX != null && Math.hypot(e.clientX - d.lastRX, e.clientY - d.lastRY) < 14) return;
       const vi = insertionIndexAt(e.clientX, e.clientY);
       if (vi != null && vi !== lastTargetRef.current) {
         lastTargetRef.current = vi;
+        d.lastRX = e.clientX; d.lastRY = e.clientY;
         const order = orderRef.current.filter((id) => id !== d.id);
         const oi = (() => {
           if (vi >= visibleHand.filter((c) => c.id !== d.id).length) return order.length;
@@ -1250,7 +1265,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2113-T</span>
+          <span className="opacity-60">v2116-A</span>
         </div>
       </div>
     );
@@ -1268,7 +1283,10 @@ function App() {
             const url = window.location.origin + "/?salon=" + srv.code;
             const texte = "Viens jouer au Ramy Gasy avec moi ! Salon " + srv.code + " → " + url;
             if (navigator.share) {
-              navigator.share({ title: "Ramy Gasy", text: texte, url }).catch(() => {});
+              navigator.share({ title: "Ramy Gasy", text: texte, url }).catch(() => {
+                if (navigator.clipboard) navigator.clipboard.writeText(texte).then(() => setMsg("Lien d'invitation copié — colle-le à tes amis !")).catch(() => setMsg(url));
+                else setMsg(url);
+              });
             } else if (navigator.clipboard) {
               navigator.clipboard.writeText(texte).then(() => setMsg("Lien d'invitation copié — colle-le à tes amis !")).catch(() => setMsg(url));
             } else setMsg(url);
@@ -1395,6 +1413,14 @@ function App() {
           Toi : {emotes[youIdx].text}
         </div>
       )}
+      {/* Messages des autres joueurs, bien visibles au centre */}
+      <div className="fixed top-24 left-1/2 -translate-x-1/2 z-40 flex flex-col gap-1 items-center pointer-events-none" style={{ maxWidth: "90vw" }}>
+        {Object.values(emotes).filter((e) => e && e.idx !== youIdx).map((e) => (
+          <div key={e.id} className="bg-amber-100 text-emerald-950 text-sm font-bold px-3 py-1.5 rounded-2xl shadow-xl">
+            {(srv.players[e.idx] || {}).avatar || "🙂"} {(srv.players[e.idx] || {}).name} : {e.text}
+          </div>
+        ))}
+      </div>
       {toast && (
         <div className="fixed top-14 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 panel rounded-2xl px-3 py-2" style={{ borderColor: "#fbbf24" }}>
           <Card card={toast.card} small flat />
@@ -1499,6 +1525,10 @@ function App() {
             </div>
           </div>
         </div>
+      ) : buyOpen && g.buyDiscarderIdx === youIdx ? (
+        <div className="mx-3 my-1 py-1.5 rounded-xl panel text-center text-xs text-emerald-300">
+          💰 Fenêtre d'achat en cours — les autres peuvent acheter la carte que tu viens de jeter…
+        </div>
       ) : buyOpen ? (
         <div className="mx-3 my-1 py-2 px-3 rounded-xl panel pulse-gold flex items-center justify-center gap-3" style={{ borderColor: "#fbbf24" }}>
           {topDiscard && <Card card={topDiscard} small flat />}
@@ -1512,6 +1542,10 @@ function App() {
               <button onClick={() => setPassedWindow(g.buyWindowUntil)} className="btn-dark px-3 py-1.5 rounded-xl text-xs font-bold">Passer</button>
             </div>
           </div>
+        </div>
+      ) : myTurn && pendingDiscard ? (
+        <div className="mx-3 my-1 py-1.5 rounded-xl btn-red text-center text-sm font-bold animate-pulse">
+          🔒 Touche la défausse pour confirmer ton jet — ou une carte de ta main pour annuler
         </div>
       ) : myTurn ? (
         <div className="mx-3 my-1 py-1.5 rounded-xl btn-gold text-center text-sm font-bold pulse-gold">
@@ -1541,11 +1575,15 @@ function App() {
           style={{ touchAction: "none" }}
           className={`flex flex-col items-center gap-1 active:scale-95 transition-transform rounded-xl relative ${drag && !drag.fromDiscard && myTurn && g.phase === "play" ? "pulse-gold" : ""} ${pendingDiscard ? "ring-4 ring-red-500 animate-pulse" : ""}`}>
           <div style={{ transform: drag && drag.over === "discard" ? "rotate(4deg) scale(1.18)" : "rotate(4deg)", transition: "transform .12s" }}>
-            {topDiscard ? <Card card={topDiscard} /> : <div style={{ height: 58, width: 40 }} className="rounded-lg border-2 border-dashed border-emerald-600" />}
+            {pendCard ? <Card card={pendCard} /> : topDiscard ? <Card card={topDiscard} /> : <div style={{ height: 58, width: 40 }} className="rounded-lg border-2 border-dashed border-emerald-600" />}
           </div>
-          {pendingDiscard && <span className="absolute -top-3 -right-3 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full">Confirmer</span>}
+          {pendingDiscard && <span className="absolute -top-3 -right-3 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full z-10">Confirmer</span>}
           <span className="text-[10px] text-emerald-300 font-bold">
-            {buyOpen ? `Acheter (${me.buysLeft})` : myTurn && g.phase === "draw" ? "Prendre (gratuit)" : `Défausse · ${g.discardCount || 0}`}
+            {pendingDiscard ? "Confirme ici 🔒"
+              : buyOpen && g.buyDiscarderIdx !== youIdx ? `Acheter (${me.buysLeft})`
+              : buyOpen ? `Défausse · ${g.discardCount || 0}`
+              : g.discardLocked && myTurn && g.phase === "draw" ? "Bloquée (achat) 🚫"
+              : myTurn && g.phase === "draw" ? "Prendre (gratuit)" : `Défausse · ${g.discardCount || 0}`}
           </span>
         </button>
       </div>

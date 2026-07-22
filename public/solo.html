@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2113-T">
+<meta name="version" content="v2116-A">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -300,25 +300,34 @@ function helpArrangement(hand, contract, variant) {
       }
     }
   };
-  const preferEsc = contract.poseTout ? variant % 2 === 1 : (contract.esc || 0) >= (contract.tri || 0) ? variant % 2 === 0 : variant % 2 === 1;
+  // Priorité guidée par le contrat : 100% escaliers → toujours escaliers d'abord, 100% tris → toujours tris d'abord
+  const preferEsc = contract.poseTout ? variant % 2 === 1
+    : (contract.tri || 0) === 0 ? true
+    : (contract.esc || 0) === 0 ? false
+    : (contract.esc || 0) >= (contract.tri || 0) ? variant % 2 === 0 : variant % 2 === 1;
   if (preferEsc) { takeRuns(); takeJokerRuns(); takeTris(); } else { takeTris(); takeRuns(); takeJokerRuns(); }
 
-  // Ébauches : paires (futur tri) et voisins de suite (futur escalier)
-  const m2 = byRankGroups();
-  for (const r of rotArr(Object.keys(m2))) {
-    const grp = m2[r].filter((c) => !used.has(c.id));
-    if (grp.length === 2) { grp.forEach((c) => used.add(c.id)); groups.push({ kind: "tri", cards: grp, complete: false }); }
-  }
-  const bySuit = {};
-  reals.filter((c) => !used.has(c.id)).forEach((c) => { (bySuit[c.suit] = bySuit[c.suit] || []).push(c); });
-  for (const s of rotArr(Object.keys(bySuit))) {
-    const arr = bySuit[s].sort((a, b) => a.rank - b.rank);
-    for (let i = 0; i < arr.length - 1; i++) {
-      const a = arr[i], b = arr[i + 1];
-      if (used.has(a.id) || used.has(b.id)) continue;
-      if (b.rank - a.rank <= 2) { used.add(a.id); used.add(b.id); groups.push({ kind: "esc", cards: [a, b], complete: false }); }
+  // Ébauches : paires (futur tri) et voisins de suite (futur escalier) — dans l'ordre du contrat
+  const draftPairs = () => {
+    const m2 = byRankGroups();
+    for (const r of rotArr(Object.keys(m2))) {
+      const grp = m2[r].filter((c) => !used.has(c.id));
+      if (grp.length === 2) { grp.forEach((c) => used.add(c.id)); groups.push({ kind: "tri", cards: grp, complete: false }); }
     }
-  }
+  };
+  const draftSuites = () => {
+    const bySuit = {};
+    reals.filter((c) => !used.has(c.id)).forEach((c) => { (bySuit[c.suit] = bySuit[c.suit] || []).push(c); });
+    for (const s of rotArr(Object.keys(bySuit))) {
+      const arr = bySuit[s].sort((a, b) => a.rank - b.rank);
+      for (let i = 0; i < arr.length - 1; i++) {
+        const a = arr[i], b = arr[i + 1];
+        if (used.has(a.id) || used.has(b.id)) continue;
+        if (b.rank - a.rank <= 2) { used.add(a.id); used.add(b.id); groups.push({ kind: "esc", cards: [a, b], complete: false }); }
+      }
+    }
+  };
+  if (preferEsc) { draftSuites(); draftPairs(); } else { draftPairs(); draftSuites(); }
   // Les jokers libres rejoignent les ébauches (escaliers d'abord, puis paires)
   for (const grp of [...groups.filter((x) => !x.complete && x.kind === "esc"), ...groups.filter((x) => !x.complete && x.kind === "tri")]) {
     const jk = jokers.find((c) => !used.has(c.id));
@@ -553,6 +562,7 @@ function aiDiscardChoice(hand, level) {
 
 function aiWantsBuy(p, top, level) {
   if (!top || top.joker) return false;
+  if (p.posed) return false; // déjà posé : acheter ne sert plus à rien
   if (level === "facile") return false;
   const nonJ = p.hand.filter((c) => !c.joker);
   const mates = nonJ.filter((c) => c.rank === top.rank).length;
@@ -1296,7 +1306,13 @@ function tapCard(id) {
       if (overD) overStickyRef.current = Date.now();
       setDrag({ id: d.id, card: d.card, x: e.clientX, y: e.clientY, over: overD ? "discard" : null });
       const hr = handRef.current && handRef.current.getBoundingClientRect();
-      if (hr && e.clientY >= hr.top - 10 && e.clientY <= hr.bottom + 10) reorderTo(e.clientX, e.clientY, d.id);
+      if (hr && e.clientY >= hr.top - 10 && e.clientY <= hr.bottom + 10) {
+        // Anti-oscillation : on attend que le doigt ait bougé un peu depuis le dernier reclassement
+        if (!(d.lastRX != null && Math.hypot(e.clientX - d.lastRX, e.clientY - d.lastRY) < 14)) {
+          d.lastRX = e.clientX; d.lastRY = e.clientY;
+          reorderTo(e.clientX, e.clientY, d.id);
+        }
+      }
     }
   }
 
@@ -1506,16 +1522,21 @@ function tapCard(id) {
 
   function helpSort() {
     setG((s) => {
+      // Le contrat restant tient compte des groupes déjà préparés dans « Prêt »
+      const base = MANCHES[s.mancheIdx];
+      const already = { tri: s.staged.filter((m) => m.type === "tri").length, esc: s.staged.filter((m) => m.type === "esc").length };
+      const remaining = base.poseTout ? base : { ...base, tri: Math.max(0, (base.tri || 0) - already.tri), esc: Math.max(0, (base.esc || 0) - already.esc) };
+      const contractReady = !base.poseTout && (remaining.tri || 0) === 0 && (remaining.esc || 0) === 0;
       const cur = s.players[0].hand.map((c) => c.id).join(",");
       let res = null, changed = false;
       for (let k = 0; k < 8; k++) {
         helpCount.current += 1;
-        const r = helpArrangement(s.players[0].hand, MANCHES[s.mancheIdx], helpCount.current);
+        const r = helpArrangement(s.players[0].hand, remaining, helpCount.current);
         if (!res) res = r;
         if (r.order.map((c) => c.id).join(",") !== cur) { res = r; changed = true; break; }
       }
       const players = s.players.map((p, k2) => (k2 === 0 ? { ...p, hand: res.order } : p));
-      setMsg((changed ? "💡 " : "💡 Pas d'autre classement possible — ") + res.summary);
+      setMsg((changed ? "💡 " : "💡 Pas d'autre classement possible — ") + (contractReady ? "🎯 ton contrat est prêt — pose-le ! " : "") + res.summary);
       return { ...s, players };
     });
   }
@@ -1806,7 +1827,10 @@ function tapCard(id) {
     const top = discard[discard.length - 1];
     const mates = top && !top.joker ? hand.filter((c) => !c.joker && c.rank === top.rank).length : 0;
     const neigh = top && !top.joker ? hand.filter((c) => !c.joker && c.suit === top.suit && Math.abs(c.rank - top.rank) <= 1).length : 0;
+    // Une fois posé : prendre la défausse seulement si la carte complète une combinaison de la table
+    const fitsMeld = (card) => Boolean(card) && !card.joker && s.melds.some((m) => validGroup(m.type, [...m.cards, card]));
     const wantsTake =
+      ai.posed ? Boolean(level !== "facile" && !contract.poseTout && fitsMeld(top)) :
       level === "facile" ? false :
       level === "difficile" ? Boolean(top && !top.joker && (mates >= 2 || neigh >= 2)) :
       Boolean(top && !top.joker && mates >= 2);
@@ -1890,7 +1914,11 @@ function tapCard(id) {
     ns = checkWin(ns, idx);
     if (ns.roundOver) return { ...ns, animEvents, animSeq: ++ANIM_SEQ };
 
-    const toss = aiDiscardChoice(hand, level);
+    // Une fois posé : jeter les cartes les plus chères (limiter les points en fin de manche)
+    const nonJokers = hand.filter((c) => !c.joker);
+    const toss = posed && nonJokers.length > 0
+      ? [...nonJokers].sort((a, b) => cardPoints(b) - cardPoints(a))[0]
+      : aiDiscardChoice(hand, level);
     hand = hand.filter((c) => c.id !== toss.id);
     players = ns.players.map((p, i) => (i === idx ? { ...p, hand } : p));
     animEvents.push({ source: pKey, target: "discard", card: toss, faceDown: false });
@@ -2260,7 +2288,9 @@ function tapCard(id) {
           style={{ touchAction: "none" }}
           className={`flex flex-col items-center gap-1 active:scale-95 transition-transform rounded-xl relative ${drag && drag.origin !== "discard" && myTurn && g.phase === "play" ? "pulse-gold" : ""} ${pendingDiscard ? "ring-4 ring-red-500 animate-pulse" : ""}`}>
           <div style={{ transform: drag && drag.over === "discard" ? "rotate(4deg) scale(1.18)" : "rotate(4deg)", transition: "transform .12s", opacity: drag && drag.origin === "discard" ? 0.35 : 1 }}>
-            {topDiscard ? <Card card={topDiscard} /> : <div style={{ height: 58, width: 40 }} className="rounded-lg border-2 border-dashed border-emerald-600" />}
+            {pendingDiscard && me.hand.find((c) => c.id === pendingDiscard)
+              ? <Card card={me.hand.find((c) => c.id === pendingDiscard)} />
+              : topDiscard ? <Card card={topDiscard} /> : <div style={{ height: 58, width: 40 }} className="rounded-lg border-2 border-dashed border-emerald-600" />}
           </div>
           {pendingDiscard && <span className="absolute -top-3 -right-3 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full z-10">Confirmer</span>}
           <span className="text-[10px] text-emerald-300 font-bold">
@@ -2295,7 +2325,7 @@ function tapCard(id) {
         className={`px-2 pt-3 pb-2 border-t-2 ${drag && drag.origin === "discard" ? "border-amber-400 pulse-gold" : myTurn ? "border-amber-400" : "border-emerald-800"}`}
         style={{ background: "linear-gradient(180deg, rgba(4,35,24,.9), rgba(3,25,17,.97))" }}>
         <div className="flex flex-wrap gap-1.5 justify-center pb-1">
-          {me.hand.map((c) => (
+          {me.hand.filter((c) => c.id !== pendingDiscard).map((c) => (
             <div key={c.id} data-cid={c.id}
               onPointerDown={(e) => onCardPointerDown(e, c)}
               style={{ touchAction: "none", opacity: drag && drag.id === c.id ? 0.35 : 1,

@@ -148,6 +148,8 @@ function broadcast(room) {
         discardTop: g.discard[g.discard.length - 1] || null,
       discardCount: g.discard.length,
       buyNextIdx: g.phase === "buyWindow" ? g.nextIdx : null,
+        buyDiscarderIdx: g.phase === "buyWindow" ? g.lastDiscarderIdx : null,
+        discardLocked: Boolean(g.discardLocked),
         melds: g.melds,
         turn: g.turn,
         phase: g.phase,
@@ -220,6 +222,7 @@ function handleDraw(room, idx, source) {
   p.timeouts = 0;
   if (source === "discard") {
     if (g.discard.length === 0) return "La défausse est vide.";
+    if (g.discardLocked) return "Une carte vient d'être achetée — pioche dans le tas.";
     const topD = g.discard[g.discard.length - 1];
     if (topD.joker) return "Impossible de récupérer un joker jeté — il est perdu !";
     const card = g.discard.pop();
@@ -325,6 +328,7 @@ function doDiscard(room, idx, cardId, auto) {
   if (!card) return "Carte introuvable.";
   p.hand = p.hand.filter((c) => c.id !== cardId);
   g.discard.push(card);
+  g.discardLocked = false; // nouvelle carte jetée : la défausse redevient disponible
   p.justPosed = p.justPosed && p.hand.length === 0; // le pose-tout reste valable si on finit dans le même tour
   log(room, `${p.name} jette ${E.cardName(card)}${auto ? " (auto)" : ""}`);
   io.to(room.code).emit("fx", { kind: "discard", idx, card });
@@ -345,6 +349,7 @@ function handleDiscard(room, idx, cardId) {
 // ---------- Fenêtre d'achat (hors tour, priorité dans le sens du jeu) ----------
 function wantsTop(p, top, level) {
   if (!top || top.joker || level === "facile") return false;
+  if (p.posed) return false; // déjà posé : acheter ne sert plus à rien
   const nonJ = p.hand.filter((c) => !c.joker);
   const mates = nonJ.filter((c) => c.rank === top.rank).length;
   const neigh = nonJ.filter((c) => c.suit === top.suit && Math.abs(c.rank - top.rank) <= 1).length;
@@ -360,7 +365,7 @@ function botBuyer(room, discarderIdx, nextIdx) {
   if (level === "facile") return null;
   let best = null, bestD = 99;
   room.players.forEach((p, i) => {
-    if (i === discarderIdx || i === nextIdx || p.buysLeft <= 0) return;
+    if (i === discarderIdx || i === nextIdx || p.buysLeft <= 0 || p.posed) return;
     if (!(p.isBot || p.absent || !p.connected)) return; // seulement les mains jouées par l'IA
     const nonJ = p.hand.filter((c) => !c.joker);
     const mates = nonJ.filter((c) => c.rank === top.rank).length;
@@ -387,6 +392,7 @@ function doBuy(room, idx) {
   p.hand.push(bought, penalty);
   p.buysLeft--;
   p.lastTaken = bought;
+  g.discardLocked = true; // après un achat, la carte du dessous ne peut pas être prise
   log(room, p.name + " achète " + E.cardName(bought) + " (+1 pénalité)");
   io.to(room.code).emit("fx", { kind: "buy", idx, card: bought });
 }
@@ -545,7 +551,11 @@ function aiPlayTurn(room) {
   const top = g.discard[g.discard.length - 1];
   const mates = top && !top.joker ? p.hand.filter((c) => !c.joker && c.rank === top.rank).length : 0;
   const neigh = top && !top.joker ? p.hand.filter((c) => !c.joker && c.suit === top.suit && Math.abs(c.rank - top.rank) <= 1).length : 0;
-  const wantsTake = level === "facile" ? false : level === "difficile" ? Boolean(top && !top.joker && (mates >= 2 || neigh >= 2)) : Boolean(top && !top.joker && mates >= 2);
+  // Une fois posé : prendre la défausse seulement si la carte complète une combinaison de la table (main -1 garanti)
+  const fitsMeld = (card) => Boolean(card) && !card.joker && g.melds.some((m) => E.validGroup(m.type, [...m.cards, card]));
+  const wantsTake = g.discardLocked ? false
+    : p.posed ? Boolean(level !== "facile" && !contract.poseTout && fitsMeld(top))
+    : level === "facile" ? false : level === "difficile" ? Boolean(top && !top.joker && (mates >= 2 || neigh >= 2)) : Boolean(top && !top.joker && mates >= 2);
   if (wantsTake) {
     const card = g.discard.pop();
     p.hand.push(card);
@@ -618,8 +628,11 @@ function aiPlayTurn(room) {
   checkRoundEnd(room, idx);
   if (g.roundOver) { broadcast(room); return; }
 
-  // Jeter
-  const toss = E.aiDiscardChoice(p.hand, level);
+  // Jeter — une fois posé, on se débarrasse des cartes les plus chères (limiter les points)
+  const nonJokers = p.hand.filter((c) => !c.joker);
+  const toss = p.posed && nonJokers.length > 0
+    ? [...nonJokers].sort((a, b) => E.cardPoints(b) - E.cardPoints(a))[0]
+    : E.aiDiscardChoice(p.hand, level);
   doDiscard(room, idx, toss.id, false);
   broadcast(room);
 }
@@ -673,6 +686,7 @@ io.on("connection", (socket) => {
     if (!player) return cb({ ok: false, error: "Joueur inconnu dans ce salon." });
     player.socketId = socket.id;
     player.connected = true;
+    if (player.absent) { player.absent = false; player.timeouts = 0; log(room, player.name + " reprend la main"); }
     player.absent = false;
     player.timeouts = 0;
     myRoom = room; myToken = token;
