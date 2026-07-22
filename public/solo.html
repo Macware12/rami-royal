@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2165-V">
+<meta name="version" content="v2166-P">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -2714,7 +2714,8 @@ function tapCard(id) {
               className={`flex items-center gap-1 rounded-xl p-1 panel ${selected.length > 0 || drag ? "pulse-gold" : ""}`}
               style={{ borderColor: "#f59e0b88" }}>
               <span className="text-[10px] text-amber-300 uppercase font-bold">{m.type === "tri" ? "Tri" : "Esc."}</span>
-              <div className="flex gap-0.5">{m.cards.map((c) => <Card key={c.id} card={c} small flat />)}</div>
+              {/* Cartes superposées comme sur la table : compact, et la zone « Prêt » reste sur une ligne */}
+              <div className="flex">{m.cards.map((c, ci) => <StackCard key={c.id} card={c} overlap={ci > 0} />)}</div>
               <button onClick={(e) => { e.stopPropagation(); unstage(i); }} className="text-red-400 text-sm px-1 font-bold">✕</button>
             </div>
           ))}
