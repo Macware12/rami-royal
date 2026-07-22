@@ -886,7 +886,6 @@ function MeldChip({ meld, ownerName, onClick, highlight, mid, small }) {
 function RamiRoyal() {
   const [screen, setScreen] = useState("setup");
   const [nbAI, setNbAI] = useState(2);
-  const [startManche, setStartManche] = useState(1);
   const [tuto, setTuto] = useState(false);
   const [tutoFlags, setTutoFlags] = useState({ drew: false, esc: false, tri: false, posed: false, complete: false, aide: false, scores: false, regles: false });
   const [tutoParty, setTutoParty] = useState(0); // confettis de mission
@@ -1045,10 +1044,10 @@ function RamiRoyal() {
     store.set("rami-avatar", myAvatar);
     store.set("rami-level", level);
     const manchesFinales = shortMode ? genererManchesAleatoires().map((i) => MANCHES[i]) : MANCHES;
-    setG({ ...newRound(players, startManche - 1, null), level, shortMode, manches: manchesFinales });
+    setG({ ...newRound(players, 0, null), level, shortMode, manches: manchesFinales });
     setSelected([]);
     setMsg("");
-    showIntro(startManche - 1);
+    showIntro(0);
     setScreen("game");
   }
 
@@ -2349,13 +2348,6 @@ function tapCard(id) {
                 ⚡ Court (3 aléatoires)
               </button>
             </div>
-          </label>
-          <label className="flex flex-col gap-2 text-sm">
-            Commencer à la manche (pour tester)
-            <select value={startManche} onChange={(e) => setStartManche(Number(e.target.value))}
-              className="bg-emerald-950/70 border border-emerald-600 rounded-xl p-2.5">
-              {MANCHES.map((m, i) => <option key={i} value={i + 1}>Manche {i + 1} — {m.label}</option>)}
-            </select>
           </label>
           <button onClick={startGame} className="btn-gold font-bold py-3 rounded-xl text-base">
             Distribuer les cartes 🎴
