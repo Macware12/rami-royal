@@ -78,6 +78,7 @@ input, textarea { -webkit-user-select: text; user-select: text; }
     <p>Après <b>chaque carte jetée</b>, une <b>fenêtre d'achat de quelques secondes</b> s'ouvre : un joueur dont ce n'est pas le tour peut acheter la carte, en récupérant aussi <b>une carte de pénalité</b> piochée dans le tas.</p>
     <ul>
       <li>Maximum <b>3 achats par joueur et par manche</b></li>
+      <li>Un joueur qui a <b>déjà posé son contrat ne peut plus acheter</b> — il complétera pendant son tour</li>
       <li>Si plusieurs joueurs veulent la carte : priorité dans <b>le sens du jeu</b> à partir du jeteur</li>
       <li><b>Le joueur dont le tour arrive est prioritaire sur tous les acheteurs</b> : s'il veut la carte, il la prend gratuitement et l'achat est annulé</li>
       <li>Sans réponse avant la fin du décompte, personne n'achète</li>
@@ -92,7 +93,7 @@ input, textarea { -webkit-user-select: text; user-select: text; }
       <li><b>Deux jokers ne peuvent pas se suivre</b> dans un escalier</li>
       <li><b>Un joker jeté dans la défausse est perdu</b> : personne ne peut le prendre ni l'acheter</li>
       <li>La <b>position</b> du joker dans un escalier posé détermine la carte qu'il remplace</li>
-      <li><b>Échange</b> : si un escalier posé contient un joker et que tu possèdes la carte correspondant à sa position exacte, tu peux la poser à sa place et <b>récupérer le joker</b> — uniquement si tu as déjà posé ton contrat. <b>Impossible sur un tri.</b></li>
+      <li><b>Échange</b> : si un escalier posé contient un joker et que tu possèdes la carte correspondant à sa position exacte, tu peux la poser à sa place et <b>récupérer le joker</b> — uniquement si tu as déjà posé ton contrat. <b>Impossible sur un tri</b>, et <b>pas en manche 8 (pose-tout)</b>.</li>
     </ul>
   </div>
 
