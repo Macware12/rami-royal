@@ -121,45 +121,54 @@ function findJokerRuns(hand) {
 }
 
 function aiPlanContract(hand, contract, level) {
+  // Deux passes : escaliers d'abord, puis tris d'abord — évite qu'un long escalier vole la carte d'un tri (et inversement)
+  return aiPlanContractPass(hand, contract, level, false) || aiPlanContractPass(hand, contract, level, true);
+}
+function aiPlanContractPass(hand, contract, level, triFirst) {
   const used = new Set();
   const melds = [];
   let escNeed = contract.esc, triNeed = contract.tri;
   const jokers = hand.filter((c) => c.joker);
   let jokerIdx = 0;
-  for (const run of findRuns(hand)) {
-    if (escNeed <= 0) break;
-    if (run.some((c) => used.has(c.id))) continue;
-    run.forEach((c) => used.add(c.id));
-    melds.push({ type: "esc", cards: run });
-    escNeed--;
-  }
-  if (escNeed > 0 && level === "difficile") {
-    for (const jr of findJokerRuns(hand)) {
-      if (escNeed <= 0 || jokerIdx >= jokers.length) break;
-      if (jr.some((c) => used.has(c.id))) continue;
-      const jk = jokers[jokerIdx];
-      if (used.has(jk.id)) continue;
-      jokerIdx++;
-      const cards = [...jr, jk];
-      cards.forEach((c) => used.add(c.id));
-      melds.push({ type: "esc", cards });
+  const takeTris = () => {
+    const remaining = hand.filter((c) => !c.joker && !used.has(c.id));
+    const byRank = {};
+    remaining.forEach((c) => { (byRank[c.rank] = byRank[c.rank] || []).push(c); });
+    for (const r in byRank) {
+      if (triNeed <= 0) break;
+      if (byRank[r].length >= 3) {
+        const cards = byRank[r]; // toutes les cartes identiques : chaque carte posée = une de moins en main
+        cards.forEach((c) => used.add(c.id));
+        melds.push({ type: "tri", cards });
+        triNeed--;
+      }
+    }
+  };
+  const takeEscs = () => {
+    const pool = hand.filter((c) => !used.has(c.id));
+    for (const run of findRuns(pool)) {
+      if (escNeed <= 0) break;
+      if (run.some((c) => used.has(c.id))) continue;
+      run.forEach((c) => used.add(c.id));
+      melds.push({ type: "esc", cards: run });
       escNeed--;
     }
-  }
-  if (escNeed > 0) return null;
-  const remaining = hand.filter((c) => !c.joker && !used.has(c.id));
-  const byRank = {};
-  remaining.forEach((c) => { (byRank[c.rank] = byRank[c.rank] || []).push(c); });
-  for (const r in byRank) {
-    if (triNeed <= 0) break;
-    if (byRank[r].length >= 3) {
-      const cards = byRank[r]; // toutes les cartes identiques : chaque carte posée = une de moins en main
-      cards.forEach((c) => used.add(c.id));
-      melds.push({ type: "tri", cards });
-      triNeed--;
+    if (escNeed > 0 && level === "difficile") {
+      for (const jr of findJokerRuns(pool)) {
+        if (escNeed <= 0 || jokerIdx >= jokers.length) break;
+        if (jr.some((c) => used.has(c.id))) continue;
+        const jk = jokers[jokerIdx];
+        if (used.has(jk.id)) continue;
+        jokerIdx++;
+        const cards = [...jr, jk];
+        cards.forEach((c) => used.add(c.id));
+        melds.push({ type: "esc", cards });
+        escNeed--;
+      }
     }
-  }
-  if (triNeed > 0) return null;
+  };
+  if (triFirst) { takeTris(); takeEscs(); } else { takeEscs(); takeTris(); }
+  if (escNeed > 0 || triNeed > 0) return null;
   return melds;
 }
 
