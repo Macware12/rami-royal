@@ -228,6 +228,7 @@ function handleDraw(room, idx, source) {
     const card = g.discard.pop();
     p.hand.push(card);
     p.lastTaken = card;
+    g.takenCards = [...(g.takenCards || []), { idx, card }]; // mémoire pour la défausse défensive des bots
     g.phase = "play";
     log(room, `${p.name} prend ${E.cardName(card)} dans la défausse`);
     io.to(room.code).emit("fx", { kind: "take", idx, card });
@@ -347,13 +348,22 @@ function handleDiscard(room, idx, cardId) {
 }
 
 // ---------- Fenêtre d'achat (hors tour, priorité dans le sens du jeu) ----------
-function wantsTop(p, top, level) {
+function wantsTop(p, top, level, contract) {
   if (!top || top.joker || level === "facile") return false;
   if (p.posed) return false; // déjà posé : acheter ne sert plus à rien
   const nonJ = p.hand.filter((c) => !c.joker);
   const mates = nonJ.filter((c) => c.rank === top.rank).length;
   const neigh = nonJ.filter((c) => c.suit === top.suit && Math.abs(c.rank - top.rank) <= 1).length;
-  return level === "difficile" ? mates >= 2 || neigh >= 2 : mates >= 2;
+  if (level !== "difficile") return mates >= 2;
+  // Difficile : on ne veut que ce qui sert le contrat
+  const wantTri = !contract || (contract.tri || 0) > 0 || contract.poseTout;
+  const wantEsc = !contract || (contract.esc || 0) > 0 || contract.poseTout;
+  if ((wantTri && mates >= 2) || (wantEsc && neigh >= 2)) return true;
+  // ...ou qui complète le contrat d'un coup
+  if (contract && !contract.poseTout) {
+    return !E.aiPlanContract(p.hand, contract, level) && Boolean(E.aiPlanContract([...p.hand, top], contract, level));
+  }
+  return false;
 }
 
 function botBuyer(room, discarderIdx, nextIdx) {
@@ -363,14 +373,14 @@ function botBuyer(room, discarderIdx, nextIdx) {
   const n = room.players.length;
   const level = room.options.level;
   if (level === "facile") return null;
+  const contract = E.MANCHES[g.mancheIdx];
   let best = null, bestD = 99;
   room.players.forEach((p, i) => {
     if (i === discarderIdx || i === nextIdx || p.buysLeft <= 0 || p.posed) return;
     if (!(p.isBot || p.absent || !p.connected)) return; // seulement les mains jouées par l'IA
-    const nonJ = p.hand.filter((c) => !c.joker);
-    const mates = nonJ.filter((c) => c.rank === top.rank).length;
-    const neigh = nonJ.filter((c) => c.suit === top.suit && Math.abs(c.rank - top.rank) <= 1).length;
-    const wants = level === "difficile" ? mates >= 2 || neigh >= 2 : mates >= 2;
+    const wants = level === "difficile"
+      ? wantsTop(p, top, level, contract)
+      : p.hand.filter((c) => !c.joker && c.rank === top.rank).length >= 2;
     if (!wants) return;
     const d = (i - discarderIdx + n) % n;
     if (d < bestD) { bestD = d; best = i; }
@@ -392,6 +402,7 @@ function doBuy(room, idx) {
   p.hand.push(bought, penalty);
   p.buysLeft--;
   p.lastTaken = bought;
+  g.takenCards = [...(g.takenCards || []), { idx, card: bought }]; // mémoire pour la défausse défensive des bots
   g.discardLocked = true; // après un achat, la carte du dessous ne peut pas être prise
   log(room, p.name + " achète " + E.cardName(bought) + " (+1 pénalité)");
   io.to(room.code).emit("fx", { kind: "buy", idx, card: bought });
@@ -411,7 +422,7 @@ function openBuyWindow(room, discarderIdx) {
   // si un bot veut acheter mais qu'un humain est le prochain joueur, on ouvre la fenêtre
   // pour qu'il puisse faire valoir sa priorité
   if (!someoneCanBuy && !(bBuyer != null && nextIsHuman)) {
-    if (bBuyer != null && !(nextP && wantsTop(nextP, top, room.options.level) && !nextIsHuman)) doBuy(room, bBuyer);
+    if (bBuyer != null && !(nextP && wantsTop(nextP, top, room.options.level, E.MANCHES[g.mancheIdx]) && !nextIsHuman)) doBuy(room, bBuyer);
     advanceTurn(room, discarderIdx);
     return;
   }
@@ -479,7 +490,7 @@ function resolveBuyWindow(room) {
   if (g.botBuyer != null && !requests.includes(g.botBuyer)) requests.push(g.botBuyer);
   const nextP = g.nextIdx != null ? room.players[g.nextIdx] : null;
   const nextAIWants = nextP && (nextP.isBot || nextP.absent || !nextP.connected) &&
-    wantsTop(nextP, g.discard[g.discard.length - 1], room.options.level);
+    wantsTop(nextP, g.discard[g.discard.length - 1], room.options.level, E.MANCHES[g.mancheIdx]);
   if (nextAIWants && requests.length > 0) {
     requests.forEach((i) => {
       const so = room.players[i] && room.players[i].socketId;
@@ -555,11 +566,14 @@ function aiPlayTurn(room) {
   const fitsMeld = (card) => Boolean(card) && !card.joker && g.melds.some((m) => E.validGroup(m.type, [...m.cards, card]));
   const wantsTake = g.discardLocked ? false
     : p.posed ? Boolean(level !== "facile" && !contract.poseTout && fitsMeld(top))
-    : level === "facile" ? false : level === "difficile" ? Boolean(top && !top.joker && (mates >= 2 || neigh >= 2)) : Boolean(top && !top.joker && mates >= 2);
+    : level === "facile" ? false
+    : level === "difficile" ? wantsTop(p, top, level, contract)
+    : Boolean(top && !top.joker && mates >= 2);
   if (wantsTake) {
     const card = g.discard.pop();
     p.hand.push(card);
     p.lastTaken = card;
+    g.takenCards = [...(g.takenCards || []), { idx, card }];
     g.phase = "play";
     log(room, `${p.name} prend ${E.cardName(card)} dans la défausse`);
     io.to(room.code).emit("fx", { kind: "take", idx, card });
@@ -636,11 +650,34 @@ function aiPlayTurn(room) {
   checkRoundEnd(room, idx);
   if (g.roundOver) { broadcast(room); return; }
 
-  // Jeter — une fois posé, on se débarrasse des cartes les plus chères (limiter les points)
+  // Jeter
   const nonJokers = p.hand.filter((c) => !c.joker);
-  const toss = p.posed && nonJokers.length > 0
-    ? [...nonJokers].sort((a, b) => E.cardPoints(b) - E.cardPoints(a))[0]
-    : E.aiDiscardChoice(p.hand, level);
+  let toss;
+  if (p.posed && nonJokers.length > 0) {
+    // Une fois posé : se débarrasser des cartes les plus chères (limiter les points)
+    toss = [...nonJokers].sort((a, b) => E.cardPoints(b) - E.cardPoints(a))[0];
+  } else if (level === "difficile" && nonJokers.length > 0) {
+    // Défausse défensive : éviter de nourrir les adversaires
+    const othersTaken = (g.takenCards || []).filter((t) => t.idx !== idx).map((t) => t.card);
+    const anyOtherPosed = room.players.some((q, i2) => i2 !== idx && q.posed);
+    const danger = (c) => {
+      let d2 = 0;
+      othersTaken.forEach((t) => {
+        if (t.rank === c.rank) d2 += 3;
+        if (t.suit === c.suit && Math.abs(t.rank - c.rank) <= 2) d2 += 2;
+      });
+      if (anyOtherPosed && g.melds.some((m) => E.validGroup(m.type, [...m.cards, c]))) d2 += 6;
+      return d2;
+    };
+    const usefulness = (c) => {
+      const m2 = nonJokers.filter((o) => o.id !== c.id && o.rank === c.rank).length;
+      const n2 = nonJokers.filter((o) => o.id !== c.id && o.suit === c.suit && Math.abs(o.rank - c.rank) <= 2).length;
+      return m2 * 4 + n2 * 3 - E.cardPoints(c) * 0.15;
+    };
+    toss = [...nonJokers].sort((a, b) => (usefulness(a) + danger(a)) - (usefulness(b) + danger(b)))[0];
+  } else {
+    toss = E.aiDiscardChoice(p.hand, level);
+  }
   doDiscard(room, idx, toss.id, false);
   broadcast(room);
 }
