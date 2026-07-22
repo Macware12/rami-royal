@@ -82,6 +82,107 @@ app.get("/stats.json", (req, res) => {
 
 // ---------- Précompilation Babel au démarrage : chargement bien plus rapide côté client ----------
 const PRECOMPILED = {};
+// ---------- Comptes joueurs (pseudo + code secret à 6 chiffres) ----------
+// Deux modes côté client : invité (rien n'est gardé) ou connecté (stats retrouvables partout).
+// Persistance fichier, comme les salons — ACCOUNTS_FILE à pointer vers un disque persistant sur Render.
+const fsComptes = require("fs");
+const ACCOUNTS_FILE = process.env.ACCOUNTS_FILE || path.join(__dirname, "comptes-save.json");
+const comptes = new Map(); // code → { code, pseudo, stats, succes, createdAt, lastSeen }
+const MAX_COMPTES = 100000;
+let comptesTimer = null;
+function saveComptes() {
+  clearTimeout(comptesTimer);
+  comptesTimer = setTimeout(() => {
+    try { fsComptes.writeFileSync(ACCOUNTS_FILE, JSON.stringify([...comptes.values()])); }
+    catch (e) { console.error("Sauvegarde des comptes impossible:", e.message); }
+  }, 1000);
+}
+try {
+  if (fsComptes.existsSync(ACCOUNTS_FILE))
+    JSON.parse(fsComptes.readFileSync(ACCOUNTS_FILE, "utf8")).forEach((c) => c && c.code && comptes.set(c.code, c));
+  if (comptes.size) console.log(comptes.size + " compte(s) chargé(s)");
+} catch (e) { console.error("Lecture des comptes impossible:", e.message); }
+
+function cleanStats(s) {
+  const out = {};
+  if (!s || typeof s !== "object") return out;
+  ["games", "wins", "streak", "bestStreak", "bestScore"].forEach((k) => {
+    if (typeof s[k] === "number" && isFinite(s[k])) out[k] = Math.max(0, Math.min(1e9, Math.round(s[k])));
+  });
+  return out;
+}
+function cleanSucces(s) {
+  const out = {};
+  if (!s || typeof s !== "object") return out;
+  Object.keys(s).slice(0, 50).forEach((k) => {
+    if (typeof k === "string" && k.length <= 40 && typeof s[k] === "number") out[k] = s[k];
+  });
+  return out;
+}
+// Fusion prudente multi-appareils : les compteurs ne reculent jamais, le record est le plus bas
+function mergeStats(a, b) {
+  a = a || {}; b = b || {};
+  const out = {};
+  ["games", "wins", "bestStreak"].forEach((k) => { const v = Math.max(a[k] || 0, b[k] || 0); if (v) out[k] = v; });
+  if (b.streak != null) out.streak = b.streak; // la série en cours suit le dernier appareil
+  else if (a.streak != null) out.streak = a.streak;
+  const scores = [a.bestScore, b.bestScore].filter((x) => x != null);
+  if (scores.length) out.bestScore = Math.min(...scores);
+  return out;
+}
+function mergeSucces(a, b) {
+  const out = { ...(b || {}), ...(a || {}) }; // union, en gardant la date la plus ancienne (a = serveur)
+  return out;
+}
+
+app.use("/compte", express.json({ limit: "8kb" }));
+const compteTries = new Map(); // anti force-brute sur les codes
+setInterval(() => compteTries.clear(), 60 * 1000);
+function tropDEssais(req, res) {
+  const n = (compteTries.get(req.ip) || 0) + 1;
+  compteTries.set(req.ip, n);
+  if (compteTries.size > 10000) compteTries.clear();
+  if (n > 12) { res.status(429).json({ erreur: "Trop d'essais — réessaie dans une minute." }); return true; }
+  return false;
+}
+const pseudoValide = (p) => typeof p === "string" && p.trim().length >= 2 && p.trim().length <= 20;
+function trouveCompte(req) {
+  const { pseudo, code } = req.body || {};
+  const c = typeof code === "string" && /^[0-9]{6}$/.test(code.trim()) ? comptes.get(code.trim()) : null;
+  if (!c || !pseudoValide(pseudo) || c.pseudo.toLowerCase() !== pseudo.trim().toLowerCase()) return null;
+  return c;
+}
+
+app.post("/compte/creer", (req, res) => {
+  if (tropDEssais(req, res)) return;
+  if (!pseudoValide(req.body && req.body.pseudo)) return res.status(400).json({ erreur: "Pseudo invalide (2 à 20 caractères)." });
+  if (comptes.size >= MAX_COMPTES) return res.status(503).json({ erreur: "Plus de place pour de nouveaux comptes." });
+  let code;
+  do { code = String(crypto.randomInt(100000, 1000000)); } while (comptes.has(code));
+  const compte = { code, pseudo: req.body.pseudo.trim(), stats: cleanStats(req.body.stats),
+    succes: cleanSucces(req.body.succes), createdAt: Date.now(), lastSeen: Date.now() };
+  comptes.set(code, compte);
+  saveComptes();
+  res.json({ code, pseudo: compte.pseudo, stats: compte.stats, succes: compte.succes });
+});
+
+app.post("/compte/connexion", (req, res) => {
+  if (tropDEssais(req, res)) return;
+  const c = trouveCompte(req);
+  if (!c) return res.status(404).json({ erreur: "Pseudo ou code incorrect." });
+  c.lastSeen = Date.now(); saveComptes();
+  res.json({ code: c.code, pseudo: c.pseudo, stats: c.stats || {}, succes: c.succes || {} });
+});
+
+app.post("/compte/stats", (req, res) => {
+  const c = trouveCompte(req);
+  if (!c) return res.status(404).json({ erreur: "Pseudo ou code incorrect." });
+  c.stats = mergeStats(c.stats, cleanStats(req.body.stats));
+  c.succes = mergeSucces(c.succes, cleanSucces(req.body.succes));
+  c.lastSeen = Date.now(); saveComptes();
+  res.json({ stats: c.stats, succes: c.succes });
+});
+
 try {
   const fsBoot = require("fs");
   const Babel = require("@babel/standalone");
@@ -1260,7 +1361,11 @@ function loadRooms() {
 
 loadRooms();
 setInterval(saveRooms, 15000);
-process.on("SIGTERM", () => { saveRooms(); process.exit(0); });
-process.on("SIGINT", () => { saveRooms(); process.exit(0); });
+function flushComptes() {
+  clearTimeout(comptesTimer);
+  try { fsComptes.writeFileSync(ACCOUNTS_FILE, JSON.stringify([...comptes.values()])); } catch (e) {}
+}
+process.on("SIGTERM", () => { saveRooms(); flushComptes(); process.exit(0); });
+process.on("SIGINT", () => { saveRooms(); flushComptes(); process.exit(0); });
 
 server.listen(PORT, () => console.log("Serveur Ramy Gasy sur le port " + PORT));

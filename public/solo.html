@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2158-A">
+<meta name="version" content="v2159-K">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -152,6 +152,13 @@ const SUCCES_LIST = [
   { id: "premier_pose", nom: "Rapide comme l'éclair", desc: "Poser son contrat avant tous les autres" },
 ];
 function readJSON(k) { try { return JSON.parse(store.get(k)) || {}; } catch (_) { return {}; } }
+const API_BASE = (window.RAMI_CONFIG && window.RAMI_CONFIG.server) || "";
+// Compte joueur (pseudo + code à 6 chiffres) — en mode invité, rien n'est conservé
+function compteApi(chemin, body) {
+  return fetch(API_BASE + "/compte/" + chemin, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  }).then((r) => r.json().then((d) => { if (!r.ok) throw new Error(d.erreur || "Erreur serveur"); return d; }));
+}
 
 let CARD_ID = 0;
 let ANIM_SEQ = 0;
@@ -877,7 +884,14 @@ function RamiRoyal() {
   const [showTable, setShowTable] = useState(false);
   const [succesBanner, setSuccesBanner] = useState(null);
   const [showSucces, setShowSucces] = useState(false);
-  const [stats, setStats] = useState(readJSON("rami-stats"));
+  const [account, setAccount] = useState(readJSON("rami-account")); // {} = mode invité
+  const [stats, setStats] = useState(() => (readJSON("rami-account").code ? readJSON("rami-stats") : {}));
+  const [showLogin, setShowLogin] = useState(false);
+  const [loginCode, setLoginCode] = useState("");
+  const [loginBusy, setLoginBusy] = useState(false);
+  const [loginErr, setLoginErr] = useState("");
+  const [newCode, setNewCode] = useState(null); // code fraîchement créé, à montrer au joueur
+  const succesSession = useRef({}); // succès du mode invité : mémoire de session uniquement
   const [myAvatar, setMyAvatar] = useState(store.get("rami-avatar") || AVATARS_POOL[0]);
   const [muted, setMuted] = useState(store.get("rami-muted") === "1");
   const [intro, setIntro] = useState(null);
@@ -1165,6 +1179,15 @@ function RamiRoyal() {
     }
     setHasSave(Boolean(store.get("rami-save")));
     const savedName = store.get("rami-name"); if (savedName) setPlayerName(savedName);
+    // Compte connecté : on rafraîchit les stats depuis le serveur (silencieux si hors ligne)
+    const acc = readJSON("rami-account");
+    if (acc.code) {
+      compteApi("connexion", { pseudo: acc.pseudo, code: acc.code }).then((d) => {
+        store.set("rami-stats", JSON.stringify(d.stats || {}));
+        store.set("rami-succes", JSON.stringify(d.succes || {}));
+        setStats(d.stats || {});
+      }).catch(() => {});
+    }
     const savedLevel = store.get("rami-level"); if (savedLevel) setLevel(savedLevel);
   }, []);
 
@@ -1655,10 +1678,11 @@ function tapCard(id) {
 
   function award(id) {
     if (tuto) return; // le tutoriel ne débloque rien
-    const cur = readJSON("rami-succes");
+    const logged = Boolean(readJSON("rami-account").code);
+    const cur = logged ? readJSON("rami-succes") : succesSession.current; // invité : session seulement
     if (cur[id]) return;
     cur[id] = Date.now();
-    store.set("rami-succes", JSON.stringify(cur));
+    if (logged) store.set("rami-succes", JSON.stringify(cur));
     const def = SUCCES_LIST.find((x) => x.id === id);
     setSuccesBanner({ id, nom: def ? def.nom : id });
     sfx("win");
@@ -2154,18 +2178,76 @@ function tapCard(id) {
     }
   }, [g, screen]);
 
+  // ---- Compte joueur ----
+  function statsLocalesAFusionner() {
+    // À la création/connexion : on emporte les stats déjà présentes (anciens joueurs + session invité)
+    const loc = readJSON("rami-stats"), cur = stats || {};
+    const out = {};
+    ["games", "wins", "bestStreak"].forEach((k) => { const v = Math.max(loc[k] || 0, cur[k] || 0); if (v) out[k] = v; });
+    out.streak = cur.streak != null ? cur.streak : loc.streak || 0;
+    const scores = [loc.bestScore, cur.bestScore].filter((x) => x != null);
+    if (scores.length) out.bestScore = Math.min(...scores);
+    return out;
+  }
+  function activerCompte(d) {
+    store.set("rami-account", JSON.stringify({ pseudo: d.pseudo, code: d.code }));
+    store.set("rami-stats", JSON.stringify(d.stats || {}));
+    store.set("rami-succes", JSON.stringify(d.succes || {}));
+    store.set("rami-name", d.pseudo);
+    setPlayerName(d.pseudo);
+    setAccount({ pseudo: d.pseudo, code: d.code });
+    setStats(d.stats || {});
+    setLoginBusy(false); setLoginErr(""); setLoginCode("");
+  }
+  function creerCompte() {
+    const pseudo = playerName.trim();
+    if (pseudo.length < 2) { setLoginErr("Choisis d'abord un pseudo (2 caractères minimum)."); return; }
+    setLoginBusy(true); setLoginErr("");
+    compteApi("creer", { pseudo, stats: statsLocalesAFusionner(), succes: { ...readJSON("rami-succes"), ...succesSession.current } })
+      .then((d) => { activerCompte(d); setNewCode(d.code); })
+      .catch((e) => { setLoginBusy(false); setLoginErr(e.message || "Serveur injoignable — réessaie."); });
+  }
+  function connecterCompte() {
+    const pseudo = playerName.trim();
+    if (pseudo.length < 2) { setLoginErr("Entre ton pseudo (celui du compte)."); return; }
+    setLoginBusy(true); setLoginErr("");
+    compteApi("connexion", { pseudo, code: loginCode.trim() })
+      .then((d) => {
+        // On fusionne les éventuelles stats locales avec celles du serveur
+        const locales = statsLocalesAFusionner();
+        if (locales.games) {
+          return compteApi("stats", { pseudo: d.pseudo, code: d.code, stats: locales, succes: readJSON("rami-succes") })
+            .then((m) => activerCompte({ ...d, stats: m.stats, succes: m.succes })).catch(() => activerCompte(d));
+        }
+        activerCompte(d);
+      })
+      .then(() => setShowLogin(false))
+      .catch((e) => { setLoginBusy(false); setLoginErr(e.message || "Serveur injoignable — réessaie."); });
+  }
+  function deconnecterCompte() {
+    // Les données restent sur le serveur ; en local on repart en mode invité (qui oublie tout)
+    store.del("rami-account"); store.del("rami-stats"); store.del("rami-succes");
+    succesSession.current = {};
+    setAccount({}); setStats({}); setShowLogin(false); setNewCode(null);
+  }
+
   function nextManche() {
     if (g.mancheIdx + 1 >= MANCHES.length) {
       store.del("rami-save");
       const ranking = [...g.players].sort((a, b) => a.total - b.total);
       const won = ranking[0] === g.players[0];
-      const st = readJSON("rami-stats");
+      const acc = readJSON("rami-account");
+      const st = acc.code ? readJSON("rami-stats") : { ...stats }; // invité : stats de la session seulement
       st.games = (st.games || 0) + 1;
       st.wins = (st.wins || 0) + (won ? 1 : 0);
       st.streak = won ? (st.streak || 0) + 1 : 0;
       st.bestStreak = Math.max(st.bestStreak || 0, st.streak);
       if (won) st.bestScore = st.bestScore == null ? g.players[0].total : Math.min(st.bestScore, g.players[0].total);
-      store.set("rami-stats", JSON.stringify(st));
+      if (acc.code) {
+        store.set("rami-stats", JSON.stringify(st));
+        // Synchronisation serveur silencieuse : le compte est retrouvable sur tous les appareils
+        compteApi("stats", { pseudo: acc.pseudo, code: acc.code, stats: st, succes: readJSON("rami-succes") }).catch(() => {});
+      }
       setStats(st);
       if (won) award("premiere_victoire");
       if (won && g.level === "difficile") award("dompteur");
@@ -2250,6 +2332,53 @@ function tapCard(id) {
               🎴 {stats.games} partie{stats.games > 1 ? "s" : ""} · 🏆 {stats.wins || 0} victoire{(stats.wins || 0) > 1 ? "s" : ""}
               {(stats.streak || 0) > 1 ? ` · 🔥 série de ${stats.streak}` : ""}
               {stats.bestScore != null ? ` · record : ${stats.bestScore} pts` : ""}
+            </div>
+          )}
+          {account.code ? (
+            <div className="text-[11px] text-emerald-300 text-center">
+              👤 <b className="text-amber-300">{account.pseudo}</b> · compte n° {account.code}
+              {" · "}<button onClick={deconnecterCompte} className="underline text-emerald-400">déconnexion</button>
+            </div>
+          ) : (
+            <button onClick={() => { setLoginErr(""); setNewCode(null); setShowLogin(true); }}
+              className="btn-dark font-bold py-2 rounded-xl text-xs">
+              👤 Se connecter / Créer un compte
+              <span className="block font-normal text-[10px] text-emerald-400 mt-0.5">Mode invité : rien n'est conservé d'une visite à l'autre</span>
+            </button>
+          )}
+          {showLogin && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 flex items-center justify-center p-4" onClick={() => !loginBusy && setShowLogin(false)}>
+              <div className="panel rounded-2xl p-5 w-full max-w-sm flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+                {newCode ? (
+                  <React.Fragment>
+                    <h3 className="text-amber-300 font-bold text-center">✨ Compte créé !</h3>
+                    <p className="text-xs text-emerald-200 text-center leading-relaxed">Ton code secret — <b className="text-amber-300">note-le précieusement</b>, c'est lui qui te permet de retrouver ton compte partout :</p>
+                    <div className="text-4xl font-bold text-amber-300 tracking-[.3em] text-center" style={{ fontFamily: "Georgia, serif" }}>{newCode}</div>
+                    <button onClick={() => { if (navigator.clipboard) navigator.clipboard.writeText(newCode).catch(() => {}); }}
+                      className="btn-dark font-bold py-2 rounded-xl text-xs">📋 Copier le code</button>
+                    <button onClick={() => { setShowLogin(false); setNewCode(null); }} className="btn-gold font-bold py-2.5 rounded-xl text-sm">C'est noté !</button>
+                  </React.Fragment>
+                ) : (
+                  <React.Fragment>
+                    <h3 className="text-amber-300 font-bold text-center">👤 Mon compte</h3>
+                    <p className="text-[11px] text-emerald-300 leading-relaxed">Un compte = ton pseudo + un code secret à 6 chiffres. Tes stats et succès te suivent sur tous tes appareils (téléphone, ordinateur…).</p>
+                    <label className="flex flex-col gap-1 text-xs text-emerald-200">Pseudo
+                      <input value={playerName} onChange={(e) => setPlayerName(e.target.value.slice(0, 20))} maxLength={20}
+                        className="bg-emerald-950/70 border border-emerald-600 rounded-xl p-2.5 text-sm text-emerald-100" placeholder="Ton pseudo" />
+                    </label>
+                    <button onClick={creerCompte} disabled={loginBusy}
+                      className="btn-gold font-bold py-2.5 rounded-xl text-sm">{loginBusy ? "…" : "✨ Créer mon compte"}</button>
+                    <div className="text-center text-[10px] text-emerald-500">— déjà un compte ? —</div>
+                    <label className="flex flex-col gap-1 text-xs text-emerald-200">Code secret (6 chiffres)
+                      <input inputMode="numeric" value={loginCode} onChange={(e) => setLoginCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                        className="bg-emerald-950/70 border border-emerald-600 rounded-xl p-2.5 text-sm text-emerald-100 tracking-[.3em]" placeholder="******" />
+                    </label>
+                    <button onClick={connecterCompte} disabled={loginBusy || loginCode.length !== 6}
+                      className="btn-dark font-bold py-2.5 rounded-xl text-sm disabled:opacity-40">{loginBusy ? "…" : "🔑 Me connecter"}</button>
+                    {loginErr && <div className="text-red-300 text-xs text-center">{loginErr}</div>}
+                  </React.Fragment>
+                )}
+              </div>
             </div>
           )}
           <button onClick={() => setShowSucces(true)} className="btn-dark font-bold py-2 rounded-xl text-xs">
