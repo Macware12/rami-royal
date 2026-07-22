@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2163-R">
+<meta name="version" content="v2164-B">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -685,7 +685,7 @@ function pickAiBuyer(state, discarderIdx, nextIdx) {
   let best = null, bestD = 99;
   state.players.forEach((p, i) => {
     if (!p.isAI || i === discarderIdx || i === nextIdx || p.buysLeft <= 0 || p.posed) return;
-    const wants = aiWantsBuy(p, top, state.level || "moyen", MANCHES[state.mancheIdx]) ||
+    const wants = aiWantsBuy(p, top, state.level || "moyen", getContrat(state)) ||
       // Achat de blocage (difficile) : carte très convoitée par un adversaire — s'il lui reste des achats de réserve
       ((state.level || "moyen") === "difficile" && p.buysLeft >= 2 &&
         hotForOpponents(top, state.takenCards, i, state.players) >= 5);
@@ -930,7 +930,7 @@ function RamiRoyal() {
   const handleDropRef = useRef(null);
   const discardDropRef = useRef(null);
 
-  function newRound(players, mancheIdx, totals, history) {
+  function newRound(players, mancheIdx, totals, history, manches) {
     const deck = buildDeck();
     const ps = players.map((p, i) => ({
       ...p,
@@ -962,7 +962,7 @@ function RamiRoyal() {
       history: history || [],
       turn: mancheIdx % ps.length,
       phase: "draw", staged: [], justPosed: false, lastDrawn: [],
-      log: ["— Manche " + (mancheIdx + 1) + " : " + MANCHES[mancheIdx].label + " —"],
+      log: ["— Manche " + (mancheIdx + 1) + " : " + (manches || MANCHES)[mancheIdx].label + " —"],
       animEvents: [], animSeq: 0, toast: null, buyWindow: null, roundOver: null,
     };
   }
@@ -1044,10 +1044,10 @@ function RamiRoyal() {
     store.set("rami-avatar", myAvatar);
     store.set("rami-level", level);
     const manchesFinales = shortMode ? genererManchesAleatoires().map((i) => MANCHES[i]) : MANCHES;
-    setG({ ...newRound(players, 0, null), level, shortMode, manches: manchesFinales });
+    setG({ ...newRound(players, 0, null, null, manchesFinales), level, shortMode, manches: manchesFinales });
     setSelected([]);
     setMsg("");
-    showIntro(0);
+    showIntro(0, manchesFinales);
     setScreen("game");
   }
 
@@ -1211,9 +1211,9 @@ function RamiRoyal() {
     const savedLevel = store.get("rami-level"); if (savedLevel) setLevel(savedLevel);
   }, []);
 
-  function showIntro(mIdx) {
+  function showIntro(mIdx, manches) {
     clearTimeout(introTimer.current);
-    setIntro({ num: mIdx + 1, label: MANCHES[mIdx].label });
+    setIntro({ num: mIdx + 1, label: (manches || MANCHES)[mIdx].label });
     introTimer.current = setTimeout(() => setIntro(null), 2200);
   }
 
@@ -1256,7 +1256,7 @@ function RamiRoyal() {
   function checkWin(state, idx) {
     if (state.players[idx].hand.length > 0) return state;
     if (!state.players[idx].posed) return state; // impossible de gagner sans avoir posé son contrat (les groupes « Prêt » ne comptent pas)
-    const isFinal = MANCHES[state.mancheIdx].poseTout;
+    const isFinal = getContrat(state).poseTout;
     let bonusType = null;
     if (isFinal) bonusType = "final";
     else if (state.justPosed && !state.players.some((p, i) => i !== idx && p.posed)) bonusType = "anticipe";
@@ -1372,7 +1372,7 @@ function RamiRoyal() {
     const topD = s.discard[s.discard.length - 1];
     const nextP = s.players[bw.nextIdx];
     // Le joueur suivant est prioritaire : s'il veut la carte, personne ne peut l'acheter (ni humain, ni bot)
-    const nextWants = Boolean(nextP && nextP.isAI && aiWantsBuy(nextP, topD, s.level || "moyen", MANCHES[s.mancheIdx]));
+    const nextWants = Boolean(nextP && nextP.isAI && aiWantsBuy(nextP, topD, s.level || "moyen", getContrat(s)));
     if (humanChoice === "buy" && s.players[0].buysLeft > 0 && topD && !topD.joker) {
       if (nextWants) {
         setMsg(nextP.name + " est le joueur suivant : il est prioritaire et garde la carte pour son tour.");
@@ -1712,7 +1712,7 @@ function tapCard(id) {
   function helpSort() {
     setG((s) => {
       // Le contrat restant tient compte des groupes déjà préparés dans « Prêt »
-      const base = MANCHES[s.mancheIdx];
+      const base = getContrat(s);
       const already = { tri: s.staged.filter((m) => m.type === "tri").length, esc: s.staged.filter((m) => m.type === "esc").length };
       const remaining = base.poseTout ? base : { ...base, tri: Math.max(0, (base.tri || 0) - already.tri), esc: Math.max(0, (base.esc || 0) - already.esc) };
       const contractReady = !base.poseTout && (remaining.tri || 0) === 0 && (remaining.esc || 0) === 0;
@@ -1734,7 +1734,7 @@ function tapCard(id) {
     setG((s) => {
       const p = s.players[0];
       if (p.posed || s.roundOver) return s;
-      const contract = MANCHES[s.mancheIdx];
+      const contract = getContrat(s);
       const already = { tri: s.staged.filter((m) => m.type === "tri").length, esc: s.staged.filter((m) => m.type === "esc").length };
       if (contract.poseTout) {
         const plan = aiPlanFullHand(p.hand);
@@ -1954,7 +1954,7 @@ function tapCard(id) {
 
   function completeMeldWith(meldId, cardId) {
     setG((s) => {
-      if (!s.players[0].posed || MANCHES[s.mancheIdx].poseTout || s.roundOver || s.turn !== 0 || s.phase !== "play") return s;
+      if (!s.players[0].posed || getContrat(s).poseTout || s.roundOver || s.turn !== 0 || s.phase !== "play") return s;
       const card = s.players[0].hand.find((c) => c.id === cardId);
       if (!card) return s;
       const meld = s.melds.find((m) => m.id === meldId);
@@ -2029,7 +2029,7 @@ function tapCard(id) {
   function aiTakeTurn(s) {
     const idx = s.turn;
     const ai = s.players[idx];
-    const contract = MANCHES[s.mancheIdx];
+    const contract = getContrat(s);
     const level = s.level || "moyen";
     const pKey = "p" + idx;
     let hand = [...ai.hand];
@@ -2171,12 +2171,17 @@ function tapCard(id) {
         if (anyOtherPosed && melds.some((m) => validGroup(m.type, [...m.cards, c]))) d2 += 6;
         return d2;
       };
+      // Utilité selon le contrat : dans une manche 100 % tris, les voisins de couleur ne valent rien (et inversement)
+      const wantTri = (contract.tri || 0) > 0 || contract.poseTout;
+      const wantEsc = (contract.esc || 0) > 0 || contract.poseTout;
       const usefulness = (c) => {
         const m2 = nonJokers.filter((o) => o.id !== c.id && o.rank === c.rank).length;
         const n2 = nonJokers.filter((o) => o.id !== c.id && o.suit === c.suit && Math.abs(o.rank - c.rank) <= 2).length;
-        return m2 * 4 + n2 * 3 - cardPoints(c) * 0.15;
+        return m2 * (wantTri ? 4 : 1) + n2 * (wantEsc ? 3 : 1) - cardPoints(c) * 0.15;
       };
-      toss = [...nonJokers].sort((a, b) => (usefulness(a) + danger(a)) - (usefulness(b) + danger(b)))[0];
+      // Jamais rejeter le rang qu'on vient de prendre : ça annulerait la prise (ou le blocage)
+      const candidats = tookCard ? nonJokers.filter((c) => c.rank !== tookCard.rank) : nonJokers;
+      toss = [...(candidats.length ? candidats : nonJokers)].sort((a, b) => (usefulness(a) + danger(a)) - (usefulness(b) + danger(b)))[0];
     } else {
       toss = aiDiscardChoice(hand, level);
     }
@@ -2278,8 +2283,9 @@ function tapCard(id) {
       setScreen("final");
       return;
     }
-    showIntro(g.mancheIdx + 1);
-    setG((s) => ({ ...newRound(s.players, s.mancheIdx + 1, s.players.map((p) => p.total), s.history), level: s.level }));
+    showIntro(g.mancheIdx + 1, g.manches);
+    setG((s) => ({ ...newRound(s.players, s.mancheIdx + 1, s.players.map((p) => p.total), s.history, s.manches),
+      level: s.level, shortMode: s.shortMode, manches: s.manches }));
     setSelected([]);
     setMsg("");
   }
@@ -2535,7 +2541,7 @@ function tapCard(id) {
           <button onClick={() => setShowQuit(true)} className="btn-dark rounded-xl px-2.5 py-1.5 text-base leading-none">🏠</button>
           <div>
             <div className="text-amber-300 font-bold text-sm" style={{ fontFamily: "Georgia, serif" }}>
-              {tuto ? "🎓 Tutoriel" : `Manche ${g.mancheIdx + 1}/8`}
+              {tuto ? "🎓 Tutoriel" : `Manche ${g.mancheIdx + 1}/${(g.manches || MANCHES).length}`}
             </div>
             <div className="text-[10px] text-emerald-400">IA {g.level || "moyen"} · {g.stock.length} en pioche</div>
           </div>
@@ -2892,7 +2898,7 @@ function tapCard(id) {
                 <tbody>
                   {(g.history || []).map((h) => (
                     <tr key={h.mancheIdx} className="border-t border-emerald-900">
-                      <td className="py-1 pr-2 text-emerald-200">{h.mancheIdx + 1}. {MANCHES[h.mancheIdx].label}</td>
+                      <td className="py-1 pr-2 text-emerald-200">{h.mancheIdx + 1}. {(g && g.manches ? g.manches : MANCHES)[h.mancheIdx].label}</td>
                       {h.summary.map((r) => {
                         const v = r.pts + r.bonus;
                         return (

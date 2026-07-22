@@ -278,6 +278,9 @@ const genCode = () => {
 const genToken = () => crypto.randomBytes(16).toString("hex");
 
 // ---------- Cycle de vie d'un salon ----------
+// Contrat courant d'une partie : tient compte des manches aléatoires du mode court
+function contratCourant(g) { return (g.manches || E.MANCHES)[g.mancheIdx]; }
+
 function createRoom(hostName, options) {
   const code = genCode();
   const room = {
@@ -378,7 +381,7 @@ function startRound(room, mancheIdx) {
     manches: manchesFinales, // Manches à jouer (8 normales ou 3 aléatoires)
   };
   room.state = "playing";
-  log(room, `La manche ${mancheIdx + 1} commence (contrat : ${E.MANCHES[mancheIdx].label})`);
+  log(room, `La manche ${mancheIdx + 1} commence (contrat : ${manchesFinales[mancheIdx].label})`);
   startTurn(room);
 }
 
@@ -411,7 +414,8 @@ function broadcast(room) {
       players: room.players.map(publicPlayer),
       game: g ? {
         mancheIdx: g.mancheIdx,
-        contract: E.MANCHES[g.mancheIdx],
+        contract: contratCourant(g),
+        nbManches: (g.manches || E.MANCHES).length, // 3 en mode court, 8 sinon
         stockCount: g.stock.length,
         discardTop: g.discard[g.discard.length - 1] || null,
       discardCount: g.discard.length,
@@ -520,7 +524,7 @@ function handleDraw(room, idx, source) {
 function handlePose(room, idx, meldsSpec) {
   const g = room.game;
   const p = room.players[idx];
-  const contract = E.MANCHES[g.mancheIdx];
+  const contract = contratCourant(g);
   if (room.state !== "playing" || g.roundOver) return "La partie n'est pas en cours.";
   if (g.turn !== idx || g.phase !== "play") return "Tu ne peux pas poser maintenant.";
   if (p.posed) return "Tu as déjà posé ton contrat.";
@@ -567,7 +571,7 @@ function handleComplete(room, idx, meldId, cardId) {
   if (room.state !== "playing" || g.roundOver) return "La partie n'est pas en cours.";
   if (g.turn !== idx || g.phase !== "play") return "Tu ne peux pas compléter maintenant.";
   if (!p.posed) return "Pose d'abord ton contrat.";
-  if (E.MANCHES[g.mancheIdx].poseTout) return "Pas de complétion à la manche du pose-tout.";
+  if (contratCourant(g).poseTout) return "Pas de complétion à la manche du pose-tout.";
   const meld = g.melds.find((m) => m.id === meldId);
   const card = p.hand.find((c) => c.id === cardId);
   if (!meld || !card) return "Carte ou combinaison introuvable.";
@@ -675,7 +679,7 @@ function botBuyer(room, discarderIdx, nextIdx) {
   const n = room.players.length;
   const level = room.options.level;
   if (level === "facile") return null;
-  const contract = E.MANCHES[g.mancheIdx];
+  const contract = contratCourant(g);
   let best = null, bestD = 99;
   room.players.forEach((p, i) => {
     if (i === discarderIdx || i === nextIdx || p.buysLeft <= 0 || p.posed) return;
@@ -728,7 +732,7 @@ function openBuyWindow(room, discarderIdx) {
   // si un bot veut acheter mais qu'un humain est le prochain joueur, on ouvre la fenêtre
   // pour qu'il puisse faire valoir sa priorité
   if (!someoneCanBuy && !(bBuyer != null && nextIsHuman)) {
-    if (bBuyer != null && !(nextP && wantsTop(nextP, top, room.options.level, E.MANCHES[g.mancheIdx]) && !nextIsHuman)) doBuy(room, bBuyer);
+    if (bBuyer != null && !(nextP && wantsTop(nextP, top, room.options.level, contratCourant(g)) && !nextIsHuman)) doBuy(room, bBuyer);
     advanceTurn(room, discarderIdx);
     return;
   }
@@ -798,7 +802,7 @@ function resolveBuyWindow(room) {
   if (g.botBuyer != null && !requests.includes(g.botBuyer)) requests.push(g.botBuyer);
   const nextP = g.nextIdx != null ? room.players[g.nextIdx] : null;
   const nextAIWants = nextP && (nextP.isBot || nextP.absent || !nextP.connected) &&
-    wantsTop(nextP, g.discard[g.discard.length - 1], room.options.level, E.MANCHES[g.mancheIdx]);
+    wantsTop(nextP, g.discard[g.discard.length - 1], room.options.level, contratCourant(g));
   if (nextAIWants && requests.length > 0) {
     requests.forEach((i) => {
       const so = room.players[i] && room.players[i].socketId;
@@ -833,7 +837,7 @@ function checkRoundEnd(room, idx) {
   const p = room.players[idx];
   if (p.hand.length > 0 || g.roundOver) return;
   clearTimers(room);
-  const isFinal = E.MANCHES[g.mancheIdx].poseTout;
+  const isFinal = contratCourant(g).poseTout;
   let bonusType = null;
   if (isFinal) bonusType = "final";
   else if (p.justPosed && !room.players.some((q, i) => i !== idx && q.posed)) bonusType = "anticipe";
@@ -866,10 +870,11 @@ function aiPlayTurn(room) {
   const idx = g.turn;
   const p = room.players[idx];
   if (!p || !(p.isBot || p.absent || !p.connected)) return; // jamais jouer à la place d'un humain actif (timer périmé)
-  const contract = E.MANCHES[g.mancheIdx];
+  const contract = contratCourant(g);
   const level = room.options.level;
 
   // Piocher ou prendre — sauf si la carte est déjà en main (phase "play" : relance du chien de garde)
+  let tookNow = null; // carte prise dans la défausse CE tour-ci : interdite de re-défausse (sinon le blocage est annulé)
   if (g.phase === "draw") {
   const top = g.discard[g.discard.length - 1];
   const mates = top && !top.joker ? p.hand.filter((c) => !c.joker && c.rank === top.rank).length : 0;
@@ -889,6 +894,7 @@ function aiPlayTurn(room) {
     const card = g.discard.pop();
     p.hand.push(card);
     p.lastTaken = card;
+    tookNow = card;
     g.takenCards = [...(g.takenCards || []), { idx, card }];
     g.phase = "play";
     log(room, `${p.name} prend ${E.cardName(card)} dans la défausse`);
@@ -986,12 +992,17 @@ function aiPlayTurn(room) {
       if (anyOtherPosed && g.melds.some((m) => E.validGroup(m.type, [...m.cards, c]))) d2 += 6;
       return d2;
     };
+    // Utilité selon le contrat : dans une manche 100 % tris, les voisins de couleur ne valent rien (et inversement)
+    const wantTri = (contract.tri || 0) > 0 || contract.poseTout;
+    const wantEsc = (contract.esc || 0) > 0 || contract.poseTout;
     const usefulness = (c) => {
       const m2 = nonJokers.filter((o) => o.id !== c.id && o.rank === c.rank).length;
       const n2 = nonJokers.filter((o) => o.id !== c.id && o.suit === c.suit && Math.abs(o.rank - c.rank) <= 2).length;
-      return m2 * 4 + n2 * 3 - E.cardPoints(c) * 0.15;
+      return m2 * (wantTri ? 4 : 1) + n2 * (wantEsc ? 3 : 1) - E.cardPoints(c) * 0.15;
     };
-    toss = [...nonJokers].sort((a, b) => (usefulness(a) + danger(a)) - (usefulness(b) + danger(b)))[0];
+    // Jamais rejeter le rang qu'on vient de prendre : ça annulerait la prise (ou le blocage)
+    const candidats = tookNow ? nonJokers.filter((c) => c.rank !== tookNow.rank) : nonJokers;
+    toss = [...(candidats.length ? candidats : nonJokers)].sort((a, b) => (usefulness(a) + danger(a)) - (usefulness(b) + danger(b)))[0];
   } else {
     toss = E.aiDiscardChoice(p.hand, level);
   }
