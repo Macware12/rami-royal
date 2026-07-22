@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2116-A">
+<meta name="version" content="v2117-A">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -197,12 +197,15 @@ function helpArrangement(hand, contract, variant) {
       }
     }
   };
-  // Priorité guidée par le contrat : 100% escaliers → toujours escaliers d'abord, 100% tris → toujours tris d'abord
+  // On ne forme QUE les types demandés par le contrat : pas d'escalier pour un contrat 100% tris (et inversement)
+  const wantEscAny = contract.poseTout || (contract.esc || 0) > 0;
+  const wantTriAny = contract.poseTout || (contract.tri || 0) > 0;
   const preferEsc = contract.poseTout ? variant % 2 === 1
     : (contract.tri || 0) === 0 ? true
     : (contract.esc || 0) === 0 ? false
     : (contract.esc || 0) >= (contract.tri || 0) ? variant % 2 === 0 : variant % 2 === 1;
-  if (preferEsc) { takeRuns(); takeJokerRuns(); takeTris(); } else { takeTris(); takeRuns(); takeJokerRuns(); }
+  if (preferEsc) { if (wantEscAny) { takeRuns(); takeJokerRuns(); } if (wantTriAny) takeTris(); }
+  else { if (wantTriAny) takeTris(); if (wantEscAny) { takeRuns(); takeJokerRuns(); } }
 
   // Ébauches : paires (futur tri) et voisins de suite (futur escalier) — dans l'ordre du contrat
   const draftPairs = () => {
@@ -224,7 +227,8 @@ function helpArrangement(hand, contract, variant) {
       }
     }
   };
-  if (preferEsc) { draftSuites(); draftPairs(); } else { draftPairs(); draftSuites(); }
+  if (preferEsc) { if (wantEscAny) draftSuites(); if (wantTriAny) draftPairs(); }
+  else { if (wantTriAny) draftPairs(); if (wantEscAny) draftSuites(); }
   // Les jokers libres rejoignent les ébauches (escaliers d'abord, puis paires)
   for (const grp of [...groups.filter((x) => !x.complete && x.kind === "esc"), ...groups.filter((x) => !x.complete && x.kind === "tri")]) {
     const jk = jokers.find((c) => !used.has(c.id));
@@ -1265,7 +1269,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2116-A</span>
+          <span className="opacity-60">v2117-A</span>
         </div>
       </div>
     );
