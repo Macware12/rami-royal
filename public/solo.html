@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2125-L">
+<meta name="version" content="v2126-T">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -740,19 +740,19 @@ function OpponentCard({ p, active, refCb }) {
   );
 }
 
-function StackCard({ card, overlap }) {
+function StackCard({ card, overlap, small }) {
   const red = card.suit === "♥" || card.suit === "♦";
   return (
-    <div className={card.joker ? "joker-glow" : ""} style={{ marginLeft: overlap ? -16 : 0 }}>
+    <div className={card.joker ? "joker-glow" : ""} style={{ marginLeft: overlap ? (small ? -13 : -16) : 0 }}>
       <div className="rounded-md relative"
         style={{
-          width: 30, height: 44,
+          width: small ? 24 : 30, height: small ? 35 : 44,
           background: card.joker ? "linear-gradient(160deg,#faf5ff,#e9dcfc)" : "linear-gradient(160deg,#fffdf6,#f6efdd)",
           border: card.joker ? "1.5px solid #a78bfa" : "1px solid #d6cdb8",
           boxShadow: "0 1px 3px rgba(0,0,0,.35)",
           color: card.joker ? "#7c3aed" : red ? "#C1272D" : "#1c1917",
         }}>
-        <span className="absolute font-bold leading-none text-center" style={{ top: 3, left: 2, width: 12, fontSize: 9 }}>
+        <span className="absolute font-bold leading-none text-center" style={{ top: 2, left: 2, width: small ? 10 : 12, fontSize: small ? 8 : 9 }}>
           {rankLabel(card)}<br />{card.joker ? "🤡" : card.suit}
         </span>
       </div>
@@ -760,7 +760,7 @@ function StackCard({ card, overlap }) {
   );
 }
 
-function MeldChip({ meld, ownerName, onClick, highlight, mid }) {
+function MeldChip({ meld, ownerName, onClick, highlight, mid, small }) {
   return (
     <button onClick={onClick} data-mid={mid}
       className={`shrink-0 flex items-center rounded-xl px-1 py-1 panel transition-all ${highlight ? "pulse-gold" : ""}`}
@@ -769,7 +769,7 @@ function MeldChip({ meld, ownerName, onClick, highlight, mid }) {
         {meld.type === "tri" ? "TRI" : "ESC"}
       </span>
       <div className="flex">
-        {meld.cards.map((c, i) => <StackCard key={c.id} card={c} overlap={i > 0} />)}
+        {meld.cards.map((c, i) => <StackCard key={c.id} card={c} overlap={i > 0} small={small} />)}
       </div>
     </button>
   );
@@ -1281,6 +1281,15 @@ function tapCard(id) {
   const lastTargetRef = useRef(-1);
   const [drag, setDrag] = useState(null);
   const [pendingDiscard, setPendingDiscard] = useState(null);
+  const [tableOverflow, setTableOverflow] = useState(false);
+  const tableScrollRef = useRef(null);
+
+  // La table déborde-t-elle ? (pour afficher l'indice « tout voir »)
+  useEffect(() => {
+    const el = tableScrollRef.current;
+    if (!el) { setTableOverflow(false); return; }
+    setTableOverflow(el.scrollHeight > el.clientHeight + 4);
+  }, [g]);
 
   // Sécurité : annuler le jet en attente après 8 secondes
   useEffect(() => {
@@ -2199,22 +2208,28 @@ function tapCard(id) {
       </div>
 
       {/* Table regroupée par joueur */}
-      <div className="flex-1 overflow-y-auto px-2 py-1 flex flex-col gap-1.5 content-start relative" style={{ minHeight: 56 }}>
-        {g.melds.length === 0 && <p className="text-emerald-400 text-xs italic px-1">Les combinaisons posées apparaîtront ici.</p>}
+      <div className="flex-1 relative" style={{ minHeight: 56 }}>
+        <div ref={tableScrollRef} className="absolute inset-0 overflow-y-auto px-2 py-1 flex flex-col gap-1.5 content-start">
+          {g.melds.length === 0 && <p className="text-emerald-400 text-xs italic px-1">Les combinaisons posées apparaîtront ici.</p>}
+          {[...new Set(g.melds.map((m) => m.owner))].map((o) => (
+            <div key={o} className="flex items-center gap-1.5 overflow-x-auto" style={{ paddingRight: 84 }}>
+              <span className="shrink-0 text-base" style={{ width: 22 }} title={g.players[o].name}>{g.players[o].avatar || "🙂"}</span>
+              {g.melds.filter((m) => m.owner === o).map((m) => (
+                <MeldChip key={m.id} mid={m.id} meld={m} small={g.melds.length > 4}
+                  highlight={(me.posed && selected.length === 1 && myTurn) || (Boolean(drag) && !drag.fromDiscard && me.posed && myTurn && g.phase === "play")}
+                  onClick={() => myTurn && completeMeld(m.id)} />
+              ))}
+            </div>
+          ))}
+        </div>
         {g.melds.length > 0 && (
           <button onClick={() => setShowTable(true)}
             className="absolute top-0.5 right-2 z-10 btn-dark rounded-xl px-2 py-1 text-[11px] font-bold">⛶ Agrandir</button>
         )}
-        {[...new Set(g.melds.map((m) => m.owner))].map((o) => (
-          <div key={o} className="flex items-center gap-1.5 overflow-x-auto" style={{ paddingRight: 84 }}>
-            <span className="shrink-0 text-base" style={{ width: 22 }} title={g.players[o].name}>{g.players[o].avatar || "🙂"}</span>
-            {g.melds.filter((m) => m.owner === o).map((m) => (
-              <MeldChip key={m.id} mid={m.id} meld={m}
-                highlight={(me.posed && selected.length === 1 && myTurn) || (Boolean(drag) && !drag.fromDiscard && me.posed && myTurn && g.phase === "play")}
-                onClick={() => myTurn && completeMeld(m.id)} />
-            ))}
-          </div>
-        ))}
+        {tableOverflow && (
+          <button onClick={() => setShowTable(true)}
+            className="absolute bottom-1 right-2 z-10 btn-gold rounded-xl px-2 py-1 text-[11px] font-bold shadow-xl">⬇ tout voir</button>
+        )}
       </div>
 
       {tuto && (
