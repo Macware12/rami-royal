@@ -7,11 +7,42 @@ const { Server } = require("socket.io");
 const E = require("./engine");
 
 const app = express();
+
+// ---------- Durcissement HTTP ----------
+app.set("trust proxy", 1); // Render est derrière un proxy : nécessaire pour connaître la vraie IP du visiteur
+app.disable("x-powered-by"); // ne pas révéler Express/Node aux scanners
+
+// Redirection HTTPS (active seulement derrière un proxy comme Render ; sans effet en local)
+// + en-têtes de sécurité sur toutes les réponses
+app.use((req, res, next) => {
+  if (req.headers["x-forwarded-proto"] === "http")
+    return res.redirect(301, "https://" + req.headers.host + req.url);
+  res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains"); // force HTTPS pour 1 an
+  res.setHeader("X-Content-Type-Options", "nosniff"); // pas de devinette de type MIME
+  res.setHeader("X-Frame-Options", "DENY"); // anti-clickjacking : pas d'iframe
+  res.setHeader("Referrer-Policy", "same-origin");
+  next();
+});
+
+// Limite de débit HTTP : 300 requêtes / minute / IP (anti-flood, sans dépendance externe)
+const httpHits = new Map();
+setInterval(() => httpHits.clear(), 60 * 1000);
+app.use((req, res, next) => {
+  const ip = req.ip || "?";
+  const n = (httpHits.get(ip) || 0) + 1;
+  httpHits.set(ip, n);
+  if (n > 300) return res.status(429).send("Trop de requêtes — réessaie dans une minute.");
+  if (httpHits.size > 10000) httpHits.clear(); // borne mémoire dure
+  next();
+});
+
 app.get("/ping", (req, res) => res.send("ok"));
 
 // ---------- Statistiques temps réel ----------
 const presence = new Map(); // id → { t: dernier signal, m: mode, p: pseudo }
-const STATS_KEY = process.env.STATS_KEY || "gasy2026"; // clé pour voir les pseudos sur /stats.html
+// Clé pour voir les pseudos sur /stats.html — à définir dans les variables d'environnement Render.
+// Pas de valeur par défaut : un secret en dur dans un dépôt GitHub public n'est pas un secret.
+const STATS_KEY = process.env.STATS_KEY || null;
 app.get("/presence", (req, res) => {
   const id = String(req.query.id || "").slice(0, 40);
   const now = Date.now();
@@ -37,7 +68,7 @@ app.get("/stats.json", (req, res) => {
     heure: new Date().toISOString(),
   };
   // Détail des pseudos : uniquement avec la bonne clé (la page est publique)
-  if (String(req.query.cle || "") === STATS_KEY) {
+  if (STATS_KEY && String(req.query.cle || "") === STATS_KEY) {
     out.pseudosMulti = [];
     for (const room of rooms.values())
       for (const p of room.players)
@@ -83,17 +114,35 @@ app.use(express.static(path.join(__dirname, "public"), {
   },
 })); // sert le client web
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
+
+// CORS verrouillé : seules les pages servies par CE serveur (même domaine) peuvent se connecter.
+// Pour autoriser un autre domaine (ex. domaine personnalisé), définir sur Render :
+// ALLOWED_ORIGINS="https://mondomaine.com,https://www.mondomaine.com"
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "").split(",").map((s) => s.trim()).filter(Boolean);
+const io = new Server(server, {
+  maxHttpBufferSize: 16 * 1024, // les actions du jeu sont minuscules : rejette les payloads géants (défaut 1 Mo)
+  cors: { origin: true, credentials: false },
+  allowRequest: (req, cb) => {
+    const origin = req.headers.origin;
+    if (!origin) return cb(null, true); // même origine stricte ou client hors navigateur
+    try {
+      const oHost = new URL(origin).host;
+      if (oHost === req.headers.host || ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+    } catch (e) { /* origine illisible → refus */ }
+    cb("origine non autorisée", false);
+  },
+});
 
 const BUY_WINDOW_MS = 5000;       // fenêtre d'achat après chaque défausse
 const AI_DELAY_MS = 1400;         // rythme des tours joués par l'IA
 const ROOM_IDLE_LIMIT_MS = 2 * 60 * 60 * 1000; // salon fermé après 2h d'inactivité
+const MAX_ROOMS = 300;            // borne dure anti-flood (300 salons = largement assez, protège la mémoire)
 const rooms = new Map();          // code → room
 
 const genCode = () => {
   const letters = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
   let c = "";
-  for (let i = 0; i < 5; i++) c += letters[Math.floor(Math.random() * letters.length)];
+  for (let i = 0; i < 5; i++) c += letters[crypto.randomInt(letters.length)]; // aléa cryptographique : codes non prédictibles
   return rooms.has(c) ? genCode() : c;
 };
 const genToken = () => crypto.randomBytes(16).toString("hex");
@@ -137,7 +186,8 @@ function addPlayer(room, name, isBot, wantedAvatar) {
 }
 
 function sanitizeName(n) {
-  return String(n || "").trim().slice(0, 14) || "Joueur";
+  // Retire les chevrons (anti-HTML) et les caractères de contrôle invisibles, puis borne la longueur
+  return String(n || "").replace(/[<>\u0000-\u001f\u007f]/g, "").trim().slice(0, 14) || "Joueur";
 }
 
 function touch(room) { room.lastActivity = Date.now(); }
@@ -802,8 +852,19 @@ function aiPlayTurn(room) {
 
 // ---------- Socket.io ----------
 io.on("connection", (socket) => {
+  // Limite de débit par connexion : 40 événements / 5 s. Un humain n'atteint jamais ça,
+  // un bot de flood si — ses événements excédentaires sont simplement ignorés.
+  let evCount = 0, evWindow = Date.now();
   const _on = socket.on.bind(socket);
   socket.on = (ev, fn) => _on(ev, (...args) => {
+    if (ev !== "disconnect") {
+      const now = Date.now();
+      if (now - evWindow > 5000) { evWindow = now; evCount = 0; }
+      if (++evCount > 40) {
+        if (evCount === 41) console.error("Débit excessif ignoré (socket " + socket.id + ")");
+        return;
+      }
+    }
     try { return fn(...args); } catch (e) { console.error("Erreur (" + ev + "):", (e && e.stack) || e); }
   });
   let myRoom = null;
@@ -829,7 +890,13 @@ io.on("connection", (socket) => {
     myRoom = null; myToken = null;
   };
 
-  socket.on("createRoom", ({ name, options, avatar }, cb) => {
+  let lastCreateAt = 0;
+  socket.on("createRoom", ({ name, options, avatar } = {}, cb) => {
+    if (typeof cb !== "function") cb = () => {};
+    // Anti-flood : borne dure sur le nombre total de salons + délai entre deux créations
+    if (rooms.size >= MAX_ROOMS) return cb({ ok: false, error: "Serveur très demandé — réessaie dans quelques minutes." });
+    if (Date.now() - lastCreateAt < 5000) return cb({ ok: false, error: "Doucement — attends quelques secondes avant de créer un autre salon." });
+    lastCreateAt = Date.now();
     detachFromRoom();
     const room = createRoom(name, options);
     const player = addPlayer(room, name, false, avatar);
@@ -842,7 +909,8 @@ io.on("connection", (socket) => {
     broadcast(room);
   });
 
-  socket.on("joinRoom", ({ code, name, avatar }, cb) => {
+  socket.on("joinRoom", ({ code, name, avatar } = {}, cb) => {
+    if (typeof cb !== "function") cb = () => {};
     const room = rooms.get(String(code || "").toUpperCase());
     if (!room) return cb({ ok: false, error: "Salon introuvable. Vérifie le code." });
     if (room !== myRoom) detachFromRoom();
@@ -858,7 +926,8 @@ io.on("connection", (socket) => {
     broadcast(room);
   });
 
-  socket.on("rejoin", ({ code, token }, cb) => {
+  socket.on("rejoin", ({ code, token } = {}, cb) => {
+    if (typeof cb !== "function") cb = () => {};
     const room = rooms.get(String(code || "").toUpperCase());
     if (!room) return cb({ ok: false, error: "Ce salon n'existe plus." });
     const player = room.players.find((p) => p.token === token);
@@ -1046,6 +1115,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("action", (a) => {
+    if (!a || typeof a !== "object") return; // payload malformé : ignoré
     if (!myRoom || !myRoom.game) return;
     const me = findMe();
     if (!me) return;
