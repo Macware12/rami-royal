@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2137-H">
+<meta name="version" content="v2138-K">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -1152,18 +1152,8 @@ function App() {
   function handleDrop(x, y, card) {
     const pts = [[x, y], [x, y - 34], [x, y - 58]]; // le doigt, le centre et le haut de la carte fantôme
     const inRect = (r, m) => Boolean(r) && pts.some(([px, py]) => px >= r.left - m && px <= r.right + m && py >= r.top - m && py <= r.bottom + m);
-    const dr = discardRef.current && discardRef.current.getBoundingClientRect();
-    const sticky = Date.now() - overStickyRef.current < 250; // la défausse vient de grossir : le jet compte
-    overStickyRef.current = 0;
-    if (inRect(dr, 28) || sticky) {
-      if (myTurn && g.phase === "play") {
-        setPendingDiscard(card.id);
-        setMsg("⚠️ Appuie sur la défausse pour confirmer le jet");
-      }
-      else if (myTurn && g.phase === "draw") setMsg("Pioche d'abord, tu jetteras ensuite.");
-      else setMsg("Tu pourras jeter pendant ton tour.");
-      return;
-    }
+    // 1) Les groupes « Prêt » et les combinaisons de la table D'ABORD : le chemin du doigt
+    //    croise souvent la défausse, il ne faut pas confondre avec un jet
     const stagedEls = document.querySelectorAll("[data-sid]");
     for (const el of stagedEls) {
       const r = el.getBoundingClientRect();
@@ -1181,6 +1171,19 @@ function App() {
         else setMsg("Pose d'abord ton contrat avant de compléter.");
         return;
       }
+    }
+    // 2) Ensuite seulement, la défausse
+    const dr = discardRef.current && discardRef.current.getBoundingClientRect();
+    const sticky = Date.now() - overStickyRef.current < 250; // la défausse vient de grossir : le jet compte
+    overStickyRef.current = 0;
+    if (inRect(dr, 28) || sticky) {
+      if (myTurn && g.phase === "play") {
+        setPendingDiscard(card.id);
+        setMsg("⚠️ Appuie sur la défausse pour confirmer le jet");
+      }
+      else if (myTurn && g.phase === "draw") setMsg("Pioche d'abord, tu jetteras ensuite.");
+      else setMsg("Tu pourras jeter pendant ton tour.");
+      return;
     }
   }
 
@@ -1361,7 +1364,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2137-H</span>
+          <span className="opacity-60">v2138-K</span>
         </div>
       </div>
     );

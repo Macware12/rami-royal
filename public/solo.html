@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2137-H">
+<meta name="version" content="v2138-K">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -1498,18 +1498,8 @@ function tapCard(id) {
   function handleDrop(x, y, card) {
     const pts = [[x, y], [x, y - 34], [x, y - 58]]; // le doigt, le centre et le haut de la carte fantôme
     const inRect = (r, m) => Boolean(r) && pts.some(([px, py]) => px >= r.left - m && px <= r.right + m && py >= r.top - m && py <= r.bottom + m);
-    const dr = discardRef.current && discardRef.current.getBoundingClientRect();
-    const sticky = Date.now() - overStickyRef.current < 250; // la défausse vient de grossir : le jet compte
-    overStickyRef.current = 0;
-    if (inRect(dr, 28) || sticky) {
-      if (myTurn && g.phase === "play") {
-        setPendingDiscard(card.id);
-        setMsg("⚠️ Appuie sur la défausse pour confirmer le jet");
-      }
-      else if (myTurn && g.phase === "draw") setMsg("Pioche d'abord, tu jetteras ensuite.");
-      else setMsg("Tu pourras jeter pendant ton tour.");
-      return;
-    }
+    // 1) Les groupes « Prêt » et les combinaisons de la table D'ABORD : le chemin du doigt
+    //    croise souvent la défausse, il ne faut pas confondre avec un jet
     const stagedEls = document.querySelectorAll("[data-sid]");
     for (const el of stagedEls) {
       const r = el.getBoundingClientRect();
@@ -1527,6 +1517,19 @@ function tapCard(id) {
         else setMsg(me.posed ? "Attends ton tour pour compléter." : "Pose d'abord ton contrat avant de compléter.");
         return;
       }
+    }
+    // 2) Ensuite seulement, la défausse
+    const dr = discardRef.current && discardRef.current.getBoundingClientRect();
+    const sticky = Date.now() - overStickyRef.current < 250; // la défausse vient de grossir : le jet compte
+    overStickyRef.current = 0;
+    if (inRect(dr, 28) || sticky) {
+      if (myTurn && g.phase === "play") {
+        setPendingDiscard(card.id);
+        setMsg("⚠️ Appuie sur la défausse pour confirmer le jet");
+      }
+      else if (myTurn && g.phase === "draw") setMsg("Pioche d'abord, tu jetteras ensuite.");
+      else setMsg("Tu pourras jeter pendant ton tour.");
+      return;
     }
   }
 
