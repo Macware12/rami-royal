@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2147-B">
+<meta name="version" content="v2148-R">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -637,7 +637,7 @@ function aiWantsBuy(p, top, level, contract) {
   const nonJ = p.hand.filter((c) => !c.joker);
   const mates = nonJ.filter((c) => c.rank === top.rank).length;
   const neigh = nonJ.filter((c) => c.suit === top.suit && Math.abs(c.rank - top.rank) <= 1).length;
-  if (level !== "difficile") return mates >= 2;
+  if (level !== "difficile") return mates >= 2 || neigh >= 2; // moyen : tris ET escaliers
   // Difficile : on ne veut que ce qui sert le contrat
   const wantTri = !contract || (contract.tri || 0) > 0 || contract.poseTout;
   const wantEsc = !contract || (contract.esc || 0) > 0 || contract.poseTout;
@@ -1975,7 +1975,7 @@ function tapCard(id) {
         // (garde-fous : jamais en fin de pioche, ni avec une main déjà chargée — son jeu reste la priorité)
         (Boolean(top) && !top.joker && stock.length > s.players.length * 2 && hand.length <= 16 &&
           hotForOpponents(top, ns.takenCards, idx, s.players) >= 3)) :
-      Boolean(top && !top.joker && mates >= 2);
+      Boolean(top && !top.joker && (mates >= 2 || neigh >= 2)); // moyen : tris ET escaliers
     let tookCard = null;
     if (wantsTake) {
       const taken = takeCard(stock, discard, "discard");

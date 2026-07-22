@@ -457,7 +457,7 @@ function wantsTop(p, top, level, contract) {
   const nonJ = p.hand.filter((c) => !c.joker);
   const mates = nonJ.filter((c) => c.rank === top.rank).length;
   const neigh = nonJ.filter((c) => c.suit === top.suit && Math.abs(c.rank - top.rank) <= 1).length;
-  if (level !== "difficile") return mates >= 2;
+  if (level !== "difficile") return mates >= 2 || neigh >= 2; // moyen : tris ET escaliers
   // Difficile : on ne veut que ce qui sert le contrat
   const wantTri = !contract || (contract.tri || 0) > 0 || contract.poseTout;
   const wantEsc = !contract || (contract.esc || 0) > 0 || contract.poseTout;
@@ -485,7 +485,8 @@ function botBuyer(room, discarderIdx, nextIdx) {
       ? (wantsTop(p, top, level, contract) ||
         // Achat de blocage : carte très convoitée par un adversaire — s'il lui reste des achats de réserve
         (p.buysLeft >= 2 && hotForOpponents(top, g.takenCards, i, room.players) >= 5))
-      : p.hand.filter((c) => !c.joker && c.rank === top.rank).length >= 2;
+      : (p.hand.filter((c) => !c.joker && c.rank === top.rank).length >= 2 ||
+         p.hand.filter((c) => !c.joker && c.suit === top.suit && Math.abs(c.rank - top.rank) <= 1).length >= 2);
     if (!wants) return;
     const d = (i - discarderIdx + n) % n;
     if (d < bestD) { bestD = d; best = i; }
@@ -684,7 +685,7 @@ function aiPlayTurn(room) {
         // (garde-fous : jamais en fin de pioche, ni avec une main déjà chargée — son jeu reste la priorité)
         (Boolean(top) && !top.joker && g.stock.length > room.players.length * 2 && p.hand.length <= 16 &&
           hotForOpponents(top, g.takenCards, idx, room.players) >= 3))
-    : Boolean(top && !top.joker && mates >= 2);
+    : Boolean(top && !top.joker && (mates >= 2 || neigh >= 2)); // moyen : tris ET escaliers
   if (wantsTake) {
     const card = g.discard.pop();
     p.hand.push(card);
