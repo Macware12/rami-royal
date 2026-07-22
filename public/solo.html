@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2120-E">
+<meta name="version" content="v2121-J">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -2523,12 +2523,16 @@ function tapCard(id) {
       {showLog && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end justify-center z-20" onClick={() => setShowLog(false)}>
           <div className="panel rounded-t-2xl p-4 w-full max-w-md max-h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-2">
+            <div className="flex justify-between items-center mb-1">
               <h3 className="text-amber-300 font-bold text-sm">Journal de la manche</h3>
               <button onClick={() => setShowLog(false)} className="text-emerald-300 text-sm px-2">Fermer ✕</button>
             </div>
-            {[...g.log].reverse().map((l, i) => (
-              <div key={i} className="text-xs py-1 border-b border-emerald-900 text-emerald-100">{l}</div>
+            <p className="text-[10px] text-emerald-400 mb-2">⬇ Du plus récent au plus ancien</p>
+            {(g.log || []).map((l, i) => ({ l, n: i + 1 })).reverse().map((x, i) => (
+              <div key={x.n} className={`text-xs py-1 border-b border-emerald-900 flex gap-2 ${x.l.startsWith("—") ? "text-amber-300 font-bold" : i === 0 ? "text-amber-200 font-bold" : i < 4 ? "text-emerald-100" : "text-emerald-400"}`}>
+                <span className="shrink-0 text-emerald-600" style={{ fontVariantNumeric: "tabular-nums" }}>{x.n}.</span>
+                <span>{i === 0 && !x.l.startsWith("—") ? "🕐 " : ""}{x.l}</span>
+              </div>
             ))}
           </div>
         </div>
