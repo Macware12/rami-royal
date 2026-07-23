@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2174-H">
+<meta name="version" content="v2176-S">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -584,15 +584,15 @@ function MeldChip({ meld, ownerName, onClick, highlight, mid, small, onLongPress
   const lp = React.useRef({ t: null, fired: false, x: 0, y: 0 });
   const lpStart = (e) => {
     lp.current.fired = false;
-    lp.current.x = e.clientX; lp.current.y = e.clientY;
+    lp.current.x = e.clientX; lp.current.y = e.clientY; lp.current.pid = e.pointerId;
     if (!onLongPress) return;
     // Pas de setPointerCapture : il provoquerait un pointercancel parasite à chaque redraw de la table.
-    // La fermeture se fait sur le pointerup global, qui capte le vrai relâchement même sous l'overlay.
+    // On mémorise le pointerId : la fermeture n'acceptera que le relâchement de CE doigt (filtre les événements synthétiques).
     clearTimeout(lp.current.t);
     lp.current.t = setTimeout(() => {
       lp.current.fired = true;
       if (navigator.vibrate) navigator.vibrate(20);
-      onLongPress(meld);
+      onLongPress(meld, lp.current.pid);
     }, 300);
   };
   const lpMove = (e) => {
@@ -725,13 +725,25 @@ function App() {
   const [showQuit, setShowQuit] = useState(false);
   const [showTable, setShowTable] = useState(false);
   const [zoomMeld, setZoomMeld] = useState(null); // appui long sur une combinaison : zoom en éventail
-  // Fermeture de l'éventail sur un vrai relâchement de doigt (jamais sur un pointercancel de redraw)
+  const [zoomSticky, setZoomSticky] = useState(false); // le système a coupé le toucher : l'éventail reste, un tap ferme
+  const zoomPid = useRef(null); // pointerId du doigt qui a ouvert l'éventail
+  const openZoom = (meld, pid) => { zoomPid.current = pid; setZoomSticky(false); setZoomMeld(meld); };
+  // Relâchement du doigt d'origine → fermeture. Si iOS ANNULE le toucher (redraw, geste système…),
+  // on ne ferme PAS : l'éventail passe en mode collant et se fermera au prochain tap n'importe où.
   useEffect(() => {
     if (!zoomMeld) return;
-    const close = () => setZoomMeld(null);
-    window.addEventListener("pointerup", close);
-    return () => window.removeEventListener("pointerup", close);
-  }, [zoomMeld]);
+    const up = (e) => { if (e.pointerId === zoomPid.current) setZoomMeld(null); };
+    const cancel = (e) => { if (e.pointerId === zoomPid.current) setZoomSticky(true); };
+    const down = () => { if (zoomSticky) setZoomMeld(null); };
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", cancel);
+    window.addEventListener("pointerdown", down);
+    return () => {
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", cancel);
+      window.removeEventListener("pointerdown", down);
+    };
+  }, [zoomMeld, zoomSticky]);
   const [emotes, setEmotes] = useState({});
   const [showEmotes, setShowEmotes] = useState(false);
   const [toast, setToast] = useState(null);
@@ -1486,7 +1498,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2174-H</span>
+          <span className="opacity-60">v2176-S</span>
         </div>
       </div>
     );
@@ -1733,7 +1745,7 @@ function App() {
                   small={arr.reduce((s, x) => s + x.cards.length, 0) > 11}
                   highlight={(me.posed && selected.length === 1 && myTurn) || (Boolean(drag) && !drag.fromDiscard && me.posed && myTurn && g.phase === "play")}
                   onClick={() => { if (myTurn && selected.length === 1) { completeWith(m.id, selected[0]); setSelected([]); } }}
-                  onLongPress={setZoomMeld} onLongPressEnd={() => setZoomMeld(null)} />
+                  onLongPress={openZoom} />
               ))}
             </div>
           ))}
@@ -1923,7 +1935,7 @@ function App() {
 
       {/* Table en plein écran */}
       {zoomMeld && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-30 flex flex-col items-center justify-center p-4" onPointerDown={() => setZoomMeld(null)}>
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-30 flex flex-col items-center justify-center p-4">
           <div className="text-emerald-200 text-sm mb-4 font-bold">
             {(srv.players[zoomMeld.owner] || {}).avatar || "🙂"} {(srv.players[zoomMeld.owner] || {}).name || ""} · {zoomMeld.type === "tri" ? "Tri" : "Escalier"} · {zoomMeld.cards.length} carte{zoomMeld.cards.length > 1 ? "s" : ""}
           </div>
@@ -1944,7 +1956,7 @@ function App() {
               );
             })}
           </div>
-          <div className="text-[11px] text-emerald-400 mt-8">Relâche pour fermer</div>
+          <div className="text-[11px] text-emerald-400 mt-8">{zoomSticky ? "Touche n'importe où pour fermer" : "Relâche pour fermer"}</div>
         </div>
       )}
       {showTable && (
