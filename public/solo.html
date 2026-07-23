@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2171-C">
+<meta name="version" content="v2172-C">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -889,7 +889,9 @@ function MeldChip({ meld, ownerName, onClick, highlight, mid, small, onLongPress
   const lpMove = (e) => {
     if (!lp.current.fired && (Math.abs(e.clientX - lp.current.x) > 12 || Math.abs(e.clientY - lp.current.y) > 12)) clearTimeout(lp.current.t);
   };
-  const lpEnd = () => { clearTimeout(lp.current.t); if (lp.current.fired && onLongPressEnd) onLongPressEnd(); };
+  // On ne ferme PAS ici : un redraw (bot qui joue) peut émettre un pointercancel parasite.
+  // La fermeture se fait sur un vrai relâchement de doigt, capté globalement (voir effet zoomMeld).
+  const lpEnd = () => clearTimeout(lp.current.t);
   const lpClick = (e) => { if (lp.current.fired) { e.preventDefault(); return; } if (onClick) onClick(e); };
   return (
     <button onClick={lpClick} data-mid={mid}
@@ -926,6 +928,13 @@ function RamiRoyal() {
   const [showQuit, setShowQuit] = useState(false);
   const [showTable, setShowTable] = useState(false);
   const [zoomMeld, setZoomMeld] = useState(null); // appui long sur une combinaison : zoom en éventail
+  // Fermeture de l'éventail sur un vrai relâchement de doigt (jamais sur un pointercancel de redraw)
+  useEffect(() => {
+    if (!zoomMeld) return;
+    const close = () => setZoomMeld(null);
+    window.addEventListener("pointerup", close);
+    return () => window.removeEventListener("pointerup", close);
+  }, [zoomMeld]);
   const [succesBanner, setSuccesBanner] = useState(null);
   const [showSucces, setShowSucces] = useState(false);
   const [account, setAccount] = useState(readJSON("rami-account")); // {} = mode invité
