@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2185-M">
+<meta name="version" content="v2186-D">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -1080,6 +1080,34 @@ function RamiRoyal() {
     setSelected([]);
     setMsg("");
     showIntro(0, manchesFinales);
+    setScreen("game");
+  }
+
+  // MODE DÉMO (temporaire) : ouvre une partie avec des combinaisons déjà posées, pour tester le zoom éventail.
+  // À SUPPRIMER une fois la fonctionnalité validée (bouton sur l'accueil + cette fonction).
+  function startDemo() {
+    setTuto(false);
+    const mk = (rank, suit) => ({ id: ++CARD_ID, rank, suit, joker: false });
+    const jk = () => ({ id: ++CARD_ID, rank: 0, suit: "★", joker: true });
+    const name = playerName.trim() || "Démo";
+    const players = [
+      { name, isAI: false, avatar: myAvatar, color: "#fbbf24" },
+      { name: "Joueur 2", isAI: true, avatar: AVATARS_POOL.filter((a) => a !== myAvatar)[0], color: AVATAR_COLORS[0] },
+    ];
+    const base = newRound(players, 0, null, null, MANCHES);
+    const melds = [
+      { id: 1, type: "esc", owner: 0, cards: [mk(5, "♠"), mk(6, "♠"), mk(7, "♠"), mk(8, "♠"), mk(9, "♠"), mk(10, "♠")] },
+      { id: 2, type: "tri", owner: 0, cards: [mk(9, "♥"), mk(9, "♦"), mk(9, "♣")] },
+      { id: 3, type: "esc", owner: 1, cards: [mk(12, "♣"), mk(13, "♣"), mk(1, "♣"), mk(2, "♣")] },
+      { id: 4, type: "esc", owner: 1, cards: [mk(4, "♦"), jk(), mk(6, "♦"), mk(7, "♦")] },
+    ];
+    ensureAudio();
+    setG({
+      ...base, level, melds, phase: "play", turn: 0,
+      players: base.players.map((p, i) => ({ ...p, posed: true, hand: i === 0 ? [mk(11, "♥"), mk(3, "♦")] : p.hand })),
+    });
+    setSelected([]);
+    setMsg("🧪 Mode démo : maintiens sur une combinaison posée pour tester le zoom éventail.");
     setScreen("game");
   }
 
@@ -2398,6 +2426,10 @@ function tapCard(id) {
           </label>
           <button onClick={startGame} className="btn-gold font-bold py-3 rounded-xl text-base">
             Distribuer les cartes 🎴
+          </button>
+          {/* TEMPORAIRE — à supprimer après validation du zoom éventail */}
+          <button onClick={startDemo} className="btn-dark font-bold py-2 rounded-xl text-xs border border-amber-500/40">
+            🧪 Démo cartes posées (test)
           </button>
           <a href="/regles.html" className="btn-dark font-bold py-2 rounded-xl text-xs text-center block">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="text-[10px] text-emerald-500 text-center underline">Politique de confidentialité</a>
