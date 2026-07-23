@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2191-T">
+<meta name="version" content="v2192-T">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -1870,13 +1870,7 @@ function tapCard(id) {
         (tip ? "Et là, fonce : " + tip + " !" : "Mais celle-ci ne t'aide pas → « Passer ». On n'achète que ce qui sert le contrat !");
     }
     if (!myTurn) {
-      // pendant les tours adverses : la visite des outils
-      if (tutoFlags.drew && !tutoFlags.aide) return "🧰 Pendant que " + g.players[g.turn].name + " joue, découvre tes outils ! Touche 💡 Aide (il brille) : je classe ta main selon le contrat.";
-      if (tutoFlags.aide && !tutoFlags.scores) return "📊 Maintenant touche « Scores » en haut : les points de chacun. Chaque carte restante en main coûte : 2-9 → 5 pts · 10-R → 10 · As → 15 · Joker 🤡 → 20. Et le plus PETIT total gagne !";
-      if (tutoFlags.scores && !tutoFlags.regles) return "❓ Dernier outil : touche « ? » en haut — ton antisèche des règles, disponible à tout moment.";
-      return tutoFlags.esc
-        ? "👀 " + g.players[g.turn].name + " joue… Chaque carte jetée peut s'acheter, reste attentif !"
-        : "👀 " + g.players[g.turn].name + " joue… Observe la défausse : à ton tour, tu pourras y prendre la carte du dessus gratuitement si elle t'aide.";
+      return "👀 " + g.players[g.turn].name + " joue… Patiente. À ton tour, tu pourras piocher dans le tas, ou prendre la carte du dessus de la défausse si elle t'arrange.";
     }
     if (me.posed && !tutoFlags.complete) return "🧩 Nouvelle mission : COMPLÈTE une combinaison de la table ! Glisse une de tes cartes sur un tri ou un escalier posé (le tien ou celui d'un autre) si elle peut s'y ajouter. Chaque carte placée = une de moins en main !";
     if (me.posed) return "🏁 Dernière ligne droite : continue à compléter quand tu peux, et jette une carte à chaque tour. Main vide = victoire !";
@@ -1893,14 +1887,14 @@ function tapCard(id) {
       if (!tutoFlags.aide) return "💡 Étape 1 — touche le bouton « 💡 Aide » qui brille en bas de l'écran. Il range ta main et rapproche les cartes qui vont ensemble : bien plus facile pour repérer ton escalier !";
       const trio = findRuns(h)[0];
       if (trio) return "✨ Étape 2 — les cartes de ton escalier brillent (3 qui se suivent" + (trio.some((c) => c.joker) ? " + ton joker 🤡, qui fera la carte manquante" : "") + "). ① Touche-les une par une. ② Appuie sur le bouton vert « ✓ C'est un escalier ! » qui apparaît.";
-      return "🧩 Il te manque encore une carte pour ton escalier (3 qui se suivent, même couleur). 👉 Pioche dans le tas, puis jette une carte en trop. Dès que la bonne arrive, je te le dis !";
+      return "🧩 Il te manque encore une carte pour ton escalier (3 qui se suivent, même couleur). 👉 Termine ton tour : jette une carte inutile (glisse-la sur la défausse). Tu piocheras à nouveau au prochain tour — la bonne finira par venir !";
     }
     if (!tutoFlags.tri) {
       const byRank = {};
       h.filter((c) => !c.joker).forEach((c) => { (byRank[c.rank] = byRank[c.rank] || []).push(c); });
       const best = Object.values(byRank).sort((a, b) => b.length - a.length)[0];
       if (best && best.length >= 3) return "✨ Tes 3 cartes de MÊME valeur brillent. ① Touche-les une par une. ② Appuie sur le bouton vert « ✓ C'est un tri ! » qui apparaît.";
-      return "🔍 Objectif TRI : 3 cartes de MÊME valeur (le joker ne compte pas ici). Il t'en manque une. 👉 Pioche dans le tas, puis jette une carte en trop. Je te préviens dès qu'elle arrive !";
+      return "🔍 Objectif TRI : 3 cartes de MÊME valeur (le joker ne compte pas ici). Il t'en manque une. 👉 Termine ton tour : jette une carte inutile (glisse-la sur la défausse). Tu piocheras à nouveau au prochain tour !";
     }
     return "Ton contrat est prêt ! Le bouton doré t'attend à ton tour.";
   }
@@ -2659,11 +2653,10 @@ function tapCard(id) {
         <div className="flex items-center gap-1.5">
           <button onClick={() => { ensureAudio(); setMuted((m) => !m); }} className="btn-dark rounded-xl px-2 py-1.5 text-xs">{muted ? "🔇" : "🔊"}</button>
           <button onClick={() => { if (tuto) setTutoFlags((f) => ({ ...f, regles: true })); setShowHelp(true); }}
-            className="btn-dark rounded-xl px-2.5 py-1.5 text-xs font-bold"
-            style={tuto && tutoFlags.scores && !tutoFlags.regles ? { boxShadow: "0 0 16px 5px #22d3ee" } : undefined}>?</button>
+            className="btn-dark rounded-xl px-2.5 py-1.5 text-xs font-bold">?</button>
           <button onClick={() => { if (tuto) setTutoFlags((f) => ({ ...f, scores: true })); setShowScores(true); }}
             className="btn-dark rounded-xl px-2 py-1.5 text-[10px] font-bold"
-            style={tuto && tutoFlags.aide && !tutoFlags.scores ? { boxShadow: "0 0 16px 5px #22d3ee" } : undefined}>Scores</button>
+            >Scores</button>
           <button onClick={() => setShowLog(true)} className="btn-dark rounded-xl px-2 py-1.5 text-[10px] font-bold">Journal</button>
         </div>
       </div>
@@ -2737,7 +2730,7 @@ function tapCard(id) {
             <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
               {(() => {
                 // Révélation progressive : missions validées + la mission EN COURS (la 1re non cochée). Le reste reste caché.
-                const ordre = [["drew", "Piocher"], ["aide", "💡"], ["scores", "📊"], ["regles", "❓"], ["esc", "Escalier"], ["tri", "Tri"], ["posed", "Poser"], ["complete", "Compléter"]];
+                const ordre = [["drew", "Piocher"], ["esc", "Escalier"], ["tri", "Tri"], ["posed", "Poser"], ["complete", "Compléter"]];
                 // Affiche toutes les missions validées + la mission EN COURS (1re non cochée). Le futur reste caché.
                 const visibles = [];
                 let curDone = false;
