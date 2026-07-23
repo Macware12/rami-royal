@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2190-T">
+<meta name="version" content="v2191-T">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -1889,16 +1889,18 @@ function tapCard(id) {
       return "👉 Pioche d'abord ! (le tas — ou la défausse si la carte t'arrange)";
     }
     if (!tutoFlags.esc) {
+      // Étape 1 : faire d'abord découvrir le bouton Aide (il brille), tant qu'il n'a pas servi
+      if (!tutoFlags.aide) return "💡 Étape 1 — touche le bouton « 💡 Aide » qui brille en bas de l'écran. Il range ta main et rapproche les cartes qui vont ensemble : bien plus facile pour repérer ton escalier !";
       const trio = findRuns(h)[0];
-      if (trio) return "✨ La voilà ! Touche les 4 cartes qui brillent : 3 qui se suivent + ton joker 🤡 (il fera la carte suivante). Puis bouton vert !";
-      return "🧩 Tes 2 cartes qui brillent se suivent — objectif : 3 à la suite ! Pioche à chaque tour (la bonne finira par venir 😉) et jette une carte pour terminer (glisse-la sur la défausse, puis touche la défausse pour confirmer 🔒).";
+      if (trio) return "✨ Étape 2 — les cartes de ton escalier brillent (3 qui se suivent" + (trio.some((c) => c.joker) ? " + ton joker 🤡, qui fera la carte manquante" : "") + "). ① Touche-les une par une. ② Appuie sur le bouton vert « ✓ C'est un escalier ! » qui apparaît.";
+      return "🧩 Il te manque encore une carte pour ton escalier (3 qui se suivent, même couleur). 👉 Pioche dans le tas, puis jette une carte en trop. Dès que la bonne arrive, je te le dis !";
     }
     if (!tutoFlags.tri) {
       const byRank = {};
       h.filter((c) => !c.joker).forEach((c) => { (byRank[c.rank] = byRank[c.rank] || []).push(c); });
       const best = Object.values(byRank).sort((a, b) => b.length - a.length)[0];
-      if (best && best.length >= 3) return "✨ Tes 3 jumelles brillent : sélectionne-les et bouton vert !";
-      return "🔍 Mission tri : 3 cartes de MÊME valeur. Tes 2 jumelles brillent — la 3e viendra par la pioche, la défausse ou un achat ! (le joker ne compte pas ici). Jette une carte pour finir ton tour (n'oublie pas de confirmer sur la défausse 🔒).";
+      if (best && best.length >= 3) return "✨ Tes 3 cartes de MÊME valeur brillent. ① Touche-les une par une. ② Appuie sur le bouton vert « ✓ C'est un tri ! » qui apparaît.";
+      return "🔍 Objectif TRI : 3 cartes de MÊME valeur (le joker ne compte pas ici). Il t'en manque une. 👉 Pioche dans le tas, puis jette une carte en trop. Je te préviens dès qu'elle arrive !";
     }
     return "Ton contrat est prêt ! Le bouton doré t'attend à ton tour.";
   }
@@ -2736,8 +2738,13 @@ function tapCard(id) {
               {(() => {
                 // Révélation progressive : missions validées + la mission EN COURS (la 1re non cochée). Le reste reste caché.
                 const ordre = [["drew", "Piocher"], ["aide", "💡"], ["scores", "📊"], ["regles", "❓"], ["esc", "Escalier"], ["tri", "Tri"], ["posed", "Poser"], ["complete", "Compléter"]];
+                // Affiche toutes les missions validées + la mission EN COURS (1re non cochée). Le futur reste caché.
                 const visibles = [];
-                for (const it of ordre) { visibles.push(it); if (!tutoFlags[it[0]]) break; }
+                let curDone = false;
+                for (const it of ordre) {
+                  if (tutoFlags[it[0]]) visibles.push(it);
+                  else if (!curDone) { visibles.push(it); curDone = true; }
+                }
                 return visibles.map(([k, lbl]) => (
                   <span key={k} className={`text-[9px] px-1.5 py-0.5 rounded-full ${tutoFlags[k] ? "bg-emerald-400 text-emerald-950" : "bg-amber-300 text-emerald-950 animate-pulse"}`}>
                     {tutoFlags[k] ? "✓ " : "→ "}{lbl}
