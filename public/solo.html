@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2169-L">
+<meta name="version" content="v2170-E">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -199,6 +199,9 @@ const STYLE = (
     @keyframes jokerpulse { 0%,100% { box-shadow: 0 0 4px 1px rgba(167,139,250,.65); } 50% { box-shadow: 0 0 13px 5px rgba(167,139,250,.95); } }
     .joker-glow { animation: jokerpulse 1.5s ease-in-out infinite; border-radius: 8px; display: inline-flex; }
     @keyframes introPop { 0% { transform: scale(.6); opacity: 0; } 15% { transform: scale(1.06); opacity: 1; } 80% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.02); opacity: 0; } }
+    /* Déploiement en éventail : les cartes partent groupées au centre puis s'ouvrent en arc */
+    @keyframes fanDeploy { from { transform: rotate(0deg) translateY(30px) scale(.7); opacity: 0; } to { transform: rotate(var(--fan-rot)) translateY(var(--fan-y)) scale(1); opacity: 1; } }
+    .fan-card { animation: fanDeploy .45s cubic-bezier(.34,1.56,.64,1) backwards; transform-origin: bottom center; }
     .fit-screen { height: 100vh; height: 100dvh; overflow-y: auto; overflow-x: hidden; }
     @media (min-width: 900px) {
       .fit-screen { max-width: 860px; margin: 0 auto; border-left: 1px solid #14705244; border-right: 1px solid #14705244; box-shadow: 0 0 60px rgba(0,0,0,.5); }
@@ -2838,16 +2841,22 @@ function tapCard(id) {
           <div className="text-emerald-200 text-sm mb-4 font-bold">
             {(g.players[zoomMeld.owner] || {}).avatar || "🙂"} {(g.players[zoomMeld.owner] || {}).name || ""} · {zoomMeld.type === "tri" ? "Tri" : "Escalier"} · {zoomMeld.cards.length} carte{zoomMeld.cards.length > 1 ? "s" : ""}
           </div>
-          <div className="flex justify-center items-end" style={{ maxWidth: "100vw", overflowX: "auto", padding: "12px 20px" }}>
-            {zoomMeld.cards.map((c, i, arr) => (
-              <div key={c.id} style={{
-                marginLeft: i > 0 ? -14 : 0,
-                transform: `rotate(${(i - (arr.length - 1) / 2) * 5}deg) translateY(${Math.abs(i - (arr.length - 1) / 2) * 3}px)`,
-                transformOrigin: "bottom center",
-              }}>
-                <Card card={c} />
-              </div>
-            ))}
+          <div className="flex justify-center items-end" style={{ maxWidth: "100vw", overflowX: "auto", padding: "40px 20px 20px" }}>
+            {zoomMeld.cards.map((c, i, arr) => {
+              const n = arr.length, mid = (n - 1) / 2;
+              const step = Math.min(14, 46 / Math.max(1, n)); // écart angulaire : large éventail, resserré si beaucoup de cartes
+              const rot = (i - mid) * step;
+              const lift = Math.pow(Math.abs(i - mid), 2) * -2.2; // creux au centre, bords relevés → arc
+              return (
+                <div key={c.id} className="fan-card" style={{
+                  marginLeft: i > 0 ? -8 : 0,
+                  "--fan-rot": rot + "deg", "--fan-y": lift + "px",
+                  animationDelay: (i * 0.045) + "s",
+                }}>
+                  <Card card={c} />
+                </div>
+              );
+            })}
           </div>
           <div className="text-[11px] text-emerald-400 mt-5">Touche n'importe où pour fermer</div>
         </div>
