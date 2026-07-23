@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2187-F">
+<meta name="version" content="v2188-F">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -1490,7 +1490,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2187-F</span>
+          <span className="opacity-60">v2188-F</span>
         </div>
       </div>
     );
@@ -1931,15 +1931,20 @@ function App() {
           <div className="text-emerald-200 text-sm mb-4 font-bold">
             {(srv.players[zoomMeld.owner] || {}).avatar || "🙂"} {(srv.players[zoomMeld.owner] || {}).name || ""} · {zoomMeld.type === "tri" ? "Tri" : "Escalier"} · {zoomMeld.cards.length} carte{zoomMeld.cards.length > 1 ? "s" : ""}
           </div>
-          <div className="flex justify-center items-center" style={{ minHeight: 260, transform: "scale(1.4)" }}>
+          <div className="flex justify-center items-center" style={{ minHeight: 260,
+            // Moins de cartes → grand ; beaucoup de cartes → réduit pour tenir à l'écran
+            transform: "scale(" + (zoomMeld.cards.length <= 5 ? 1.45 : zoomMeld.cards.length <= 8 ? 1.2 : zoomMeld.cards.length <= 11 ? 1 : 0.85) + ")" }}>
             {zoomMeld.cards.map((c, i, arr) => {
               const n = arr.length, mid = (n - 1) / 2;
-              const step = Math.min(11, 84 / Math.max(1, n - 1 || 1)); // inclinaison entre cartes voisines
+              const cw = UI_PREFS.big ? 50 : 40;
+              const step = Math.min(9, 56 / Math.max(1, n - 1 || 1));      // écart angulaire : plafonné, plus doux quand il y a beaucoup de cartes
               const rot = (i - mid) * step;
+              const pivot = 210 + n * 9;                                    // pivot plus bas quand il y a plus de cartes → arc plus plat
+              const overlap = -(cw * (0.32 + Math.min(0.28, n * 0.02)));    // chevauchement croissant pour resserrer un long escalier
               return (
                 <div key={c.id} className="fan-card" style={{
-                  marginLeft: i > 0 ? -18 : 0,           // chevauchement modéré à la base
-                  transformOrigin: "50% 240%",           // pivot ~2,4 hauteurs de carte plus bas → arc cambré et visible
+                  marginLeft: i > 0 ? overlap : 0,
+                  transformOrigin: "50% " + pivot + "%",
                   transform: "rotate(" + rot + "deg)",   // état de repos = déployé (aucun redraw ne peut ré-empiler)
                   "--fan-rot": rot + "deg",
                   animationDelay: (Math.abs(i - mid) * 0.04) + "s", // s'ouvre du centre vers les bords
