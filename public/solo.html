@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2179-D">
+<meta name="version" content="v2180-G">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -905,6 +905,9 @@ function RamiRoyal() {
   const [showQuit, setShowQuit] = useState(false);
   const [showTable, setShowTable] = useState(false);
   const [zoomMeld, setZoomMeld] = useState(null); // tap sur une combinaison : zoom en éventail (tap ailleurs pour fermer)
+  const zoomAt = useRef(0); // instant d'ouverture : ignore le « ghost click » qui suit le tap d'ouverture
+  const openZoom = (m) => { zoomAt.current = Date.now(); setZoomMeld(m); };
+  const closeZoom = () => { if (Date.now() - zoomAt.current > 350) setZoomMeld(null); };
   const [succesBanner, setSuccesBanner] = useState(null);
   const [showSucces, setShowSucces] = useState(false);
   const [account, setAccount] = useState(readJSON("rami-account")); // {} = mode invité
@@ -2615,7 +2618,7 @@ function tapCard(id) {
                 <MeldChip key={m.id} mid={m.id} meld={m}
                   small={arr.reduce((s, x) => s + x.cards.length, 0) > 11}
                   highlight={(me.posed && selected.length === 1 && myTurn) || (Boolean(drag) && drag.origin !== "discard" && me.posed && myTurn && g.phase === "play")}
-                  onClick={() => { if (myTurn && selected.length === 1) completeMeld(m.id); else setZoomMeld(m); }} />
+                  onClick={() => { if (myTurn && selected.length === 1) completeMeld(m.id); else openZoom(m); }} />
               ))}
             </div>
           ))}
@@ -2823,7 +2826,7 @@ function tapCard(id) {
 
       {/* Table en plein écran */}
       {zoomMeld && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-30 flex flex-col items-center justify-center p-4" onClick={() => setZoomMeld(null)}>
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-30 flex flex-col items-center justify-center p-4" onClick={closeZoom}>
           <div className="text-emerald-200 text-sm mb-4 font-bold">
             {(g.players[zoomMeld.owner] || {}).avatar || "🙂"} {(g.players[zoomMeld.owner] || {}).name || ""} · {zoomMeld.type === "tri" ? "Tri" : "Escalier"} · {zoomMeld.cards.length} carte{zoomMeld.cards.length > 1 ? "s" : ""}
           </div>
