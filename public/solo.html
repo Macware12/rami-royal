@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2172-C">
+<meta name="version" content="v2174-H">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -878,7 +878,8 @@ function MeldChip({ meld, ownerName, onClick, highlight, mid, small, onLongPress
     lp.current.fired = false;
     lp.current.x = e.clientX; lp.current.y = e.clientY;
     if (!onLongPress) return;
-    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
+    // Pas de setPointerCapture : il provoquerait un pointercancel parasite à chaque redraw de la table.
+    // La fermeture se fait sur le pointerup global, qui capte le vrai relâchement même sous l'overlay.
     clearTimeout(lp.current.t);
     lp.current.t = setTimeout(() => {
       lp.current.fired = true;
@@ -2231,12 +2232,12 @@ function tapCard(id) {
   }
 
   useEffect(() => {
-    if (!g || screen !== "game" || g.roundOver || g.buyWindow) return;
+    if (!g || screen !== "game" || g.roundOver || g.buyWindow || zoomMeld) return; // pause l'IA pendant l'inspection d'une combinaison
     if (g.players[g.turn].isAI) {
       aiTimer.current = setTimeout(() => setG((s) => (s && !s.roundOver && !s.buyWindow && s.players[s.turn].isAI ? aiTakeTurn(s) : s)), tuto ? 2600 : 1300);
       return () => clearTimeout(aiTimer.current);
     }
-  }, [g, screen]);
+  }, [g, screen, zoomMeld]);
 
   // ---- Compte joueur ----
   function statsLocalesAFusionner() {
@@ -2851,24 +2852,24 @@ function tapCard(id) {
           <div className="text-emerald-200 text-sm mb-4 font-bold">
             {(g.players[zoomMeld.owner] || {}).avatar || "🙂"} {(g.players[zoomMeld.owner] || {}).name || ""} · {zoomMeld.type === "tri" ? "Tri" : "Escalier"} · {zoomMeld.cards.length} carte{zoomMeld.cards.length > 1 ? "s" : ""}
           </div>
-          <div className="relative flex justify-center items-end" style={{ minHeight: 300, paddingTop: 90 }}>
+          <div className="flex justify-center items-center" style={{ minHeight: 260, transform: "scale(1.4)" }}>
             {zoomMeld.cards.map((c, i, arr) => {
               const n = arr.length, mid = (n - 1) / 2;
-              const step = Math.min(13, 96 / Math.max(1, n - 1 || 1)); // écart angulaire, resserré si beaucoup de cartes
+              const step = Math.min(11, 84 / Math.max(1, n - 1 || 1)); // inclinaison entre cartes voisines
               const rot = (i - mid) * step;
               return (
                 <div key={c.id} className="fan-card" style={{
-                  marginLeft: i > 0 ? -26 : 0,           // fort chevauchement à la base : les cartes pivotent d'un point commun
-                  transformOrigin: "50% 320px",          // pivot bas commun → ouverture circulaire
+                  marginLeft: i > 0 ? -18 : 0,           // chevauchement modéré à la base
+                  transformOrigin: "50% 240%",           // pivot ~2,4 hauteurs de carte plus bas → arc cambré et visible
                   "--fan-rot": rot + "deg",
-                  animationDelay: (Math.abs(i - mid) * 0.04) + "s", // du centre vers les bords
+                  animationDelay: (Math.abs(i - mid) * 0.04) + "s", // s'ouvre du centre vers les bords
                 }}>
                   <Card card={c} />
                 </div>
               );
             })}
           </div>
-          <div className="text-[11px] text-emerald-400 mt-5">Relâche pour fermer</div>
+          <div className="text-[11px] text-emerald-400 mt-8">Relâche pour fermer</div>
         </div>
       )}
       {showTable && (
