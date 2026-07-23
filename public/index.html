@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2177-T">
+<meta name="version" content="v2178-T">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -578,34 +578,10 @@ function StackCard({ card, overlap, small }) {
   );
 }
 
-function MeldChip({ meld, ownerName, onClick, highlight, mid, small, onLongPress, onLongPressEnd }) {
-  // Maintien (300 ms) : ouvre l'éventail. Fermeture sur le vrai décollement du doigt (touchend),
-  // capté globalement — les événements d'annulation (touchcancel/pointercancel) sont IGNORÉS.
-  const lp = React.useRef({ t: null, fired: false, x: 0, y: 0 });
-  const startHold = (x, y, isTouch) => {
-    lp.current.fired = false; lp.current.x = x; lp.current.y = y;
-    if (!onLongPress) return;
-    clearTimeout(lp.current.t);
-    lp.current.t = setTimeout(() => {
-      lp.current.fired = true;
-      if (navigator.vibrate) navigator.vibrate(20);
-      onLongPress(meld, isTouch);
-    }, 300);
-  };
-  const moveHold = (x, y) => {
-    if (!lp.current.fired && (Math.abs(x - lp.current.x) > 12 || Math.abs(y - lp.current.y) > 12)) clearTimeout(lp.current.t);
-  };
-  const lpEnd = () => clearTimeout(lp.current.t);
-  const lpClick = (e) => { if (lp.current.fired) { e.preventDefault(); return; } if (onClick) onClick(e); };
+function MeldChip({ meld, ownerName, onClick, highlight, mid, small }) {
+  // Simple clic (fiable partout, iOS compris) : la logique tap-pour-zoomer est gérée par le parent via onClick.
   return (
-    <button onClick={lpClick} data-mid={mid}
-      onTouchStart={(e) => { const t = e.touches[0]; startHold(t.clientX, t.clientY, true); }}
-      onTouchMove={(e) => { const t = e.touches[0]; moveHold(t.clientX, t.clientY); }}
-      onTouchEnd={lpEnd}
-      onPointerDown={(e) => { if (e.pointerType !== "touch") startHold(e.clientX, e.clientY, false); }}
-      onPointerMove={(e) => { if (e.pointerType !== "touch") moveHold(e.clientX, e.clientY); }}
-      onPointerUp={(e) => { if (e.pointerType !== "touch") lpEnd(); }}
-      onContextMenu={(e) => e.preventDefault()}
+    <button onClick={onClick} data-mid={mid}
       className={`shrink-0 flex items-center rounded-xl px-1 py-1 panel transition-all ${highlight ? "pulse-gold" : ""}`}
       style={{ touchAction: "none", ...(highlight ? { borderColor: "#fbbf24" } : {}) }}>
       <span className="text-[8px] uppercase text-emerald-400 font-bold mr-0.5" style={{ writingMode: "vertical-rl", textOrientation: "upright", letterSpacing: -2 }}>
@@ -724,25 +700,7 @@ function App() {
   const [showLog, setShowLog] = useState(false);
   const [showQuit, setShowQuit] = useState(false);
   const [showTable, setShowTable] = useState(false);
-  const [zoomMeld, setZoomMeld] = useState(null); // appui long sur une combinaison : zoom en éventail
-  const zoomTouch = useRef(false); // ouvert au doigt (touch) ou à la souris ?
-  const openZoom = (meld, isTouch) => { zoomTouch.current = isTouch; setZoomMeld(meld); };
-  // Fermeture au VRAI décollement : touchend (tactile) ou pointerup souris. Aucun événement d'annulation
-  // n'est écouté → un touchcancel/pointercancel de iOS en plein maintien ne peut plus fermer l'éventail.
-  useEffect(() => {
-    if (!zoomMeld) return;
-    const close = () => setZoomMeld(null);
-    if (zoomTouch.current) {
-      let armed = false;
-      const arm = setTimeout(() => { armed = true; }, 400);
-      const onStart = () => { if (armed) close(); };
-      window.addEventListener("touchend", close);
-      window.addEventListener("touchstart", onStart);
-      return () => { clearTimeout(arm); window.removeEventListener("touchend", close); window.removeEventListener("touchstart", onStart); };
-    }
-    window.addEventListener("pointerup", close);
-    return () => window.removeEventListener("pointerup", close);
-  }, [zoomMeld]);
+  const [zoomMeld, setZoomMeld] = useState(null); // tap sur une combinaison : zoom en éventail (tap ailleurs pour fermer)
   const [emotes, setEmotes] = useState({});
   const [showEmotes, setShowEmotes] = useState(false);
   const [toast, setToast] = useState(null);
@@ -1497,7 +1455,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2177-T</span>
+          <span className="opacity-60">v2178-T</span>
         </div>
       </div>
     );
@@ -1743,8 +1701,7 @@ function App() {
                 <MeldChip key={m.id} mid={m.id} meld={m}
                   small={arr.reduce((s, x) => s + x.cards.length, 0) > 11}
                   highlight={(me.posed && selected.length === 1 && myTurn) || (Boolean(drag) && !drag.fromDiscard && me.posed && myTurn && g.phase === "play")}
-                  onClick={() => { if (myTurn && selected.length === 1) { completeWith(m.id, selected[0]); setSelected([]); } }}
-                  onLongPress={openZoom} />
+                  onClick={() => { if (myTurn && selected.length === 1) { completeWith(m.id, selected[0]); setSelected([]); } else setZoomMeld(m); } } />
               ))}
             </div>
           ))}
@@ -1934,7 +1891,7 @@ function App() {
 
       {/* Table en plein écran */}
       {zoomMeld && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-30 flex flex-col items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-30 flex flex-col items-center justify-center p-4" onClick={() => setZoomMeld(null)}>
           <div className="text-emerald-200 text-sm mb-4 font-bold">
             {(srv.players[zoomMeld.owner] || {}).avatar || "🙂"} {(srv.players[zoomMeld.owner] || {}).name || ""} · {zoomMeld.type === "tri" ? "Tri" : "Escalier"} · {zoomMeld.cards.length} carte{zoomMeld.cards.length > 1 ? "s" : ""}
           </div>
@@ -1955,7 +1912,7 @@ function App() {
               );
             })}
           </div>
-          <div className="text-[11px] text-emerald-400 mt-8">Relâche pour fermer</div>
+          <div className="text-[11px] text-emerald-400 mt-8">Touche n'importe où pour fermer</div>
         </div>
       )}
       {showTable && (
