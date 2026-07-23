@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2176-S">
+<meta name="version" content="v2177-T">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -871,32 +871,32 @@ function StackCard({ card, overlap, small }) {
 }
 
 function MeldChip({ meld, ownerName, onClick, highlight, mid, small, onLongPress, onLongPressEnd }) {
-  // Maintien (300 ms) : ouvre l'éventail tant que le doigt reste appuyé ; le relâchement ferme.
-  // Capture du pointeur pour continuer à recevoir le relâchement même quand l'éventail s'affiche par-dessus.
+  // Maintien (300 ms) : ouvre l'éventail. Fermeture sur le vrai décollement du doigt (touchend),
+  // capté globalement — les événements d'annulation (touchcancel/pointercancel) sont IGNORÉS.
   const lp = React.useRef({ t: null, fired: false, x: 0, y: 0 });
-  const lpStart = (e) => {
-    lp.current.fired = false;
-    lp.current.x = e.clientX; lp.current.y = e.clientY; lp.current.pid = e.pointerId;
+  const startHold = (x, y, isTouch) => {
+    lp.current.fired = false; lp.current.x = x; lp.current.y = y;
     if (!onLongPress) return;
-    // Pas de setPointerCapture : il provoquerait un pointercancel parasite à chaque redraw de la table.
-    // On mémorise le pointerId : la fermeture n'acceptera que le relâchement de CE doigt (filtre les événements synthétiques).
     clearTimeout(lp.current.t);
     lp.current.t = setTimeout(() => {
       lp.current.fired = true;
       if (navigator.vibrate) navigator.vibrate(20);
-      onLongPress(meld, lp.current.pid);
+      onLongPress(meld, isTouch);
     }, 300);
   };
-  const lpMove = (e) => {
-    if (!lp.current.fired && (Math.abs(e.clientX - lp.current.x) > 12 || Math.abs(e.clientY - lp.current.y) > 12)) clearTimeout(lp.current.t);
+  const moveHold = (x, y) => {
+    if (!lp.current.fired && (Math.abs(x - lp.current.x) > 12 || Math.abs(y - lp.current.y) > 12)) clearTimeout(lp.current.t);
   };
-  // On ne ferme PAS ici : un redraw (bot qui joue) peut émettre un pointercancel parasite.
-  // La fermeture se fait sur un vrai relâchement de doigt, capté globalement (voir effet zoomMeld).
   const lpEnd = () => clearTimeout(lp.current.t);
   const lpClick = (e) => { if (lp.current.fired) { e.preventDefault(); return; } if (onClick) onClick(e); };
   return (
     <button onClick={lpClick} data-mid={mid}
-      onPointerDown={lpStart} onPointerMove={lpMove} onPointerUp={lpEnd} onPointerCancel={lpEnd}
+      onTouchStart={(e) => { const t = e.touches[0]; startHold(t.clientX, t.clientY, true); }}
+      onTouchMove={(e) => { const t = e.touches[0]; moveHold(t.clientX, t.clientY); }}
+      onTouchEnd={lpEnd}
+      onPointerDown={(e) => { if (e.pointerType !== "touch") startHold(e.clientX, e.clientY, false); }}
+      onPointerMove={(e) => { if (e.pointerType !== "touch") moveHold(e.clientX, e.clientY); }}
+      onPointerUp={(e) => { if (e.pointerType !== "touch") lpEnd(); }}
       onContextMenu={(e) => e.preventDefault()}
       className={`shrink-0 flex items-center rounded-xl px-1 py-1 panel transition-all ${highlight ? "pulse-gold" : ""}`}
       style={{ touchAction: "none", ...(highlight ? { borderColor: "#fbbf24" } : {}) }}>
@@ -929,25 +929,25 @@ function RamiRoyal() {
   const [showQuit, setShowQuit] = useState(false);
   const [showTable, setShowTable] = useState(false);
   const [zoomMeld, setZoomMeld] = useState(null); // appui long sur une combinaison : zoom en éventail
-  const [zoomSticky, setZoomSticky] = useState(false); // le système a coupé le toucher : l'éventail reste, un tap ferme
-  const zoomPid = useRef(null); // pointerId du doigt qui a ouvert l'éventail
-  const openZoom = (meld, pid) => { zoomPid.current = pid; setZoomSticky(false); setZoomMeld(meld); };
-  // Relâchement du doigt d'origine → fermeture. Si iOS ANNULE le toucher (redraw, geste système…),
-  // on ne ferme PAS : l'éventail passe en mode collant et se fermera au prochain tap n'importe où.
+  const zoomTouch = useRef(false); // ouvert au doigt (touch) ou à la souris ?
+  const openZoom = (meld, isTouch) => { zoomTouch.current = isTouch; setZoomMeld(meld); };
+  // Fermeture au VRAI décollement : touchend (tactile) ou pointerup souris. Aucun événement d'annulation
+  // n'est écouté → un touchcancel/pointercancel de iOS en plein maintien ne peut plus fermer l'éventail.
   useEffect(() => {
     if (!zoomMeld) return;
-    const up = (e) => { if (e.pointerId === zoomPid.current) setZoomMeld(null); };
-    const cancel = (e) => { if (e.pointerId === zoomPid.current) setZoomSticky(true); };
-    const down = () => { if (zoomSticky) setZoomMeld(null); };
-    window.addEventListener("pointerup", up);
-    window.addEventListener("pointercancel", cancel);
-    window.addEventListener("pointerdown", down);
-    return () => {
-      window.removeEventListener("pointerup", up);
-      window.removeEventListener("pointercancel", cancel);
-      window.removeEventListener("pointerdown", down);
-    };
-  }, [zoomMeld, zoomSticky]);
+    const close = () => setZoomMeld(null);
+    if (zoomTouch.current) {
+      // filet : si le doigt a été « oublié » (toucher annulé), un nouveau tap ferme
+      let armed = false;
+      const arm = setTimeout(() => { armed = true; }, 400);
+      const onStart = () => { if (armed) close(); };
+      window.addEventListener("touchend", close);
+      window.addEventListener("touchstart", onStart);
+      return () => { clearTimeout(arm); window.removeEventListener("touchend", close); window.removeEventListener("touchstart", onStart); };
+    }
+    window.addEventListener("pointerup", close);
+    return () => window.removeEventListener("pointerup", close);
+  }, [zoomMeld]);
   const [succesBanner, setSuccesBanner] = useState(null);
   const [showSucces, setShowSucces] = useState(false);
   const [account, setAccount] = useState(readJSON("rami-account")); // {} = mode invité
@@ -2881,7 +2881,7 @@ function tapCard(id) {
               );
             })}
           </div>
-          <div className="text-[11px] text-emerald-400 mt-8">{zoomSticky ? "Touche n'importe où pour fermer" : "Relâche pour fermer"}</div>
+          <div className="text-[11px] text-emerald-400 mt-8">Relâche pour fermer</div>
         </div>
       )}
       {showTable && (
