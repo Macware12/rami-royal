@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2184-Z">
+<meta name="version" content="v2185-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -871,10 +871,28 @@ function StackCard({ card, overlap, small }) {
   );
 }
 
-function MeldChip({ meld, ownerName, onClick, highlight, mid, small }) {
-  // Simple clic (fiable partout, iOS compris) : la logique tap-pour-zoomer est gérée par le parent via onClick.
+function MeldChip({ meld, ownerName, onClick, highlight, mid, small, onLongPress }) {
+  // Maintien (250 ms) → ouvre l'éventail ; le relâchement le ferme (géré par le parent via window).
+  // Le clic court garde son rôle (compléter) ; s'il y a eu maintien, on annule le clic.
+  const lp = React.useRef({ t: null, fired: false, x: 0, y: 0 });
+  const start = (x, y) => {
+    lp.current.fired = false; lp.current.x = x; lp.current.y = y;
+    if (!onLongPress) return;
+    clearTimeout(lp.current.t);
+    lp.current.t = setTimeout(() => { lp.current.fired = true; if (navigator.vibrate) navigator.vibrate(20); onLongPress(meld); }, 250);
+  };
+  const move = (x, y) => { if (!lp.current.fired && (Math.abs(x - lp.current.x) > 12 || Math.abs(y - lp.current.y) > 12)) clearTimeout(lp.current.t); };
+  const end = () => clearTimeout(lp.current.t);
+  const click = (e) => { if (lp.current.fired) { e.preventDefault(); lp.current.fired = false; return; } if (onClick) onClick(e); };
   return (
-    <button onClick={onClick} data-mid={mid}
+    <button onClick={click} data-mid={mid}
+      onTouchStart={(e) => { const t = e.touches[0]; start(t.clientX, t.clientY); }}
+      onTouchMove={(e) => { const t = e.touches[0]; move(t.clientX, t.clientY); }}
+      onTouchEnd={end}
+      onPointerDown={(e) => { if (e.pointerType !== "touch") start(e.clientX, e.clientY); }}
+      onPointerMove={(e) => { if (e.pointerType !== "touch") move(e.clientX, e.clientY); }}
+      onPointerUp={(e) => { if (e.pointerType !== "touch") end(); }}
+      onContextMenu={(e) => e.preventDefault()}
       className={`shrink-0 flex items-center rounded-xl px-1 py-1 panel transition-all ${highlight ? "pulse-gold" : ""}`}
       style={{ touchAction: "none", ...(highlight ? { borderColor: "#fbbf24" } : {}) }}>
       <span className="text-[8px] uppercase text-emerald-400 font-bold mr-0.5" style={{ writingMode: "vertical-rl", textOrientation: "upright", letterSpacing: -2 }}>
@@ -905,10 +923,15 @@ function RamiRoyal() {
   const [showHelp, setShowHelp] = useState(false);
   const [showQuit, setShowQuit] = useState(false);
   const [showTable, setShowTable] = useState(false);
-  const [zoomMeld, setZoomMeld] = useState(null); // tap sur une combinaison : zoom en éventail (tap ailleurs pour fermer)
-  const zoomAt = useRef(0); // instant d'ouverture : ignore le « ghost click » qui suit le tap d'ouverture
-  const openZoom = (m) => { zoomAt.current = Date.now(); setZoomMeld(m); };
-  const closeZoom = () => { if (Date.now() - zoomAt.current > 350) setZoomMeld(null); };
+  const [zoomMeld, setZoomMeld] = useState(null); // maintien sur une combinaison : éventail affiché tant que le doigt reste
+  // Fermeture sur le vrai relâchement (touchend/pointerup) — sert aussi de filet si le doigt est « oublié »
+  useEffect(() => {
+    if (!zoomMeld) return;
+    const close = () => setZoomMeld(null);
+    window.addEventListener("touchend", close);
+    window.addEventListener("pointerup", close);
+    return () => { window.removeEventListener("touchend", close); window.removeEventListener("pointerup", close); };
+  }, [zoomMeld]);
   const [succesBanner, setSuccesBanner] = useState(null);
   const [showSucces, setShowSucces] = useState(false);
   const [account, setAccount] = useState(readJSON("rami-account")); // {} = mode invité
@@ -2619,7 +2642,8 @@ function tapCard(id) {
                 <MeldChip key={m.id} mid={m.id} meld={m}
                   small={arr.reduce((s, x) => s + x.cards.length, 0) > 11}
                   highlight={(me.posed && selected.length === 1 && myTurn) || (Boolean(drag) && drag.origin !== "discard" && me.posed && myTurn && g.phase === "play")}
-                  onClick={() => { if (myTurn && selected.length === 1) completeMeld(m.id); else openZoom(m); }} />
+                  onClick={() => { if (myTurn && selected.length === 1) completeMeld(m.id); }}
+                  onLongPress={setZoomMeld} />
               ))}
             </div>
           ))}
@@ -2827,9 +2851,7 @@ function tapCard(id) {
 
       {/* Table en plein écran */}
       {zoomMeld && (
-        <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-30 flex flex-col items-center justify-center p-4" onClick={closeZoom}>
-          <button onClick={() => setZoomMeld(null)}
-            className="absolute top-4 right-4 z-10 btn-dark rounded-full w-10 h-10 text-lg font-bold flex items-center justify-center">✕</button>
+        <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-30 flex flex-col items-center justify-center p-4">
           <div className="text-emerald-200 text-sm mb-4 font-bold">
             {(g.players[zoomMeld.owner] || {}).avatar || "🙂"} {(g.players[zoomMeld.owner] || {}).name || ""} · {zoomMeld.type === "tri" ? "Tri" : "Escalier"} · {zoomMeld.cards.length} carte{zoomMeld.cards.length > 1 ? "s" : ""}
           </div>
@@ -2851,7 +2873,7 @@ function tapCard(id) {
               );
             })}
           </div>
-          <div className="text-[11px] text-emerald-400 mt-8">Touche n'importe où pour fermer</div>
+          <div className="text-[11px] text-emerald-400 mt-8">Relâche pour fermer</div>
         </div>
       )}
       {showTable && (
