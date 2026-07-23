@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2180-G">
+<meta name="version" content="v2181-B">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -2826,7 +2826,9 @@ function tapCard(id) {
 
       {/* Table en plein écran */}
       {zoomMeld && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-30 flex flex-col items-center justify-center p-4" onClick={closeZoom}>
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-30 flex flex-col items-center justify-center p-4">
+          <button onClick={() => setZoomMeld(null)}
+            className="absolute top-5 right-5 btn-dark rounded-full w-10 h-10 text-lg font-bold flex items-center justify-center">✕</button>
           <div className="text-emerald-200 text-sm mb-4 font-bold">
             {(g.players[zoomMeld.owner] || {}).avatar || "🙂"} {(g.players[zoomMeld.owner] || {}).name || ""} · {zoomMeld.type === "tri" ? "Tri" : "Escalier"} · {zoomMeld.cards.length} carte{zoomMeld.cards.length > 1 ? "s" : ""}
           </div>
@@ -2847,7 +2849,7 @@ function tapCard(id) {
               );
             })}
           </div>
-          <div className="text-[11px] text-emerald-400 mt-8">Touche n'importe où pour fermer</div>
+          <button onClick={() => setZoomMeld(null)} className="btn-gold font-bold py-2 px-8 rounded-xl mt-8">Fermer</button>
         </div>
       )}
       {showTable && (
