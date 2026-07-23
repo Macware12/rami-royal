@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2188-F">
+<meta name="version" content="v2189-T">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -910,6 +910,7 @@ function RamiRoyal() {
   const [screen, setScreen] = useState("setup");
   const [nbAI, setNbAI] = useState(2);
   const [tuto, setTuto] = useState(false);
+  const [introSlide, setIntroSlide] = useState(0); // écran d'apprentissage illustré avant le tutoriel
   const [tutoFlags, setTutoFlags] = useState({ drew: false, esc: false, tri: false, posed: false, complete: false, aide: false, scores: false, regles: false });
   const [tutoParty, setTutoParty] = useState(0); // confettis de mission
   const [playerName, setPlayerName] = useState("");
@@ -1227,7 +1228,8 @@ function RamiRoyal() {
   useEffect(() => {
     if (window.location.search.indexOf("tuto=1") !== -1) {
       window.history.replaceState(null, "", window.location.pathname);
-      setTimeout(() => startTuto(), 100);
+      setIntroSlide(0);
+      setScreen("tutoIntro"); // on explique les bases AVANT de lancer la partie guidée
     }
     setHasSave(Boolean(store.get("rami-save")));
     const savedName = store.get("rami-name"); if (savedName) setPlayerName(savedName);
@@ -2334,6 +2336,73 @@ function tapCard(id) {
   };
 
   // ---------- Écran d'accueil ----------
+  if (screen === "tutoIntro") {
+    const C = (rank, suit, joker) => ({ id: "i" + rank + suit + Math.random(), rank, suit, joker: !!joker });
+    const slides = [
+      {
+        emoji: "🎴", titre: "Bienvenue !",
+        texte: "Le but est simple : être le PREMIER à se débarrasser de toutes ses cartes. Pour ça, on les regroupe en combinaisons. On va voir ça ensemble, pas à pas.",
+        cartes: null,
+      },
+      {
+        emoji: "👯", titre: "Le TRI", accent: "3 cartes de MÊME valeur",
+        texte: "Trois cartes (ou plus) qui portent le même chiffre — peu importe la couleur. Ici, trois 7.",
+        cartes: [C(7, "♠"), C(7, "♥"), C(7, "♦")],
+      },
+      {
+        emoji: "🪜", titre: "L'ESCALIER", accent: "3 cartes QUI SE SUIVENT",
+        texte: "Trois cartes (ou plus) qui se suivent, TOUTES de la même couleur. Ici, 5-6-7 de pique.",
+        cartes: [C(5, "♠"), C(6, "♠"), C(7, "♠")],
+      },
+      {
+        emoji: "🤡", titre: "Le JOKER", accent: "remplace n'importe quelle carte",
+        texte: "Le joker prend la place d'une carte qui te manque. Ici, il joue le rôle du 6 pour compléter l'escalier.",
+        cartes: [C(5, "♠"), C(0, "★", true), C(7, "♠")],
+      },
+      {
+        emoji: "🎯", titre: "Le CONTRAT",
+        texte: "À chaque manche, un CONTRAT t'indique ce que tu dois former (par exemple : 1 tri + 1 escalier). Tu le réalises dans ta main, puis tu le POSES sur la table.",
+        cartes: null,
+      },
+      {
+        emoji: "🐒", titre: "C'est parti !",
+        texte: "Je te guide à chaque étape. Suis simplement les cartes qui BRILLENT et mes messages. On apprend en jouant — tu ne peux pas te tromper.",
+        cartes: null,
+      },
+    ];
+    const s = slides[introSlide];
+    const last = introSlide === slides.length - 1;
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-5 p-6 text-emerald-100" style={bgStyle}>
+        {STYLE}
+        <a href="/" className="fixed top-3 left-3 z-40 btn-dark rounded-xl px-3 py-1.5 text-xs font-bold no-underline">← Accueil</a>
+        <div className="text-[11px] uppercase tracking-widest text-emerald-400">🎓 Apprendre · {introSlide + 1}/{slides.length}</div>
+        <div className="panel rounded-2xl p-6 w-full max-w-sm flex flex-col items-center gap-4 text-center" style={{ minHeight: 340 }}>
+          <div className="text-6xl" style={{ filter: "drop-shadow(0 4px 8px rgba(0,0,0,.5))" }}>{s.emoji}</div>
+          <h2 className="text-2xl font-bold text-amber-300" style={{ fontFamily: "Georgia, serif" }}>{s.titre}</h2>
+          {s.accent && <div className="text-sm font-bold text-emerald-300 -mt-2">{s.accent}</div>}
+          {s.cartes && (
+            <div className="flex gap-1 my-1">
+              {s.cartes.map((c) => <Card key={c.id} card={c} />)}
+            </div>
+          )}
+          <p className="text-sm leading-relaxed text-emerald-100">{s.texte}</p>
+        </div>
+        <div className="flex gap-3 w-full max-w-sm">
+          {introSlide > 0 && (
+            <button onClick={() => setIntroSlide((x) => x - 1)} className="btn-dark font-bold py-3 px-5 rounded-xl">←</button>
+          )}
+          {last ? (
+            <button onClick={startTuto} className="btn-gold font-bold py-3 rounded-xl flex-1 text-base">Commencer à jouer 🎴</button>
+          ) : (
+            <button onClick={() => setIntroSlide((x) => x + 1)} className="btn-gold font-bold py-3 rounded-xl flex-1 text-base">Suivant →</button>
+          )}
+        </div>
+        <button onClick={startTuto} className="text-[11px] text-emerald-400 underline">Passer l'intro</button>
+      </div>
+    );
+  }
+
   if (screen === "setup") {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-6 p-6" style={bgStyle}>
