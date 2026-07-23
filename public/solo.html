@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2189-T">
+<meta name="version" content="v2190-T">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -2732,12 +2732,18 @@ function tapCard(id) {
           <div className="text-3xl" style={{ filter: "drop-shadow(0 3px 5px rgba(0,0,0,.5))" }}>🐒</div>
           <div className="flex-1 px-3 py-2 rounded-2xl rounded-tl-sm text-[12px] font-bold leading-snug text-cyan-50"
             style={{ background: "linear-gradient(180deg,#0e7490,#155e75)", border: "1px solid #67e8f9aa", boxShadow: "0 4px 10px rgba(0,0,0,.4)" }}>
-            <div className="flex items-center gap-1.5 mb-0.5">
-              {[["drew", "Piocher"], ["esc", "Escalier"], ["tri", "Tri"], ["posed", "Poser"], ["complete", "Compléter"], ["aide", "💡"], ["scores", "📊"], ["regles", "❓"]].map(([k, lbl]) => (
-                <span key={k} className={`text-[9px] px-1.5 py-0.5 rounded-full ${tutoFlags[k] ? "bg-emerald-400 text-emerald-950" : "bg-cyan-950/60 text-cyan-300"}`}>
-                  {tutoFlags[k] ? "✓ " : "○ "}{lbl}
-                </span>
-              ))}
+            <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+              {(() => {
+                // Révélation progressive : missions validées + la mission EN COURS (la 1re non cochée). Le reste reste caché.
+                const ordre = [["drew", "Piocher"], ["aide", "💡"], ["scores", "📊"], ["regles", "❓"], ["esc", "Escalier"], ["tri", "Tri"], ["posed", "Poser"], ["complete", "Compléter"]];
+                const visibles = [];
+                for (const it of ordre) { visibles.push(it); if (!tutoFlags[it[0]]) break; }
+                return visibles.map(([k, lbl]) => (
+                  <span key={k} className={`text-[9px] px-1.5 py-0.5 rounded-full ${tutoFlags[k] ? "bg-emerald-400 text-emerald-950" : "bg-amber-300 text-emerald-950 animate-pulse"}`}>
+                    {tutoFlags[k] ? "✓ " : "→ "}{lbl}
+                  </span>
+                ));
+              })()}
             </div>
             {tutoText()}
           </div>
