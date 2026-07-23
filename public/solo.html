@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2167-Z">
+<meta name="version" content="v2168-L">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -868,26 +868,31 @@ function StackCard({ card, overlap, small }) {
 }
 
 function MeldChip({ meld, ownerName, onClick, highlight, mid, small, onLongPress }) {
-  // Appui long (450 ms) : zoom sur la combinaison en grand éventail
-  const lp = React.useRef({ t: null, fired: false });
-  const lpStart = () => {
+  // Appui long (400 ms) : zoom sur la combinaison en grand éventail.
+  // Seuil de mouvement (12 px) au lieu de pointerleave : les micro-tremblements sur les petites cartes n'annulent plus.
+  const lp = React.useRef({ t: null, fired: false, x: 0, y: 0 });
+  const lpStart = (e) => {
     lp.current.fired = false;
+    lp.current.x = e.clientX; lp.current.y = e.clientY;
     if (!onLongPress) return;
     clearTimeout(lp.current.t);
     lp.current.t = setTimeout(() => {
       lp.current.fired = true;
       if (navigator.vibrate) navigator.vibrate(30);
       onLongPress(meld);
-    }, 450);
+    }, 400);
+  };
+  const lpMove = (e) => {
+    if (Math.abs(e.clientX - lp.current.x) > 12 || Math.abs(e.clientY - lp.current.y) > 12) clearTimeout(lp.current.t);
   };
   const lpCancel = () => clearTimeout(lp.current.t);
   const lpClick = (e) => { if (lp.current.fired) { e.preventDefault(); return; } if (onClick) onClick(e); };
   return (
     <button onClick={lpClick} data-mid={mid}
-      onPointerDown={lpStart} onPointerUp={lpCancel} onPointerLeave={lpCancel} onPointerCancel={lpCancel}
+      onPointerDown={lpStart} onPointerMove={lpMove} onPointerUp={lpCancel} onPointerCancel={lpCancel}
       onContextMenu={(e) => e.preventDefault()}
       className={`shrink-0 flex items-center rounded-xl px-1 py-1 panel transition-all ${highlight ? "pulse-gold" : ""}`}
-      style={highlight ? { borderColor: "#fbbf24" } : {}}>
+      style={{ touchAction: "none", ...(highlight ? { borderColor: "#fbbf24" } : {}) }}>
       <span className="text-[8px] uppercase text-emerald-400 font-bold mr-0.5" style={{ writingMode: "vertical-rl", textOrientation: "upright", letterSpacing: -2 }}>
         {meld.type === "tri" ? "TRI" : "ESC"}
       </span>
