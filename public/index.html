@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2181-B">
+<meta name="version" content="v2182-A">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -49,7 +49,8 @@ const STYLE = (
     @keyframes introPop { 0% { transform: scale(.6); opacity: 0; } 15% { transform: scale(1.06); opacity: 1; } 80% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.02); opacity: 0; } }
     /* Éventail circulaire : les cartes partent empilées puis pivotent autour d'un point bas commun */
     @keyframes fanCircle { from { transform: rotate(0deg); opacity: .25; } to { transform: rotate(var(--fan-rot)); opacity: 1; } }
-    .fan-card { animation: fanCircle .4s cubic-bezier(.34,1.4,.5,1) backwards; }
+    /* both : conserve l'état déployé APRÈS l'animation (sinon les cartes retombent empilées au 1er redraw) */
+    .fan-card { animation: fanCircle .4s cubic-bezier(.34,1.4,.5,1) both; }
     .joker-glow { animation: jokerpulse 1.5s ease-in-out infinite; border-radius: 8px; display: inline-flex; }
     .btn-gold { background: linear-gradient(180deg, #fcd34d, #f59e0b); color: #052e16; box-shadow: 0 3px 0 #b45309, 0 6px 12px rgba(0,0,0,.4); }
     .btn-gold:active { transform: translateY(2px); }
@@ -1466,7 +1467,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2181-B</span>
+          <span className="opacity-60">v2182-A</span>
         </div>
       </div>
     );
@@ -1902,7 +1903,7 @@ function App() {
 
       {/* Table en plein écran */}
       {zoomMeld && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-30 flex flex-col items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-30 flex flex-col items-center justify-center p-4" onClick={closeZoom}>
           <button onClick={() => setZoomMeld(null)}
             className="absolute top-5 right-5 btn-dark rounded-full w-10 h-10 text-lg font-bold flex items-center justify-center">✕</button>
           <div className="text-emerald-200 text-sm mb-4 font-bold">
@@ -1917,6 +1918,7 @@ function App() {
                 <div key={c.id} className="fan-card" style={{
                   marginLeft: i > 0 ? -18 : 0,           // chevauchement modéré à la base
                   transformOrigin: "50% 240%",           // pivot ~2,4 hauteurs de carte plus bas → arc cambré et visible
+                  transform: "rotate(" + rot + "deg)",   // état de repos = déployé (aucun redraw ne peut ré-empiler)
                   "--fan-rot": rot + "deg",
                   animationDelay: (Math.abs(i - mid) * 0.04) + "s", // s'ouvre du centre vers les bords
                 }}>
@@ -1925,7 +1927,7 @@ function App() {
               );
             })}
           </div>
-          <button onClick={() => setZoomMeld(null)} className="btn-gold font-bold py-2 px-8 rounded-xl mt-8">Fermer</button>
+          <div className="text-[11px] text-emerald-400 mt-8">Touche n'importe où pour fermer</div>
         </div>
       )}
       {showTable && (
