@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2178-T">
+<meta name="version" content="v2179-D">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -1602,22 +1602,29 @@ function tapCard(id) {
   }
 
   function handleDrop(x, y, card) {
-    // 0) Le doigt DANS la zone de la main = simple reclassement : jamais un jet ni un ajout à un groupe
-    const hr0 = handRef.current && handRef.current.getBoundingClientRect();
-    if (hr0 && y >= hr0.top && x >= hr0.left && x <= hr0.right) { overStickyRef.current = 0; return; }
     const ch = UI_PREFS.big ? 72 : 58; // hauteur de la carte fantôme (option « grandes cartes »)
-    const pts = [[x, y], [x, y - ch / 2 - 5], [x, y - ch]]; // le doigt, le centre et le haut de la carte fantôme
-    const inRect = (r, m) => Boolean(r) && pts.some(([px, py]) => px >= r.left - m && px <= r.right + m && py >= r.top - m && py <= r.bottom + m);
-    // 1) Les groupes « Prêt » et les combinaisons de la table D'ABORD : le chemin du doigt
-    //    croise souvent la défausse, il ne faut pas confondre avec un jet
+    const cw = UI_PREFS.big ? 50 : 40;
+    // Rectangle réel de la carte fantôme, qui flotte AU-DESSUS du doigt (cf. style du glissement)
+    const gT = y - (UI_PREFS.big ? 76 : 62), gL = x - 20;
+    const gRect = { left: gL, right: gL + cw, top: gT, bottom: gT + ch };
+    const overlaps = (r, m) => Boolean(r) && gRect.left < r.right + m && gRect.right > r.left - m && gRect.top < r.bottom + m && gRect.bottom > r.top - m;
+    // 1) AJOUT à un groupe « Prêt » : on se base sur la position de la CARTE (pas du doigt, souvent resté
+    //    dans la main), et seulement si la carte complète vraiment le groupe — sinon c'est un reclassement.
     const stagedEls = document.querySelectorAll("[data-sid]");
     for (const el of stagedEls) {
-      const r = el.getBoundingClientRect();
-      if (inRect(r, 6)) {
-        addToStagedCards(Number(el.getAttribute("data-sid")), [card.id]);
+      if (!overlaps(el.getBoundingClientRect(), 8)) continue;
+      const gi = Number(el.getAttribute("data-sid"));
+      const grp = g.staged[gi];
+      if (grp && !g.players[0].posed && validGroup(grp.type, [...grp.cards, card])) {
+        addToStagedCards(gi, [card.id]);
         return;
       }
     }
+    // 2) Le doigt DANS la zone de la main = simple reclassement : jamais un jet ni un ajout à un groupe
+    const hr0 = handRef.current && handRef.current.getBoundingClientRect();
+    if (hr0 && y >= hr0.top && x >= hr0.left && x <= hr0.right) { overStickyRef.current = 0; return; }
+    const pts = [[x, y], [x, y - ch / 2 - 5], [x, y - ch]]; // le doigt, le centre et le haut de la carte fantôme
+    const inRect = (r, m) => Boolean(r) && pts.some(([px, py]) => px >= r.left - m && px <= r.right + m && py >= r.top - m && py <= r.bottom + m);
     // Combinaisons de la table : priorité au point le plus proche du doigt, et si plusieurs sont
     // touchées (rangées voisines), on choisit celle que la carte peut réellement compléter
     const meldEls = [...document.querySelectorAll("[data-mid]")];
