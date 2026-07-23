@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2170-E">
+<meta name="version" content="v2171-C">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -47,9 +47,9 @@ const STYLE = (
     @keyframes jokerpulse { 0%,100% { box-shadow: 0 0 4px 1px rgba(167,139,250,.65); } 50% { box-shadow: 0 0 13px 5px rgba(167,139,250,.95); } }
     @keyframes confetti { 0% { transform: translateY(-8vh) rotate(0deg); opacity: 1; } 100% { transform: translateY(108vh) rotate(720deg); opacity: .85; } }
     @keyframes introPop { 0% { transform: scale(.6); opacity: 0; } 15% { transform: scale(1.06); opacity: 1; } 80% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.02); opacity: 0; } }
-    /* Déploiement en éventail : les cartes partent groupées au centre puis s'ouvrent en arc */
-    @keyframes fanDeploy { from { transform: rotate(0deg) translateY(30px) scale(.7); opacity: 0; } to { transform: rotate(var(--fan-rot)) translateY(var(--fan-y)) scale(1); opacity: 1; } }
-    .fan-card { animation: fanDeploy .45s cubic-bezier(.34,1.56,.64,1) backwards; transform-origin: bottom center; }
+    /* Éventail circulaire : les cartes partent empilées puis pivotent autour d'un point bas commun */
+    @keyframes fanCircle { from { transform: rotate(0deg); opacity: .25; } to { transform: rotate(var(--fan-rot)); opacity: 1; } }
+    .fan-card { animation: fanCircle .4s cubic-bezier(.34,1.4,.5,1) backwards; }
     .joker-glow { animation: jokerpulse 1.5s ease-in-out infinite; border-radius: 8px; display: inline-flex; }
     .btn-gold { background: linear-gradient(180deg, #fcd34d, #f59e0b); color: #052e16; box-shadow: 0 3px 0 #b45309, 0 6px 12px rgba(0,0,0,.4); }
     .btn-gold:active { transform: translateY(2px); }
@@ -578,29 +578,30 @@ function StackCard({ card, overlap, small }) {
   );
 }
 
-function MeldChip({ meld, ownerName, onClick, highlight, mid, small, onLongPress }) {
-  // Appui long (400 ms) : zoom sur la combinaison en grand éventail.
-  // Seuil de mouvement (12 px) au lieu de pointerleave : les micro-tremblements sur les petites cartes n'annulent plus.
+function MeldChip({ meld, ownerName, onClick, highlight, mid, small, onLongPress, onLongPressEnd }) {
+  // Maintien (300 ms) : ouvre l'éventail tant que le doigt reste appuyé ; le relâchement ferme.
+  // Capture du pointeur pour continuer à recevoir le relâchement même quand l'éventail s'affiche par-dessus.
   const lp = React.useRef({ t: null, fired: false, x: 0, y: 0 });
   const lpStart = (e) => {
     lp.current.fired = false;
     lp.current.x = e.clientX; lp.current.y = e.clientY;
     if (!onLongPress) return;
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
     clearTimeout(lp.current.t);
     lp.current.t = setTimeout(() => {
       lp.current.fired = true;
-      if (navigator.vibrate) navigator.vibrate(30);
+      if (navigator.vibrate) navigator.vibrate(20);
       onLongPress(meld);
-    }, 400);
+    }, 300);
   };
   const lpMove = (e) => {
-    if (Math.abs(e.clientX - lp.current.x) > 12 || Math.abs(e.clientY - lp.current.y) > 12) clearTimeout(lp.current.t);
+    if (!lp.current.fired && (Math.abs(e.clientX - lp.current.x) > 12 || Math.abs(e.clientY - lp.current.y) > 12)) clearTimeout(lp.current.t);
   };
-  const lpCancel = () => clearTimeout(lp.current.t);
+  const lpEnd = () => { clearTimeout(lp.current.t); if (lp.current.fired && onLongPressEnd) onLongPressEnd(); };
   const lpClick = (e) => { if (lp.current.fired) { e.preventDefault(); return; } if (onClick) onClick(e); };
   return (
     <button onClick={lpClick} data-mid={mid}
-      onPointerDown={lpStart} onPointerMove={lpMove} onPointerUp={lpCancel} onPointerCancel={lpCancel}
+      onPointerDown={lpStart} onPointerMove={lpMove} onPointerUp={lpEnd} onPointerCancel={lpEnd}
       onContextMenu={(e) => e.preventDefault()}
       className={`shrink-0 flex items-center rounded-xl px-1 py-1 panel transition-all ${highlight ? "pulse-gold" : ""}`}
       style={{ touchAction: "none", ...(highlight ? { borderColor: "#fbbf24" } : {}) }}>
@@ -1475,7 +1476,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2170-E</span>
+          <span className="opacity-60">v2171-C</span>
         </div>
       </div>
     );
@@ -1722,7 +1723,7 @@ function App() {
                   small={arr.reduce((s, x) => s + x.cards.length, 0) > 11}
                   highlight={(me.posed && selected.length === 1 && myTurn) || (Boolean(drag) && !drag.fromDiscard && me.posed && myTurn && g.phase === "play")}
                   onClick={() => { if (myTurn && selected.length === 1) { completeWith(m.id, selected[0]); setSelected([]); } }}
-                  onLongPress={setZoomMeld} />
+                  onLongPress={setZoomMeld} onLongPressEnd={() => setZoomMeld(null)} />
               ))}
             </div>
           ))}
@@ -1916,24 +1917,24 @@ function App() {
           <div className="text-emerald-200 text-sm mb-4 font-bold">
             {(srv.players[zoomMeld.owner] || {}).avatar || "🙂"} {(srv.players[zoomMeld.owner] || {}).name || ""} · {zoomMeld.type === "tri" ? "Tri" : "Escalier"} · {zoomMeld.cards.length} carte{zoomMeld.cards.length > 1 ? "s" : ""}
           </div>
-          <div className="flex justify-center items-end" style={{ maxWidth: "100vw", overflowX: "auto", padding: "40px 20px 20px" }}>
+          <div className="relative flex justify-center items-end" style={{ minHeight: 300, paddingTop: 90 }}>
             {zoomMeld.cards.map((c, i, arr) => {
               const n = arr.length, mid = (n - 1) / 2;
-              const step = Math.min(14, 46 / Math.max(1, n)); // écart angulaire : large éventail, resserré si beaucoup de cartes
+              const step = Math.min(13, 96 / Math.max(1, n - 1 || 1)); // écart angulaire, resserré si beaucoup de cartes
               const rot = (i - mid) * step;
-              const lift = Math.pow(Math.abs(i - mid), 2) * -2.2; // creux au centre, bords relevés → arc
               return (
                 <div key={c.id} className="fan-card" style={{
-                  marginLeft: i > 0 ? -8 : 0,
-                  "--fan-rot": rot + "deg", "--fan-y": lift + "px",
-                  animationDelay: (i * 0.045) + "s",
+                  marginLeft: i > 0 ? -26 : 0,           // fort chevauchement à la base : les cartes pivotent d'un point commun
+                  transformOrigin: "50% 320px",          // pivot bas commun → ouverture circulaire
+                  "--fan-rot": rot + "deg",
+                  animationDelay: (Math.abs(i - mid) * 0.04) + "s", // du centre vers les bords
                 }}>
                   <Card card={c} />
                 </div>
               );
             })}
           </div>
-          <div className="text-[11px] text-emerald-400 mt-5">Touche n'importe où pour fermer</div>
+          <div className="text-[11px] text-emerald-400 mt-5">Relâche pour fermer</div>
         </div>
       )}
       {showTable && (
