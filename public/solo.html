@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2200-T">
+<meta name="version" content="v2202-T">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -1845,16 +1845,6 @@ function tapCard(id) {
     if (!g) return "";
     const h = g.players[0].hand;
     const st = (g && g.staged) || [];
-    // Suggère une carte concrète à jeter : celle qui n'aide aucune combinaison ET coûte le plus de points
-    const suggestUseless = () => {
-      const reals = h.filter((c) => !c.joker);
-      const utile = (c) => reals.some((o) => o.id !== c.id && o.rank === c.rank) ||
-        reals.some((o) => o.id !== c.id && o.suit === c.suit && Math.abs(o.rank - c.rank) <= 2);
-      const mortes = reals.filter((c) => !utile(c)).sort((a, b) => cardPoints(b) - cardPoints(a));
-      if (!mortes.length) return "";
-      const c = mortes[0];
-      return " Par exemple le " + rankLabel(c) + c.suit + " : il ne forme ni paire ni suite avec tes autres cartes, et il coûte " + cardPoints(c) + " pts en fin de manche — autant t'en débarrasser !";
-    };
     // Analyse d'une carte : aide-t-elle le contrat du joueur ?
     const advise = (card) => {
       if (!card || card.joker) return null;
@@ -1868,49 +1858,60 @@ function tapCard(id) {
       // (pas de conseil pour un gain faible « elle prolonge ta suite » : la pioche scriptée du tutoriel fait mieux)
       return null;
     };
-    if (pendingDiscard) return "🔒 Tu veux jeter cette carte ? Touche la DÉFAUSSE (badge rouge) pour confirmer — ou touche une carte de ta main pour annuler. Cette sécurité évite les jets accidentels !";
-    if (g.roundOver) return "🎉 Diplômé du Ramy Gasy ! Tu sais tout : piocher, acheter, poser ton contrat, compléter. Rappel : une vraie partie = 8 manches, avec un CONTRAT DIFFÉRENT à chaque manche (la liste est dans « ? ») — et le plus PETIT total de points gagne. À toi les vraies parties !";
+    // ——— UNE SEULE instruction courte à la fois (pensé pour un débutant total) ———
+    if (pendingDiscard) return "👉 Touche la défausse (encadrée en rouge) pour valider ton jet.";
+    if (g.roundOver) return "🎉 Bravo, tutoriel terminé ! Tu sais piocher, poser ton contrat et compléter. À toi les vraies parties !";
     if (g.buyWindow && g.buyWindow.priority) {
-      const tip = advise(topDiscard);
-      return tip ? "⭐ Prends-la GRATUITEMENT : " + tip + " !" : "⭐ Tu es prioritaire — mais cette carte ne t'aide pas. « Laisser » est malin.";
+      return advise(topDiscard) ? "⭐ Cette carte t'aide : touche « Je la prends » (c'est gratuit)." : "⭐ Cette carte ne t'aide pas : touche « Laisser ».";
     }
     if (g.buyWindow) {
-      const tip = advise(topDiscard);
-      return "💰 NOUVEAU : l'ACHAT ! Quand un adversaire jette une carte, tu peux l'acheter même hors de ton tour (3 par manche max, +1 carte de pénalité). " +
-        (tip ? "Et là, fonce : " + tip + " !" : "Mais celle-ci ne t'aide pas → « Passer ». On n'achète que ce qui sert le contrat !");
+      return advise(topDiscard) ? "💰 Tu peux ACHETER cette carte : touche « Acheter »." : "💰 Cette carte ne t'aide pas : touche « Passer ».";
     }
-    if (!myTurn) {
-      return "👀 " + g.players[g.turn].name + " joue… Patiente. À ton tour, tu pourras piocher dans le tas, ou prendre la carte du dessus de la défausse si elle t'arrange.";
-    }
+    if (!myTurn) return "👀 C'est au tour de " + g.players[g.turn].name + ". Patiente un instant…";
+
+    // COMPLÉTER (déjà posé) — un pas à la fois
     if (me.posed && !tutoFlags.complete) {
       const fit = h.find((c) => !c.joker && (g.melds || []).some((m) => validGroup(m.type, [...m.cards, c])));
-      if (fit) return "🧩 Nouvelle mission : COMPLÉTER une combinaison déjà posée ! Ta carte qui brille, le " + rankLabel(fit) + fit.suit + ", va s'ajouter à une combinaison de la table. Deux façons : ① touche le " + rankLabel(fit) + fit.suit + " (il se sélectionne) puis touche la combinaison — ② ou glisse-le directement dessus. Chaque carte placée = une de moins en main !";
-      return "🧩 Nouvelle mission : COMPLÉTER ! Ajoute une de tes cartes à un tri ou un escalier déjà posé (le tien ou celui d'un autre) : touche la carte puis la combinaison, ou glisse-la dessus. Chaque carte placée = une de moins en main !";
+      if (fit) {
+        if (!selected.includes(fit.id)) return "👉 Touche le " + rankLabel(fit) + fit.suit + " qui brille pour le choisir.";
+        return "👉 Maintenant touche la combinaison sur la table où cette carte s'ajoute.";
+      }
+      return "🧩 Touche une carte, puis la combinaison posée où elle peut s'ajouter.";
     }
-    if (me.posed) return "🏁 Dernière ligne droite : continue à compléter quand tu peux, et jette une carte à chaque tour. Main vide = victoire !";
-    if (canPose) return "🌟 CONTRAT COMPLET ! Appuie sur le gros bouton doré « Poser ! »";
+    if (me.posed) return "🏁 Jette une carte pour finir ton tour. Main vide = tu gagnes !";
+    if (canPose) return "🌟 Ton contrat est prêt ! Touche le bouton doré « Poser ! ».";
+
+    // PIOCHER
     if (g.phase === "draw") {
-      if (g.discardLocked) return "🚫 La défausse est BLOQUÉE : quelqu'un vient d'acheter ! La carte révélée en dessous ne peut pas être prise — règle du jeu. Pioche dans le tas.";
-      const tip = advise(topDiscard);
-      if (tip) return "👉 Regarde la défausse : " + tip + " ! Glisse-la dans ta main — gratuite à ton tour.";
-      if (!tutoFlags.drew) return "🎯 Bienvenue ! Le but : réaliser le CONTRAT affiché tout en haut, le poser, puis vider ta main avant les autres. Chaque tour = piocher, jouer, jeter. 👉 Commence : touche le tas qui brille pour piocher !";
-      return "👉 Pioche d'abord ! (le tas — ou la défausse si la carte t'arrange)";
+      if (g.discardLocked) return "👉 Touche le tas de cartes pour piocher.";
+      if (advise(topDiscard)) return "👉 La carte de la défausse t'arrange : glisse-la dans ta main.";
+      if (!tutoFlags.drew) return "👋 On commence ! Touche le tas de cartes (il brille) pour piocher.";
+      return "👉 Touche le tas de cartes pour piocher.";
     }
+
+    // ESCALIER — un pas à la fois
     if (!tutoFlags.esc) {
-      // Étape 1 : faire d'abord découvrir le bouton Aide (il brille), tant qu'il n'a pas servi
-      if (!tutoFlags.aide) return "💡 Étape 1 — touche le bouton « 💡 Aide » qui brille en bas de l'écran. Il range ta main et rapproche les cartes qui vont ensemble : bien plus facile pour repérer ton escalier !";
+      if (!tutoFlags.aide) return "👉 Touche le bouton « 💡 Aide » (il brille) : il range ta main pour toi.";
       const trio = findRuns(h)[0];
-      if (trio) return "✨ Étape 2 — les cartes de ton escalier brillent (3 qui se suivent" + (trio.some((c) => c.joker) ? " + ton joker 🤡, qui fera la carte manquante" : "") + "). ① Touche-les une par une. ② Appuie sur le bouton vert « ✓ C'est un escalier ! » qui apparaît.";
-      return "🧩 Il te manque encore une carte pour ton escalier (3 qui se suivent, même couleur). 👉 Termine ton tour : jette une carte qui ne te sert pas (glisse-la sur la défausse)." + suggestUseless() + " Tu repiocheras au prochain tour — la bonne finira par venir !";
+      if (trio) {
+        if (!selEscOk) return "👉 Touche les cartes qui brillent (elles forment ton escalier).";
+        return "👉 Touche le bouton vert « ✓ C'est un escalier ! ».";
+      }
+      return "👉 Jette la carte marquée « à jeter » : glisse-la sur la défausse.";
     }
+
+    // TRI — un pas à la fois
     if (!tutoFlags.tri) {
       const byRank = {};
       h.filter((c) => !c.joker).forEach((c) => { (byRank[c.rank] = byRank[c.rank] || []).push(c); });
       const best = Object.values(byRank).sort((a, b) => b.length - a.length)[0];
-      if (best && best.length >= 3) return "✨ Tes 3 cartes de MÊME valeur brillent. ① Touche-les une par une. ② Appuie sur le bouton vert « ✓ C'est un tri ! » qui apparaît.";
-      return "🔍 Objectif TRI : 3 cartes de MÊME valeur (le joker ne compte pas ici). Il t'en manque une. 👉 Termine ton tour : jette une carte qui ne te sert pas (glisse-la sur la défausse)." + suggestUseless() + " Tu repiocheras au prochain tour !";
+      if (best && best.length >= 3) {
+        if (!selTriOk) return "👉 Touche les 3 cartes qui brillent (elles ont la même valeur).";
+        return "👉 Touche le bouton vert « ✓ C'est un tri ! ».";
+      }
+      return "👉 Jette la carte marquée « à jeter » : glisse-la sur la défausse.";
     }
-    return "Ton contrat est prêt ! Le bouton doré t'attend à ton tour.";
+    return "👉 Touche le bouton doré « Poser ! ».";
   }
 
   useEffect(() => {
@@ -1935,9 +1936,9 @@ function tapCard(id) {
     if (!tuto || !g || !me) return { ids: new Set(), stock: false, pose: false, discard: false, toss: null };
     const h = me.hand;
     const ids = new Set();
-    // Carte à jeter suggérée (même logique que le coach) : inutile + la plus chère, seulement quand il faut jeter
+    // Carte à jeter suggérée : seulement quand le coach en parle vraiment (après l'étape « Aide »), pas avant
     const uselessId = (() => {
-      if (!(myTurn && g.phase === "play")) return null;
+      if (!(myTurn && g.phase === "play") || !tutoFlags.aide) return null;
       const reals = h.filter((c) => !c.joker);
       const utile = (c) => reals.some((o) => o.id !== c.id && o.rank === c.rank) ||
         reals.some((o) => o.id !== c.id && o.suit === c.suit && Math.abs(o.rank - c.rank) <= 2);
