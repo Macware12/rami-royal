@@ -134,7 +134,8 @@ try {
   if (comptes.size) console.log(comptes.size + " compte(s) chargé(s)");
 } catch (e) { console.error("Lecture des comptes impossible:", e.message); }
 
-function cleanStats(s) {
+// Un « bucket » de stats (solo à la racine, multi sous .mp)
+function cleanBucket(s) {
   const out = {};
   if (!s || typeof s !== "object") return out;
   ["games", "wins", "streak", "bestStreak", "bestScore", "sumScore", "fastestWinMs"].forEach((k) => {
@@ -155,6 +156,11 @@ function cleanStats(s) {
   }
   return out;
 }
+function cleanStats(s) {
+  const out = cleanBucket(s);              // solo (racine, rétrocompatible)
+  if (s && s.mp) out.mp = cleanBucket(s.mp); // multijoueur (sous-objet séparé)
+  return out;
+}
 function cleanSucces(s) {
   const out = {};
   if (!s || typeof s !== "object") return out;
@@ -164,7 +170,7 @@ function cleanSucces(s) {
   return out;
 }
 // Fusion prudente multi-appareils : les compteurs ne reculent jamais, le record est le plus bas
-function mergeStats(a, b) {
+function mergeBucket(a, b) {
   a = a || {}; b = b || {};
   const out = {};
   ["games", "wins", "bestStreak", "sumScore"].forEach((k) => { const v = Math.max(a[k] || 0, b[k] || 0); if (v) out[k] = v; });
@@ -187,6 +193,12 @@ function mergeStats(a, b) {
       out.contracts[l] = (y.n || 0) >= (x.n || 0) ? { n: y.n || 0, sum: y.sum || 0 } : { n: x.n || 0, sum: x.sum || 0 };
     });
   }
+  return out;
+}
+function mergeStats(a, b) {
+  a = a || {}; b = b || {};
+  const out = mergeBucket(a, b);                 // solo (racine)
+  if (a.mp || b.mp) out.mp = mergeBucket(a.mp, b.mp); // multijoueur
   return out;
 }
 function mergeSucces(a, b) {
@@ -898,7 +910,7 @@ function checkRoundEnd(room, idx) {
     q.total += pts + bonus;
     return { name: q.name, pts, bonus, total: q.total };
   });
-  g.history.push({ mancheIdx: g.mancheIdx, summary });
+  g.history.push({ mancheIdx: g.mancheIdx, label: contratCourant(g).label, summary }); // label = contrat réel (correct même en mode court)
   g.roundOver = { winnerIdx: idx, bonusType, summary };
   const manches = g.manches || E.MANCHES;
   room.state = g.mancheIdx + 1 >= manches.length ? "over" : "roundEnd";
