@@ -343,6 +343,7 @@ function clearTimers(room) {
 
 // ---------- Démarrage d'une manche ----------
 function startRound(room, mancheIdx) {
+  if (mancheIdx === 0) room.startedAt = Date.now(); // début de partie (chrono affiché aux joueurs)
   const deck = E.buildDeck();
   room.players.forEach((p) => {
     p.hand = deck.splice(0, 13);
@@ -416,6 +417,8 @@ function broadcast(room) {
         mancheIdx: g.mancheIdx,
         contract: contratCourant(g),
         nbManches: (g.manches || E.MANCHES).length, // 3 en mode court, 8 sinon
+        startedAt: room.startedAt || null, // chrono de partie
+        serverNow: Date.now(),             // pour aligner l'horloge du client
         stockCount: g.stock.length,
         discardTop: g.discard[g.discard.length - 1] || null,
       discardCount: g.discard.length,

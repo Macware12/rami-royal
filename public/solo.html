@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2202-T">
+<meta name="version" content="v2203-C">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -152,6 +152,14 @@ const SUCCES_LIST = [
   { id: "premier_pose", nom: "Rapide comme l'éclair", desc: "Poser son contrat avant tous les autres" },
 ];
 function readJSON(k) { try { return JSON.parse(store.get(k)) || {}; } catch (_) { return {}; } }
+// Chrono de partie : durée écoulée depuis le début, formatée mm:ss (ou h:mm:ss)
+function fmtElapsed(startMs) {
+  if (!startMs) return "";
+  const s = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  const mm = String(m).padStart(2, "0"), ss = String(sec).padStart(2, "0");
+  return h > 0 ? h + ":" + mm + ":" + ss : mm + ":" + ss;
+}
 const API_BASE = (window.RAMI_CONFIG && window.RAMI_CONFIG.server) || "";
 // Compte joueur (pseudo + code à 6 chiffres) — en mode invité, rien n'est conservé
 function compteApi(chemin, body) {
@@ -949,6 +957,7 @@ function RamiRoyal() {
   const [intro, setIntro] = useState(null);
   const [hasSave, setHasSave] = useState(false);
   const [wTick, setWTick] = useState(0);
+  const [clockTick, setClockTick] = useState(0); // rafraîchit le chrono de partie chaque seconde
   const [anims, setAnims] = useState([]);
   const aiTimer = useRef(null);
   const stockRef = useRef(null);
@@ -1077,7 +1086,7 @@ function RamiRoyal() {
     store.set("rami-avatar", myAvatar);
     store.set("rami-level", level);
     const manchesFinales = shortMode ? genererManchesAleatoires().map((i) => MANCHES[i]) : MANCHES;
-    setG({ ...newRound(players, 0, null, null, manchesFinales), level, shortMode, manches: manchesFinales });
+    setG({ ...newRound(players, 0, null, null, manchesFinales), level, shortMode, manches: manchesFinales, startedAt: Date.now() });
     setSelected([]);
     setMsg("");
     showIntro(0, manchesFinales);
@@ -1149,6 +1158,13 @@ function RamiRoyal() {
   }, [g && g.buyWindow && g.buyWindow.until, screen]);
 
   useEffect(() => { SFX_MUTED = muted; store.set("rami-muted", muted ? "1" : "0"); }, [muted]);
+
+  // Chrono : rafraîchit l'affichage chaque seconde pendant la partie
+  useEffect(() => {
+    if (screen !== "game") return;
+    const iv = setInterval(() => setClockTick((t) => t + 1), 1000);
+    return () => clearInterval(iv);
+  }, [screen]);
 
   // Sécurité du glisser-déposer : ne jamais laisser une carte fantôme
   useEffect(() => {
@@ -2347,7 +2363,7 @@ function tapCard(id) {
     }
     showIntro(g.mancheIdx + 1, g.manches);
     setG((s) => ({ ...newRound(s.players, s.mancheIdx + 1, s.players.map((p) => p.total), s.history, s.manches),
-      level: s.level, shortMode: s.shortMode, manches: s.manches }));
+      level: s.level, shortMode: s.shortMode, manches: s.manches, startedAt: s.startedAt }));
     setSelected([]);
     setMsg("");
   }
@@ -2672,7 +2688,7 @@ function tapCard(id) {
             <div className="text-amber-300 font-bold text-sm" style={{ fontFamily: "Georgia, serif" }}>
               {tuto ? "🎓 Tutoriel" : `Manche ${g.mancheIdx + 1}/${(g.manches || MANCHES).length}`}
             </div>
-            <div className="text-[10px] text-emerald-400">IA {g.level || "moyen"} · {g.stock.length} en pioche</div>
+            <div className="text-[10px] text-emerald-400">IA {g.level || "moyen"} · {g.stock.length} en pioche{g.startedAt && !tuto ? " · ⏱ " + fmtElapsed(g.startedAt) : ""}</div>
           </div>
         </div>
         <div className="flex items-center gap-1.5">

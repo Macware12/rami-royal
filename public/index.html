@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2202-T">
+<meta name="version" content="v2203-C">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -80,6 +80,14 @@ const store = {
 // Décalage horloge serveur/client : mis à jour à chaque état reçu, corrige les comptes à rebours
 let CLOCK_OFFSET = 0;
 const srvNow = () => Date.now() + CLOCK_OFFSET;
+// Chrono de partie : durée écoulée depuis le début (heure serveur), formatée mm:ss (ou h:mm:ss)
+function fmtElapsed(startMs) {
+  if (!startMs) return "";
+  const s = Math.max(0, Math.floor((srvNow() - startMs) / 1000));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  const mm = String(m).padStart(2, "0"), ss = String(sec).padStart(2, "0");
+  return h > 0 ? h + ":" + mm + ":" + ss : mm + ":" + ss;
+}
 const UI_PREFS = {
   big: store.get("ramimp-big") === "1",
   four: store.get("ramimp-4col") === "1",
@@ -1490,7 +1498,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2202-T</span>
+          <span className="opacity-60">v2203-C</span>
         </div>
       </div>
     );
@@ -1680,7 +1688,7 @@ function App() {
           <button onClick={() => setShowQuit(true)} className="btn-dark rounded-xl px-2.5 py-1.5 text-base leading-none">🏠</button>
           <div>
             <div className="text-amber-300 font-bold text-sm" style={{ fontFamily: "Georgia, serif" }}>Manche {g.mancheIdx + 1}/{g.nbManches || 8} · {srv.code}</div>
-            <div className="text-[10px] text-emerald-400">{g.stockCount} en pioche · {srv.options.turnSeconds}s/tour</div>
+            <div className="text-[10px] text-emerald-400">{g.stockCount} en pioche · {srv.options.turnSeconds}s/tour{g.startedAt ? " · ⏱ " + fmtElapsed(g.startedAt) : ""}</div>
           </div>
         </div>
         <div className="flex items-center gap-1.5">
