@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2195-A">
+<meta name="version" content="v2196-J">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -2884,7 +2884,11 @@ function tapCard(id) {
             </button>
           )}
           {!me.posed && selected.length >= 3 && !selTriOk && !selEscOk && (
-            <span className="text-[11px] text-red-300 self-center">Ni tri, ni escalier — ajuste ta sélection</span>
+            <span className="text-[11px] text-red-300 self-center">
+              {selCards.some((c) => c.joker) && selCards.filter((c) => !c.joker).length < 3
+                ? "Un joker 🤡 exige au moins 3 vraies cartes autour de lui : ajoute une vraie carte."
+                : "Ni tri, ni escalier — ajuste ta sélection"}
+            </span>
           )}
           {!me.posed && !g.roundOver && selected.length < 3 && (
             <>
