@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2199-T">
+<meta name="version" content="v2200-T">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -2867,7 +2867,7 @@ function tapCard(id) {
         onPointerMove={onCardPointerMove}
         onPointerUp={onCardPointerUp}
         onPointerCancel={endDrag}
-        className={`shrink-0 relative px-2 pt-3 pb-2 border-t-2 ${drag && drag.origin === "discard" ? "border-amber-400 pulse-gold" : myTurn ? "border-amber-400" : "border-emerald-800"}`}
+        className={`shrink-0 relative px-2 ${tuto && tutoHi.toss ? "pt-6" : "pt-3"} pb-2 border-t-2 ${drag && drag.origin === "discard" ? "border-amber-400 pulse-gold" : myTurn ? "border-amber-400" : "border-emerald-800"}`}
         style={{ background: "linear-gradient(180deg, rgba(4,35,24,.9), rgba(3,25,17,.97))", paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))" }}>
         {me && !tuto && (
           <div className="absolute top-0.5 right-2 flex items-center gap-0.5 text-[8px] text-emerald-400 font-bold" title="Tes achats restants cette manche">
@@ -2883,7 +2883,10 @@ function tapCard(id) {
                 boxShadow: tuto && tutoHi.ids.has(c.id) ? "0 0 14px 4px #22d3ee"
                   : tuto && tutoHi.toss === c.id ? "0 0 14px 4px #ef4444" : undefined }}>
               <Card card={c} selected={selected.includes(c.id)} isNew={g.lastDrawn.includes(c.id)} />
-              {tuto && tutoHi.toss === c.id && <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[8px] font-bold text-red-200 bg-red-700/90 px-1 rounded-full whitespace-nowrap">à jeter</span>}
+              {tuto && tutoHi.toss === c.id && (
+                <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[10px] font-bold text-white bg-red-600 px-2 py-0.5 rounded-full whitespace-nowrap shadow-lg z-20"
+                  style={{ animation: "pulse 1s infinite" }}>à jeter ⬇</span>
+              )}
             </div>
           ))}
         </div>
