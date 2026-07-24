@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2205-R">
+<meta name="version" content="v2206-S">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -943,6 +943,7 @@ function RamiRoyal() {
   }, [zoomMeld]);
   const [succesBanner, setSuccesBanner] = useState(null);
   const [showSucces, setShowSucces] = useState(false);
+  const [showStats, setShowStats] = useState(false);
   const [account, setAccount] = useState(readJSON("rami-account")); // {} = mode invité
   const [stats, setStats] = useState(() => (readJSON("rami-account").code ? readJSON("rami-stats") : {}));
   const [showLogin, setShowLogin] = useState(false);
@@ -2508,11 +2509,9 @@ function tapCard(id) {
           <a href="/regles.html" className="btn-dark font-bold py-2 rounded-xl text-xs text-center block">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="text-[10px] text-emerald-500 text-center underline">Politique de confidentialité</a>
           {(stats.games || 0) > 0 && (
-            <div className="text-[11px] text-emerald-300 text-center leading-relaxed">
-              🎴 {stats.games} partie{stats.games > 1 ? "s" : ""} · 🏆 {stats.wins || 0} victoire{(stats.wins || 0) > 1 ? "s" : ""}
-              {(stats.streak || 0) > 1 ? ` · 🔥 série de ${stats.streak}` : ""}
-              {stats.bestScore != null ? ` · record : ${stats.bestScore} pts` : ""}
-            </div>
+            <button onClick={() => setShowStats(true)} className="btn-dark font-bold py-2 rounded-xl text-xs">
+              📊 Mes statistiques
+            </button>
           )}
           {account.code ? (
             <div className="text-[11px] text-emerald-300 text-center">
@@ -2580,6 +2579,46 @@ function tapCard(id) {
           <button onClick={() => setShowSucces(true)} className="btn-dark font-bold py-2 rounded-xl text-xs">
             🏆 Mes succès ({Object.keys(readJSON("rami-succes")).length}/{SUCCES_LIST.length})
           </button>
+          {showStats && (() => {
+            const games = stats.games || 0, wins = stats.wins || 0, losses = Math.max(0, games - wins);
+            const rate = games ? Math.round((wins / games) * 100) : 0;
+            const Stat = ({ v, lbl, cls }) => (
+              <div className="panel rounded-xl py-2.5 flex flex-col items-center">
+                <div className={"text-2xl font-bold " + (cls || "text-amber-300")}>{v}</div>
+                <div className="text-[10px] text-emerald-300 mt-0.5">{lbl}</div>
+              </div>
+            );
+            return (
+              <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 flex items-center justify-center p-4" onClick={() => setShowStats(false)}>
+                <div className="panel rounded-2xl p-5 w-full max-w-sm flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-amber-300 font-bold text-lg">📊 Mes statistiques</h3>
+                    <button onClick={() => setShowStats(false)} className="text-emerald-400 text-xl">✕</button>
+                  </div>
+                  {account.code
+                    ? <div className="text-[11px] text-emerald-400 -mt-2">👤 {account.pseudo} · synchronisé sur tous tes appareils</div>
+                    : <div className="text-[11px] text-emerald-500 -mt-2">Mode invité — connecte-toi pour garder tes stats</div>}
+                  {/* Taux de victoire */}
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="text-5xl font-bold text-amber-300" style={{ fontFamily: "Georgia, serif" }}>{rate}%</div>
+                    <div className="text-xs text-emerald-300">de victoires</div>
+                    <div className="w-full h-2.5 rounded-full overflow-hidden bg-emerald-950 mt-1 flex">
+                      <div style={{ width: rate + "%", background: "#fcd34d" }} />
+                      <div style={{ width: (100 - rate) + "%", background: "#7f1d1d" }} />
+                    </div>
+                    <div className="flex justify-between w-full text-[10px]"><span className="text-amber-300">🏆 {wins} gagnées</span><span className="text-red-300">{losses} perdues</span></div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Stat v={games} lbl="Parties jouées" cls="text-emerald-200" />
+                    <Stat v={stats.bestScore != null ? stats.bestScore + " pts" : "—"} lbl="Meilleur score (record)" />
+                    <Stat v={"🔥 " + (stats.streak || 0)} lbl="Série en cours" cls="text-orange-300" />
+                    <Stat v={"⭐ " + (stats.bestStreak || 0)} lbl="Meilleure série" cls="text-orange-300" />
+                  </div>
+                  <button onClick={() => setShowStats(false)} className="btn-gold font-bold py-2.5 rounded-xl text-sm">Fermer</button>
+                </div>
+              </div>
+            );
+          })()}
           {showSucces && (
             <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 flex items-center justify-center p-4" onClick={() => setShowSucces(false)}>
               <div className="panel rounded-2xl p-4 w-full max-w-sm max-h-[75vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
