@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2197-T">
+<meta name="version" content="v2199-T">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -1882,7 +1882,11 @@ function tapCard(id) {
     if (!myTurn) {
       return "👀 " + g.players[g.turn].name + " joue… Patiente. À ton tour, tu pourras piocher dans le tas, ou prendre la carte du dessus de la défausse si elle t'arrange.";
     }
-    if (me.posed && !tutoFlags.complete) return "🧩 Nouvelle mission : COMPLÈTE une combinaison de la table ! Glisse une de tes cartes sur un tri ou un escalier posé (le tien ou celui d'un autre) si elle peut s'y ajouter. Chaque carte placée = une de moins en main !";
+    if (me.posed && !tutoFlags.complete) {
+      const fit = h.find((c) => !c.joker && (g.melds || []).some((m) => validGroup(m.type, [...m.cards, c])));
+      if (fit) return "🧩 Nouvelle mission : COMPLÉTER une combinaison déjà posée ! Ta carte qui brille, le " + rankLabel(fit) + fit.suit + ", va s'ajouter à une combinaison de la table. Deux façons : ① touche le " + rankLabel(fit) + fit.suit + " (il se sélectionne) puis touche la combinaison — ② ou glisse-le directement dessus. Chaque carte placée = une de moins en main !";
+      return "🧩 Nouvelle mission : COMPLÉTER ! Ajoute une de tes cartes à un tri ou un escalier déjà posé (le tien ou celui d'un autre) : touche la carte puis la combinaison, ou glisse-la dessus. Chaque carte placée = une de moins en main !";
+    }
     if (me.posed) return "🏁 Dernière ligne droite : continue à compléter quand tu peux, et jette une carte à chaque tour. Main vide = victoire !";
     if (canPose) return "🌟 CONTRAT COMPLET ! Appuie sur le gros bouton doré « Poser ! »";
     if (g.phase === "draw") {
@@ -1928,9 +1932,18 @@ function tapCard(id) {
 
   // cibles à illuminer pour la mission en cours
   const tutoHi = React.useMemo(() => {
-    if (!tuto || !g || !me) return { ids: new Set(), stock: false, pose: false, discard: false };
+    if (!tuto || !g || !me) return { ids: new Set(), stock: false, pose: false, discard: false, toss: null };
     const h = me.hand;
     const ids = new Set();
+    // Carte à jeter suggérée (même logique que le coach) : inutile + la plus chère, seulement quand il faut jeter
+    const uselessId = (() => {
+      if (!(myTurn && g.phase === "play")) return null;
+      const reals = h.filter((c) => !c.joker);
+      const utile = (c) => reals.some((o) => o.id !== c.id && o.rank === c.rank) ||
+        reals.some((o) => o.id !== c.id && o.suit === c.suit && Math.abs(o.rank - c.rank) <= 2);
+      const mortes = reals.filter((c) => !utile(c)).sort((a, b) => cardPoints(b) - cardPoints(a));
+      return mortes.length ? mortes[0].id : null;
+    })();
     // La carte du dessus de la défausse offre-t-elle un vrai gain ? (mêmes critères que le coach)
     const topD = g.discard[g.discard.length - 1];
     const strongD = (() => {
@@ -1944,40 +1957,41 @@ function tapCard(id) {
     })();
     const drawNow = myTurn && g.phase === "draw";
     const stockGlow = drawNow && !strongD, discardGlow = drawNow && strongD;
-    if (!tutoFlags.drew) return { ids, stock: drawNow, pose: false, discard: false };
+    if (!tutoFlags.drew) return { ids, stock: drawNow, pose: false, discard: false, toss: null };
     if (!tutoFlags.esc) {
       const trio = findRuns(h)[0];
       if (trio) {
         trio.slice(0, 3).forEach((c) => ids.add(c.id));
         const jk = h.find((c) => c.joker);
         if (jk) ids.add(jk.id);
-      } else {
-        // faire briller le duo que l'on collectionne
-        const bySuit = {};
-        h.filter((c) => !c.joker).forEach((c) => { (bySuit[c.suit] = bySuit[c.suit] || []).push(c); });
-        outer: for (const s of Object.keys(bySuit)) {
-          const arr = bySuit[s].sort((a, b) => a.rank - b.rank);
-          for (let i = 0; i < arr.length - 1; i++) {
-            if (arr[i + 1].rank - arr[i].rank === 1) { ids.add(arr[i].id); ids.add(arr[i + 1].id); break outer; }
-          }
+        return { ids, stock: stockGlow, pose: false, discard: discardGlow, toss: null };
+      }
+      // faire briller le duo que l'on collectionne
+      const bySuit = {};
+      h.filter((c) => !c.joker).forEach((c) => { (bySuit[c.suit] = bySuit[c.suit] || []).push(c); });
+      outer: for (const s of Object.keys(bySuit)) {
+        const arr = bySuit[s].sort((a, b) => a.rank - b.rank);
+        for (let i = 0; i < arr.length - 1; i++) {
+          if (arr[i + 1].rank - arr[i].rank === 1) { ids.add(arr[i].id); ids.add(arr[i + 1].id); break outer; }
         }
       }
-      return { ids, stock: stockGlow, pose: false, discard: discardGlow };
+      return { ids, stock: stockGlow, pose: false, discard: discardGlow, toss: uselessId };
     }
     if (!tutoFlags.tri) {
       const byRank = {};
       h.filter((c) => !c.joker).forEach((c) => { (byRank[c.rank] = byRank[c.rank] || []).push(c); });
       const best = Object.values(byRank).sort((a, b) => b.length - a.length)[0];
+      const complet = best && best.length >= 3;
       if (best) best.slice(0, 3).forEach((c) => ids.add(c.id));
-      return { ids, stock: stockGlow, pose: false, discard: discardGlow };
+      return { ids, stock: stockGlow, pose: false, discard: discardGlow, toss: complet ? null : uselessId };
     }
     if (me.posed && !tutoFlags.complete) {
       // Leçon « compléter » : faire briller la carte de la main qui s'ajoute à une combinaison de la table
       const fit = h.find((c) => !c.joker && (g.melds || []).some((m) => validGroup(m.type, [...m.cards, c])));
       if (fit) ids.add(fit.id);
-      return { ids, stock: false, pose: false, discard: false };
+      return { ids, stock: false, pose: false, discard: false, toss: null };
     }
-    return { ids, stock: false, pose: !me.posed, discard: false };
+    return { ids, stock: false, pose: !me.posed, discard: false, toss: null };
   }, [tuto, g, tutoFlags, myTurn]);
 
   const overStickyRef = useRef(0);
@@ -2863,11 +2877,13 @@ function tapCard(id) {
         )}
         <div className="flex flex-wrap gap-1.5 justify-center pb-1">
           {me.hand.filter((c) => c.id !== pendingDiscard).map((c) => (
-            <div key={c.id} data-cid={c.id}
+            <div key={c.id} data-cid={c.id} className="relative"
               onPointerDown={(e) => onCardPointerDown(e, c)}
-              style={{ touchAction: "none", opacity: drag && drag.id === c.id ? 0.35 : 1,
-                borderRadius: 10, boxShadow: tuto && tutoHi.ids.has(c.id) ? "0 0 14px 4px #22d3ee" : undefined }}>
+              style={{ touchAction: "none", opacity: drag && drag.id === c.id ? 0.35 : 1, borderRadius: 10,
+                boxShadow: tuto && tutoHi.ids.has(c.id) ? "0 0 14px 4px #22d3ee"
+                  : tuto && tutoHi.toss === c.id ? "0 0 14px 4px #ef4444" : undefined }}>
               <Card card={c} selected={selected.includes(c.id)} isNew={g.lastDrawn.includes(c.id)} />
+              {tuto && tutoHi.toss === c.id && <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[8px] font-bold text-red-200 bg-red-700/90 px-1 rounded-full whitespace-nowrap">à jeter</span>}
             </div>
           ))}
         </div>
