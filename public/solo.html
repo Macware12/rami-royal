@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2194-U">
+<meta name="version" content="v2195-A">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -2843,8 +2843,14 @@ function tapCard(id) {
         onPointerMove={onCardPointerMove}
         onPointerUp={onCardPointerUp}
         onPointerCancel={endDrag}
-        className={`shrink-0 px-2 pt-3 pb-2 border-t-2 ${drag && drag.origin === "discard" ? "border-amber-400 pulse-gold" : myTurn ? "border-amber-400" : "border-emerald-800"}`}
+        className={`shrink-0 relative px-2 pt-3 pb-2 border-t-2 ${drag && drag.origin === "discard" ? "border-amber-400 pulse-gold" : myTurn ? "border-amber-400" : "border-emerald-800"}`}
         style={{ background: "linear-gradient(180deg, rgba(4,35,24,.9), rgba(3,25,17,.97))", paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))" }}>
+        {me && !tuto && (
+          <div className="absolute top-0.5 right-2 flex items-center gap-0.5 text-[8px] text-emerald-400 font-bold" title="Tes achats restants cette manche">
+            <span>🛒</span>
+            {[0, 1, 2].map((k) => <span key={k} style={{ width: 5, height: 5, borderRadius: 99, background: k < me.buysLeft ? "#a3e635" : "#3f3f46" }} />)}
+          </div>
+        )}
         <div className="flex flex-wrap gap-1.5 justify-center pb-1">
           {me.hand.filter((c) => c.id !== pendingDiscard).map((c) => (
             <div key={c.id} data-cid={c.id}
