@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2207-S">
+<meta name="version" content="v2208-S">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -2353,6 +2353,18 @@ function tapCard(id) {
         const dur = Date.now() - g.startedAt;
         st.fastestWinMs = st.fastestWinMs == null ? dur : Math.min(st.fastestWinMs, dur);
       }
+      // Détail par manche : meilleure manche (moins de points) + points par contrat (→ contrat préféré)
+      const manchesList = g.manches || MANCHES;
+      st.contracts = st.contracts || {};
+      (g.history || []).forEach((hm) => {
+        const me0 = hm.summary[0]; // le joueur est en index 0
+        const mp = (me0.pts || 0) + (me0.bonus || 0);
+        st.bestManche = st.bestManche == null ? mp : Math.min(st.bestManche, mp);
+        const label = (manchesList[hm.mancheIdx] || {}).label || "?";
+        const c = st.contracts[label] || { n: 0, sum: 0 };
+        c.n += 1; c.sum += mp;
+        st.contracts[label] = c;
+      });
       if (acc.code) {
         store.set("rami-stats", JSON.stringify(st));
         // Synchronisation serveur silencieuse : le compte est retrouvable sur tous les appareils
@@ -2587,6 +2599,10 @@ function tapCard(id) {
             const rate = games ? Math.round((wins / games) * 100) : 0;
             const avg = games ? Math.round((stats.sumScore || 0) / games) : null;
             const fastest = stats.fastestWinMs ? fmtElapsed(Date.now() - stats.fastestWinMs) : null;
+            // Contrat préféré = celui où tu marques le moins de points en moyenne
+            const contracts = stats.contracts || {};
+            let favLabel = null, favAvg = Infinity;
+            Object.keys(contracts).forEach((lbl) => { const c = contracts[lbl]; if (c && c.n > 0) { const a = c.sum / c.n; if (a < favAvg) { favAvg = a; favLabel = lbl; } } });
             const Stat = ({ v, lbl, cls }) => (
               <div className="panel rounded-xl py-2.5 flex flex-col items-center">
                 <div className={"text-2xl font-bold " + (cls || "text-amber-300")}>{v}</div>
@@ -2621,9 +2637,17 @@ function tapCard(id) {
                         <Stat v={stats.bestScore != null ? stats.bestScore + " pts" : "—"} lbl="Meilleur score (record)" />
                         <Stat v={avg != null ? avg + " pts" : "—"} lbl="Score moyen" cls="text-emerald-200" />
                         <Stat v={fastest || "—"} lbl="Victoire la plus rapide" cls="text-cyan-300" />
+                        <Stat v={stats.bestManche != null ? stats.bestManche + " pts" : "—"} lbl="Meilleure manche" cls="text-emerald-200" />
                         <Stat v={"🔥 " + (stats.streak || 0)} lbl="Série en cours" cls="text-orange-300" />
                         <Stat v={"⭐ " + (stats.bestStreak || 0)} lbl="Meilleure série" cls="text-orange-300" />
                       </div>
+                      {favLabel && (
+                        <div className="panel rounded-xl p-3 text-center">
+                          <div className="text-[10px] text-emerald-300 uppercase tracking-wide">🎯 Ton contrat préféré</div>
+                          <div className="text-amber-300 font-bold text-base mt-0.5">{favLabel}</div>
+                          <div className="text-[10px] text-emerald-400">{Math.round(favAvg)} pts en moyenne — c'est là que tu brilles</div>
+                        </div>
+                      )}
                     </React.Fragment>
                   )}
                   <button onClick={() => setShowStats(false)} className="btn-gold font-bold py-2.5 rounded-xl text-sm">Fermer</button>

@@ -140,6 +140,19 @@ function cleanStats(s) {
   ["games", "wins", "streak", "bestStreak", "bestScore", "sumScore", "fastestWinMs"].forEach((k) => {
     if (typeof s[k] === "number" && isFinite(s[k])) out[k] = Math.max(0, Math.min(1e12, Math.round(s[k])));
   });
+  // bestManche peut être négatif (bonus pose-tout) → on autorise les valeurs négatives
+  if (typeof s.bestManche === "number" && isFinite(s.bestManche)) out.bestManche = Math.max(-1e6, Math.min(1e6, Math.round(s.bestManche)));
+  // contracts : { "libellé": { n, sum } } pour le contrat préféré
+  if (s.contracts && typeof s.contracts === "object") {
+    const co = {};
+    Object.keys(s.contracts).slice(0, 20).forEach((k) => {
+      if (typeof k !== "string" || k.length > 40) return;
+      const c = s.contracts[k];
+      if (c && typeof c === "object" && typeof c.n === "number" && typeof c.sum === "number" && isFinite(c.n) && isFinite(c.sum))
+        co[k] = { n: Math.max(0, Math.min(1e9, Math.round(c.n))), sum: Math.round(c.sum) };
+    });
+    out.contracts = co;
+  }
   return out;
 }
 function cleanSucces(s) {
@@ -161,6 +174,19 @@ function mergeStats(a, b) {
   if (scores.length) out.bestScore = Math.min(...scores);
   const temps = [a.fastestWinMs, b.fastestWinMs].filter((x) => x != null);
   if (temps.length) out.fastestWinMs = Math.min(...temps); // on garde la victoire la plus rapide
+  const bm = [a.bestManche, b.bestManche].filter((x) => x != null);
+  if (bm.length) out.bestManche = Math.min(...bm);
+  // Chaque appareil envoie son cumul complet : on garde, par contrat, la version au plus grand n
+  // (comme games/wins en Math.max) pour ne pas double-compter à chaque synchro
+  const ca = a.contracts || {}, cb = b.contracts || {};
+  const labels = new Set([...Object.keys(ca), ...Object.keys(cb)]);
+  if (labels.size) {
+    out.contracts = {};
+    labels.forEach((l) => {
+      const x = ca[l] || { n: 0, sum: 0 }, y = cb[l] || { n: 0, sum: 0 };
+      out.contracts[l] = (y.n || 0) >= (x.n || 0) ? { n: y.n || 0, sum: y.sum || 0 } : { n: x.n || 0, sum: x.sum || 0 };
+    });
+  }
   return out;
 }
 function mergeSucces(a, b) {
