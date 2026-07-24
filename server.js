@@ -137,8 +137,8 @@ try {
 function cleanStats(s) {
   const out = {};
   if (!s || typeof s !== "object") return out;
-  ["games", "wins", "streak", "bestStreak", "bestScore"].forEach((k) => {
-    if (typeof s[k] === "number" && isFinite(s[k])) out[k] = Math.max(0, Math.min(1e9, Math.round(s[k])));
+  ["games", "wins", "streak", "bestStreak", "bestScore", "sumScore", "fastestWinMs"].forEach((k) => {
+    if (typeof s[k] === "number" && isFinite(s[k])) out[k] = Math.max(0, Math.min(1e12, Math.round(s[k])));
   });
   return out;
 }
@@ -154,11 +154,13 @@ function cleanSucces(s) {
 function mergeStats(a, b) {
   a = a || {}; b = b || {};
   const out = {};
-  ["games", "wins", "bestStreak"].forEach((k) => { const v = Math.max(a[k] || 0, b[k] || 0); if (v) out[k] = v; });
+  ["games", "wins", "bestStreak", "sumScore"].forEach((k) => { const v = Math.max(a[k] || 0, b[k] || 0); if (v) out[k] = v; });
   if (b.streak != null) out.streak = b.streak; // la série en cours suit le dernier appareil
   else if (a.streak != null) out.streak = a.streak;
   const scores = [a.bestScore, b.bestScore].filter((x) => x != null);
   if (scores.length) out.bestScore = Math.min(...scores);
+  const temps = [a.fastestWinMs, b.fastestWinMs].filter((x) => x != null);
+  if (temps.length) out.fastestWinMs = Math.min(...temps); // on garde la victoire la plus rapide
   return out;
 }
 function mergeSucces(a, b) {
