@@ -38,6 +38,23 @@ app.use((req, res, next) => {
 
 app.get("/ping", (req, res) => res.send("ok"));
 
+// ---------- Keep-alive : empêche la mise en veille Render (offre gratuite) ----------
+// Render endort le service après ~15 min sans trafic ENTRANT externe. On se pingue via l'URL
+// publique (fournie automatiquement par Render) toutes les 10 min pour rester réveillé.
+// Actif seulement en production (RENDER_EXTERNAL_URL absent en local → aucun effet).
+(function keepAlive() {
+  const base = process.env.RENDER_EXTERNAL_URL;
+  if (!base) return;
+  const https = require("https");
+  const http = require("http");
+  const url = base.replace(/\/$/, "") + "/ping";
+  setInterval(() => {
+    try {
+      (url.startsWith("https") ? https : http).get(url, (r) => r.resume()).on("error", () => {});
+    } catch (_) {}
+  }, 10 * 60 * 1000); // toutes les 10 minutes
+})();
+
 // ---------- Statistiques temps réel ----------
 const presence = new Map(); // id → { t: dernier signal, m: mode, p: pseudo }
 // Clé pour voir les pseudos sur /stats.html — à définir dans les variables d'environnement Render.
