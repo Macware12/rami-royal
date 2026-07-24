@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2192-T">
+<meta name="version" content="v2194-U">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -1685,7 +1685,7 @@ function tapCard(id) {
     if (inRect(dr, 28) || sticky) {
       if (myTurn && g.phase === "play") {
         setPendingDiscard(card.id);
-        setMsg("⚠️ Appuie sur la défausse pour confirmer le jet");
+        setMsg("🔒 Touche la défausse (encadrée en rouge) pour confirmer le jet");
       }
       else if (myTurn && g.phase === "draw") setMsg("Pioche d'abord, tu jetteras ensuite.");
       else setMsg("Tu pourras jeter pendant ton tour.");
@@ -2704,7 +2704,7 @@ function tapCard(id) {
               {/* Réduction seulement si CETTE rangée est chargée (la rangée défile déjà horizontalement) */}
               {g.melds.filter((m) => m.owner === o).map((m, _i, arr) => (
                 <MeldChip key={m.id} mid={m.id} meld={m}
-                  small={arr.reduce((s, x) => s + x.cards.length, 0) > 11}
+                  small={true}
                   highlight={(me.posed && selected.length === 1 && myTurn) || (Boolean(drag) && drag.origin !== "discard" && me.posed && myTurn && g.phase === "play")}
                   onClick={() => { if (myTurn && selected.length === 1) completeMeld(m.id); }}
                   onLongPress={setZoomMeld} />
@@ -2813,9 +2813,8 @@ function tapCard(id) {
               ? <Card card={me.hand.find((c) => c.id === pendingDiscard)} />
               : topDiscard ? <Card card={topDiscard} /> : <div style={{ height: 58, width: 40 }} className="rounded-lg border-2 border-dashed border-emerald-600" />}
           </div>
-          {pendingDiscard && <span className="absolute -top-3 -right-3 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full z-10">Confirmer</span>}
-          <span className="text-[10px] text-emerald-300 font-bold">
-            {g.buyWindow ? `Acheter (${me.buysLeft})` : g.discardLocked && myTurn && g.phase === "draw" ? "Bloquée (achat) 🚫" : myTurn && g.phase === "draw" ? "Prendre (gratuit)" : `Défausse · ${g.discard.length}`}
+          <span className={`text-[10px] font-bold ${pendingDiscard ? "text-red-300" : "text-emerald-300"}`}>
+            {pendingDiscard ? "Confirmer 🔒" : g.buyWindow ? `Acheter (${me.buysLeft})` : g.discardLocked && myTurn && g.phase === "draw" ? "Bloquée (achat) 🚫" : myTurn && g.phase === "draw" ? "Prendre (gratuit)" : `Défausse · ${g.discard.length}`}
           </span>
         </button>
       </div>
