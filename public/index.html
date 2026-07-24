@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2204-K">
+<meta name="version" content="v2205-R">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -744,6 +744,7 @@ function App() {
   const [tick, setTick] = useState(0);
   const [drag, setDrag] = useState(null);
   const [saved, setSaved] = useState(null);
+  const [savedInfo, setSavedInfo] = useState(null); // aperçu live du salon à reprendre (hôte, joueurs)
   const [connErr, setConnErr] = useState("");
   const [connLost, setConnLost] = useState(false);
   const [pendingDiscard, setPendingDiscard] = useState(null);
@@ -824,6 +825,18 @@ function App() {
     const resync = setInterval(() => { if (socket.connected) socket.emit("resync"); }, 10000);
     return () => { clearInterval(keepAlive); clearInterval(resync); socket.off("state"); socket.off("info"); socket.off("fx"); socket.off("roomClosed"); socket.off("kicked"); socket.off("emote"); socket.off("disconnect"); socket.off("connect_error"); };
   }, []);
+
+  // Vérifie que la partie sauvegardée existe encore, et récupère son contexte (sinon on efface le bouton)
+  useEffect(() => {
+    if (!saved || srv) { setSavedInfo(null); return; }
+    let vivant = true;
+    fetch(API_BASE + "/salon-info?code=" + saved.code).then((r) => r.json()).then((d) => {
+      if (!vivant) return;
+      if (d && d.ok) setSavedInfo(d);
+      else { setSavedInfo(null); setSaved(null); store.del("ramimp-save"); } // salon expiré : plus rien à reprendre
+    }).catch(() => {});
+    return () => { vivant = false; };
+  }, [saved, srv]);
 
   // Reconnexion automatique après coupure réseau
   useEffect(() => {
@@ -1418,8 +1431,13 @@ function App() {
             </div>
           </div>
           {saved && (
-            <button onClick={rejoinSaved} className="btn-green font-bold py-2.5 rounded-xl text-sm">
-              ▶ Reprendre la partie ({saved.code})
+            <button onClick={rejoinSaved} className="btn-green font-bold py-3 rounded-xl text-sm pulse-gold flex flex-col items-center gap-0.5">
+              <span>▶ Reprendre ma partie ({saved.code})</span>
+              {savedInfo && savedInfo.ok && (
+                <span className="text-[10px] font-normal opacity-90">
+                  {savedInfo.hote}{savedInfo.joueurs > 0 ? " · " + savedInfo.joueurs + " joueur" + (savedInfo.joueurs > 1 ? "s" : "") : ""}{savedInfo.enPartie ? " · en cours" : ""}
+                </span>
+              )}
             </button>
           )}
           <div className="border-t border-emerald-800 pt-3 flex flex-col gap-2">
@@ -1498,7 +1516,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2204-K</span>
+          <span className="opacity-60">v2205-R</span>
         </div>
       </div>
     );
