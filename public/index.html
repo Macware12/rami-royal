@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2214-A">
+<meta name="version" content="v2215-C">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -987,7 +987,15 @@ function App() {
       setPendingDiscard(null);
       setMsg("Jet annulé — délai d'attente dépassé.");
     }, 8000);
-    return () => clearTimeout(timer);
+    // Toucher n'importe où AILLEURS que la défausse annule le jet en attente
+    const onDown = (e) => {
+      const dr = discardRef.current;
+      if (dr && dr.contains(e.target)) return; // sur la défausse : confirmation gérée par le bouton
+      setPendingDiscard(null);
+      setMsg("Jet annulé.");
+    };
+    const armT = setTimeout(() => document.addEventListener("pointerdown", onDown), 60);
+    return () => { clearTimeout(timer); clearTimeout(armT); document.removeEventListener("pointerdown", onDown); };
   }, [pendingDiscard]);
 
   // Si la carte glissée n'existe plus (mise à jour du serveur), on annule proprement
@@ -1617,7 +1625,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2214-A</span>
+          <span className="opacity-60">v2215-C</span>
         </div>
       </div>
     );
