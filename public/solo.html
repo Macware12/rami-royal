@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2215-C">
+<meta name="version" content="v2216-P">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -3096,9 +3096,11 @@ function tapCard(id) {
                 style={tuto && tutoFlags.drew && !tutoFlags.aide ? { boxShadow: "0 0 16px 5px #22d3ee" } : undefined}>
                 💡 Aide
               </button>
-              <button onClick={autoStage} className="btn-dark px-4 py-2 rounded-xl text-sm font-bold">
-                🪄 Préparer ma pose
-              </button>
+              {!contract.poseTout && (
+                <button onClick={autoStage} className="btn-dark px-4 py-2 rounded-xl text-sm font-bold">
+                  🪄 Préparer ma pose
+                </button>
+              )}
             </>
           )}
           {!me.posed && g.staged.length > 0 && !g.roundOver && (
