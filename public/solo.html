@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2218-T">
+<meta name="version" content="v2220-D">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -2242,8 +2242,8 @@ function tapCard(id) {
     if (!posed) {
       const plan = contract.poseTout ? aiPlanFullHand(hand) : aiPlanContract(hand, contract, level);
       let planOk = plan && (!contract.poseTout || plan.reduce((n, m) => n + m.cards.length, 0) === hand.length);
-      // Difficile : on retient la pose pour ne rien dévoiler et viser une fin éclair —
-      // sauf si quelqu'un a déjà posé (la course est lancée) ou si la pioche s'épuise
+      // Difficile : on RETIENT la pose pour cacher son jeu (ne pas révéler quelles cartes complètent ses
+      // combinaisons) et frapper tard — sauf si quelqu'un a déjà posé, ou si la pioche s'épuise.
       if (planOk && level === "difficile" && !contract.poseTout) {
         const othersPosed = s.players.some((q, i2) => i2 !== idx && q.posed);
         const leftover = hand.length - plan.reduce((n, m) => n + m.cards.length, 0);
@@ -2326,14 +2326,14 @@ function tapCard(id) {
     } else if (level === "difficile" && nonJokers.length > 0) {
       // Défausse défensive : éviter de nourrir les adversaires
       const othersTaken = (ns.takenCards || []).filter((t) => t.idx !== idx).map((t) => t.card);
-      const anyOtherPosed = ns.players.some((q, i2) => i2 !== idx && q.posed);
       const danger = (c) => {
         let d2 = 0;
         othersTaken.forEach((t) => {
-          if (t.rank === c.rank) d2 += 3;
-          if (t.suit === c.suit && Math.abs(t.rank - c.rank) <= 2) d2 += 2;
+          if (t.rank === c.rank) d2 += 4;                                   // un adversaire collectionne ce rang
+          if (t.suit === c.suit && Math.abs(t.rank - c.rank) <= 2) d2 += 3; // …ou cette couleur autour de ce rang
         });
-        if (anyOtherPosed && melds.some((m) => validGroup(m.type, [...m.cards, c]))) d2 += 6;
+        // Zéro cadeau : ne jamais offrir une carte qui complète un jeu ADVERSE déjà posé
+        if (melds.some((m) => m.owner !== idx && validGroup(m.type, [...m.cards, c]))) d2 += 14;
         return d2;
       };
       // Utilité selon le contrat : dans une manche 100 % tris, les voisins de couleur ne valent rien (et inversement)

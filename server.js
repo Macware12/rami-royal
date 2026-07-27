@@ -969,8 +969,8 @@ function aiPlayTurn(room) {
   if (!p.posed) {
     const plan = contract.poseTout ? E.aiPlanFullHand(p.hand) : E.aiPlanContract(p.hand, contract, level);
     let planOk = plan && (!contract.poseTout || plan.reduce((s, m) => s + m.cards.length, 0) === p.hand.length);
-    // Difficile : on retient la pose pour ne rien dévoiler et viser une fin éclair —
-    // sauf si quelqu'un a déjà posé (la course est lancée) ou si la pioche s'épuise
+    // Difficile : on RETIENT la pose pour cacher son jeu (ne pas révéler quelles cartes complètent ses
+    // combinaisons) et frapper tard — sauf si quelqu'un a déjà posé, ou si la pioche s'épuise.
     if (planOk && level === "difficile" && !contract.poseTout) {
       const othersPosed = room.players.some((q, i2) => i2 !== idx && q.posed);
       const leftover = p.hand.length - plan.reduce((s, m) => s + m.cards.length, 0);
@@ -1040,16 +1040,15 @@ function aiPlayTurn(room) {
     // Une fois posé : se débarrasser des cartes les plus chères (limiter les points)
     toss = [...nonJokers].sort((a, b) => E.cardPoints(b) - E.cardPoints(a))[0];
   } else if (level === "difficile" && nonJokers.length > 0) {
-    // Défausse défensive : éviter de nourrir les adversaires
+    // Défausse défensive « zéro cadeau » : ne jamais nourrir les adversaires
     const othersTaken = (g.takenCards || []).filter((t) => t.idx !== idx).map((t) => t.card);
-    const anyOtherPosed = room.players.some((q, i2) => i2 !== idx && q.posed);
     const danger = (c) => {
       let d2 = 0;
       othersTaken.forEach((t) => {
-        if (t.rank === c.rank) d2 += 3;
-        if (t.suit === c.suit && Math.abs(t.rank - c.rank) <= 2) d2 += 2;
+        if (t.rank === c.rank) d2 += 4;                                     // un adversaire collectionne ce rang
+        if (t.suit === c.suit && Math.abs(t.rank - c.rank) <= 2) d2 += 3;   // …ou cette couleur autour de ce rang
       });
-      if (anyOtherPosed && g.melds.some((m) => E.validGroup(m.type, [...m.cards, c]))) d2 += 6;
+      if (g.melds.some((m) => m.owner !== idx && E.validGroup(m.type, [...m.cards, c]))) d2 += 14; // complète un jeu adverse posé
       return d2;
     };
     // Utilité selon le contrat : dans une manche 100 % tris, les voisins de couleur ne valent rien (et inversement)
