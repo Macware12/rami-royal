@@ -34,26 +34,45 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 
     <h2>Ce que nous collectons</h2>
     <ul>
-      <li><b>Aucun compte</b> n'est requis et aucune donnée personnelle identifiante (email, téléphone, position) n'est demandée.</li>
+      <li>Nous ne demandons <b>aucune donnée personnelle identifiante</b> : ni email, ni numéro de téléphone, ni nom réel, ni position géographique.</li>
       <li>Le <b>pseudo et l'emoji</b> que vous choisissez servent uniquement à vous représenter à la table de jeu.</li>
       <li>En multijoueur, l'état des parties (pseudos, cartes, scores, messages prédéfinis) transite par notre serveur et est conservé <b>en mémoire, temporairement</b> : il est effacé à la fin de la partie ou après quelques heures d'inactivité.</li>
     </ul>
 
+    <h2>Compte (facultatif)</h2>
+    <p>Le jeu se joue très bien <b>sans compte</b> (mode invité). Si vous le souhaitez, vous pouvez créer un compte pour retrouver vos statistiques sur tous vos appareils. Ce compte est volontairement minimaliste :</p>
+    <ul>
+      <li>Il se compose uniquement d'un <b>pseudo</b> et d'un <b>code secret à 6 chiffres</b> généré par le jeu. <b>Aucun mot de passe, aucun email</b> ne sont demandés.</li>
+      <li>Nous conservons alors, associés à ce code, uniquement votre <b>pseudo, vos statistiques de jeu et vos succès</b>. Rien qui permette de vous identifier personnellement.</li>
+      <li>Le <b>code secret est votre seule clé</b> : conservez-le. Toute personne à qui vous le communiquez pourrait consulter vos statistiques. Nous ne pouvons pas le récupérer à votre place.</li>
+    </ul>
+
     <h2>Ce qui reste sur votre appareil</h2>
-    <p>Vos préférences (pseudo, emoji, sons), vos statistiques, vos succès et la sauvegarde de partie en cours sont stockés <b>localement sur votre appareil</b> (stockage du navigateur ou de l'application). Ils ne sont jamais transmis à des tiers et disparaissent si vous effacez les données du site ou de l'application.</p>
+    <p>Vos préférences (pseudo, emoji, sons), et — en mode invité — vos statistiques, vos succès et la sauvegarde de partie en cours sont stockés <b>localement sur votre appareil</b> (stockage du navigateur ou de l'application). Ils disparaissent si vous effacez les données du site ou de l'application.</p>
+
+    <h2>Sécurité</h2>
+    <ul>
+      <li>Toutes les communications sont <b>chiffrées en HTTPS</b> (redirection forcée), avec des en-têtes de sécurité standard (HSTS, anti-clickjacking, anti-sniffing MIME).</li>
+      <li>Le serveur applique une <b>limitation du débit</b> des requêtes et une protection <b>anti-force-brute</b> sur les codes de compte, pour prévenir les abus.</li>
+      <li>Les données échangées sont <b>filtrées et bornées</b> côté serveur ; aucune donnée sensible n'est stockée.</li>
+      <li>Nous n'exécutons ni ne stockons de contenu arbitraire fourni par les joueurs (les pseudos et messages sont assainis).</li>
+    </ul>
 
     <h2>Ce que nous ne faisons pas</h2>
     <ul>
       <li>Pas de publicité, pas de traceurs, pas de cookies publicitaires.</li>
-      <li>Pas de revente ni de partage de données.</li>
-      <li>Pas de collecte sur les mineurs — le jeu ne collecte de données personnelles sur personne.</li>
+      <li>Pas de revente ni de partage de vos données avec des tiers.</li>
+      <li>Aucune donnée personnelle identifiante n'est collectée sur qui que ce soit, y compris les mineurs.</li>
     </ul>
 
     <h2>Hébergement</h2>
     <p>Le serveur de jeu est hébergé par un prestataire d'hébergement cloud. Comme tout serveur web, il peut journaliser techniquement des adresses IP à des fins de sécurité et de bon fonctionnement, sans exploitation commerciale.</p>
 
+    <h2>Supprimer vos données</h2>
+    <p>En mode invité, effacez les données du site/de l'application depuis votre navigateur ou téléphone. Si vous avez un compte et souhaitez sa suppression, écrivez-nous en indiquant votre code — nous supprimerons les statistiques associées.</p>
+
     <h2>Contact</h2>
-    <p>Pour toute question relative à cette politique : <b>[ton adresse email de contact]</b>.</p>
+    <p>Pour toute question relative à cette politique ou à vos données : <b>contact.ramygasy@gmail.com</b>.</p>
   </div>
   <p style="text-align:center; margin-top: 24px;"><a class="back" href="/">← Retour au jeu</a></p>
 </div>
