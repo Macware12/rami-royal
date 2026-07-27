@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2217-T">
+<meta name="version" content="v2218-T">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -2224,6 +2224,20 @@ function tapCard(id) {
     let melds = [...s.melds];
     let posed = ai.posed;
     let justPosed = false;
+
+    // Tutoriel : dès que LE JOUEUR a posé, le premier bot à jouer pose aussi son contrat (réalisme + une
+    // combinaison adverse sur la table à compléter). Ne se déclenche jamais pendant les leçons.
+    if (tuto && !posed && idx !== 0 && s.players[0].posed && !s.players.some((q, i2) => i2 !== 0 && q.posed)) {
+      const mkc = (rank, suit) => ({ rank, suit, id: "tb" + rank + suit + "-" + Math.random().toString(36).slice(2, 6), joker: false });
+      const scripted = [
+        { type: "tri", cards: [mkc(4, "♠"), mkc(4, "♥"), mkc(4, "♦")] },
+        { type: "esc", cards: [mkc(10, "♣"), mkc(11, "♣"), mkc(12, "♣")] },
+      ];
+      scripted.forEach((m, i) => melds.push({ id: Date.now() + idx * 100 + i, type: m.type, cards: normMeld(m.type, m.cards), owner: idx }));
+      hand = hand.slice(0, Math.max(0, hand.length - 6)); // le bot « utilise » 6 cartes
+      posed = true; justPosed = true;
+      ns = addLog(ns, ai.name + " pose son contrat !");
+    }
 
     if (!posed) {
       const plan = contract.poseTout ? aiPlanFullHand(hand) : aiPlanContract(hand, contract, level);
