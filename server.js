@@ -969,13 +969,14 @@ function aiPlayTurn(room) {
   if (!p.posed) {
     const plan = contract.poseTout ? E.aiPlanFullHand(p.hand) : E.aiPlanContract(p.hand, contract, level);
     let planOk = plan && (!contract.poseTout || plan.reduce((s, m) => s + m.cards.length, 0) === p.hand.length);
-    // Difficile : on RETIENT la pose pour cacher son jeu (ne pas révéler quelles cartes complètent ses
-    // combinaisons) et frapper tard — sauf si quelqu'un a déjà posé, ou si la pioche s'épuise.
+    // Difficile : on RETIENT la pose pour cacher son jeu — sauf si quelqu'un a déjà posé, si la pioche
+    // s'épuise, ou si un adversaire est près de finir (fin de course : on pose vite pour compléter).
     if (planOk && level === "difficile" && !contract.poseTout) {
       const othersPosed = room.players.some((q, i2) => i2 !== idx && q.posed);
+      const minOpp = Math.min(...room.players.map((q, i2) => (i2 === idx ? 99 : q.hand.length)));
       const leftover = p.hand.length - plan.reduce((s, m) => s + m.cards.length, 0);
       const lowStock = g.stock.length < room.players.length * 4;
-      if (!othersPosed && leftover > 3 && !lowStock) planOk = false;
+      if (!othersPosed && leftover > 3 && !lowStock && minOpp > 4) planOk = false;
     }
     if (planOk) {
       plan.forEach((m, i) => g.melds.push({ id: Date.now() + idx * 100 + i, type: m.type, cards: E.normMeld(m.type, m.cards), owner: idx }));
@@ -1035,8 +1036,16 @@ function aiPlayTurn(room) {
 
   // Jeter
   const nonJokers = p.hand.filter((c) => !c.joker);
+  // Fin de course : pioche presque vide ou un adversaire près de finir
+  const endgame = g.stock.length <= room.players.length * 2 || room.players.some((q, i2) => i2 !== idx && q.hand.length <= 3);
+  // Joker mort : en fin de course, un joker inutilisable = 20 pts de pénalité → on le jette (perdu pour tous)
+  const jokerInHand = p.hand.find((c) => c.joker);
+  const deadJoker = level === "difficile" && endgame && jokerInHand &&
+    (p.posed || !E.aiPlanContract(p.hand, contract, level)) ? jokerInHand : null;
   let toss;
-  if (p.posed && nonJokers.length > 0) {
+  if (deadJoker) {
+    toss = deadJoker;
+  } else if (p.posed && nonJokers.length > 0) {
     // Une fois posé : se débarrasser des cartes les plus chères (limiter les points)
     toss = [...nonJokers].sort((a, b) => E.cardPoints(b) - E.cardPoints(a))[0];
   } else if (level === "difficile" && nonJokers.length > 0) {
@@ -1054,9 +1063,19 @@ function aiPlayTurn(room) {
     // Utilité selon le contrat : dans une manche 100 % tris, les voisins de couleur ne valent rien (et inversement)
     const wantTri = (contract.tri || 0) > 0 || contract.poseTout;
     const wantEsc = (contract.esc || 0) > 0 || contract.poseTout;
+    // COMPTAGE DE CARTES : un « début » ne vaut que si une carte qui le complète est encore disponible.
+    const seen = {};
+    const kk = (r, su) => ((((r - 1) % 13) + 13) % 13 + 1) + su;
+    g.discard.forEach((c) => { if (!c.joker) seen[kk(c.rank, c.suit)] = (seen[kk(c.rank, c.suit)] || 0) + 1; });
+    g.melds.forEach((m) => m.cards.forEach((c) => { if (!c.joker) seen[kk(c.rank, c.suit)] = (seen[kk(c.rank, c.suit)] || 0) + 1; }));
+    const aliveS = (r, su) => Math.max(0, 2 - (seen[kk(r, su)] || 0));
     const usefulness = (c) => {
-      const m2 = nonJokers.filter((o) => o.id !== c.id && o.rank === c.rank).length;
-      const n2 = nonJokers.filter((o) => o.id !== c.id && o.suit === c.suit && Math.abs(o.rank - c.rank) <= 2).length;
+      const sameInHand = nonJokers.filter((o) => o.id !== c.id && o.rank === c.rank).length;
+      const neighInHand = nonJokers.filter((o) => o.id !== c.id && o.suit === c.suit && Math.abs(o.rank - c.rank) <= 2).length;
+      const rankAlive = ["♠", "♥", "♦", "♣"].reduce((n, su) => n + aliveS(c.rank, su), 0) - nonJokers.filter((o) => o.rank === c.rank).length;
+      const escAlive = aliveS(c.rank - 1, c.suit) + aliveS(c.rank + 1, c.suit) + aliveS(c.rank - 2, c.suit) + aliveS(c.rank + 2, c.suit);
+      const m2 = sameInHand >= 1 && rankAlive > 0 ? sameInHand : 0;
+      const n2 = neighInHand >= 1 && escAlive > 0 ? neighInHand : 0;
       return m2 * (wantTri ? 4 : 1) + n2 * (wantEsc ? 3 : 1) - E.cardPoints(c) * 0.15;
     };
     // Jamais rejeter le rang qu'on vient de prendre : ça annulerait la prise (ou le blocage)

@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2220-D">
+<meta name="version" content="v2221-D">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -2243,12 +2243,14 @@ function tapCard(id) {
       const plan = contract.poseTout ? aiPlanFullHand(hand) : aiPlanContract(hand, contract, level);
       let planOk = plan && (!contract.poseTout || plan.reduce((n, m) => n + m.cards.length, 0) === hand.length);
       // Difficile : on RETIENT la pose pour cacher son jeu (ne pas révéler quelles cartes complètent ses
-      // combinaisons) et frapper tard — sauf si quelqu'un a déjà posé, ou si la pioche s'épuise.
+      // combinaisons) et frapper tard — SAUF si quelqu'un a déjà posé, si la pioche s'épuise, ou si un
+      // adversaire est près de finir (fin de course : on pose vite pour compléter et limiter la casse).
       if (planOk && level === "difficile" && !contract.poseTout) {
         const othersPosed = s.players.some((q, i2) => i2 !== idx && q.posed);
+        const minOpp = Math.min(...s.players.map((q, i2) => (i2 === idx ? 99 : q.hand.length)));
         const leftover = hand.length - plan.reduce((n, m) => n + m.cards.length, 0);
         const lowStock = stock.length < s.players.length * 4;
-        if (!othersPosed && leftover > 3 && !lowStock) planOk = false;
+        if (!othersPosed && leftover > 3 && !lowStock && minOpp > 4) planOk = false;
       }
       if (planOk) {
         plan.forEach((m, i) => melds.push({ ...m, id: Date.now() + idx * 100 + i, owner: idx, cards: normMeld(m.type, m.cards) }));
@@ -2308,8 +2310,16 @@ function tapCard(id) {
     if (ns.roundOver) return { ...ns, animEvents, animSeq: ++ANIM_SEQ };
 
     const nonJokers = hand.filter((c) => !c.joker);
+    // Fin de course : pioche presque vide ou un adversaire près de finir
+    const endgame = stock.length <= s.players.length * 2 || s.players.some((q, i2) => i2 !== idx && q.hand.length <= 3);
+    // Joker mort : en fin de course, un joker inutilisable = 20 pts de pénalité → on le jette (perdu pour tous)
+    const jokerInHand = hand.find((c) => c.joker);
+    const deadJoker = !tuto && level === "difficile" && endgame && jokerInHand &&
+      (posed || !aiPlanContract(hand, contract, level)) ? jokerInHand : null;
     let toss;
-    if (tuto && nonJokers.length > 0) {
+    if (deadJoker) {
+      toss = deadJoker;
+    } else if (tuto && nonJokers.length > 0) {
       // Défausse scénarisée du tutoriel : chaque leçon arrive au bon moment, rien d'aléatoire.
       // Joueur 3 jette le 8♣ (leçon « prends dans la défausse ») dès que le joueur a appris à piocher ;
       // Joueur 2 jette le 9♦ (leçon « achat ») dès que l'escalier est acquis.
@@ -2339,9 +2349,21 @@ function tapCard(id) {
       // Utilité selon le contrat : dans une manche 100 % tris, les voisins de couleur ne valent rien (et inversement)
       const wantTri = (contract.tri || 0) > 0 || contract.poseTout;
       const wantEsc = (contract.esc || 0) > 0 || contract.poseTout;
+      // COMPTAGE DE CARTES : un « début » ne vaut que si une carte qui le complète est encore disponible.
+      const seen = {};
+      const kk = (r, su) => ((((r - 1) % 13) + 13) % 13 + 1) + su;
+      ns.discard.forEach((c) => { if (!c.joker) seen[kk(c.rank, c.suit)] = (seen[kk(c.rank, c.suit)] || 0) + 1; });
+      melds.forEach((m) => m.cards.forEach((c) => { if (!c.joker) seen[kk(c.rank, c.suit)] = (seen[kk(c.rank, c.suit)] || 0) + 1; }));
+      const aliveS = (r, su) => Math.max(0, 2 - (seen[kk(r, su)] || 0)); // exemplaires encore trouvables (sur 2)
       const usefulness = (c) => {
-        const m2 = nonJokers.filter((o) => o.id !== c.id && o.rank === c.rank).length;
-        const n2 = nonJokers.filter((o) => o.id !== c.id && o.suit === c.suit && Math.abs(o.rank - c.rank) <= 2).length;
+        const sameInHand = nonJokers.filter((o) => o.id !== c.id && o.rank === c.rank).length;
+        const neighInHand = nonJokers.filter((o) => o.id !== c.id && o.suit === c.suit && Math.abs(o.rank - c.rank) <= 2).length;
+        // pour un futur tri : reste-t-il un 3e exemplaire de ce rang ailleurs ?
+        const rankAlive = ["♠", "♥", "♦", "♣"].reduce((n, su) => n + aliveS(c.rank, su), 0) - nonJokers.filter((o) => o.rank === c.rank).length;
+        // pour un futur escalier : une carte voisine de même couleur est-elle encore trouvable ?
+        const escAlive = aliveS(c.rank - 1, c.suit) + aliveS(c.rank + 1, c.suit) + aliveS(c.rank - 2, c.suit) + aliveS(c.rank + 2, c.suit);
+        const m2 = sameInHand >= 1 && rankAlive > 0 ? sameInHand : 0;
+        const n2 = neighInHand >= 1 && escAlive > 0 ? neighInHand : 0;
         return m2 * (wantTri ? 4 : 1) + n2 * (wantEsc ? 3 : 1) - cardPoints(c) * 0.15;
       };
       // Jamais rejeter le rang qu'on vient de prendre : ça annulerait la prise (ou le blocage)
