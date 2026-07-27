@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2213-A">
+<meta name="version" content="v2214-A">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -571,56 +571,97 @@ function findJokerRuns(hand) {
   return out;
 }
 
-function aiPlanContract(hand, contract, level) {
-  // Deux passes : escaliers d'abord, puis tris d'abord — évite qu'un long escalier vole la carte d'un tri (et inversement)
-  return aiPlanContractPass(hand, contract, level, false) || aiPlanContractPass(hand, contract, level, true);
+// Tris candidats : groupe complet d'abord (poser un max), puis sous-ensembles de 3 (repli si conflit)
+function enumTris(hand) {
+  const byRank = {};
+  hand.forEach((c) => { if (!c.joker) (byRank[c.rank] = byRank[c.rank] || []).push(c); });
+  const out = [];
+  for (const r in byRank) {
+    const g = byRank[r];
+    if (g.length < 3) continue;
+    if (g.length > 3) out.push(g.slice());
+    for (let a = 0; a < g.length; a++)
+      for (let b = a + 1; b < g.length; b++)
+        for (let d = b + 1; d < g.length; d++) out.push([g[a], g[b], g[d]]);
+  }
+  return out;
 }
-function aiPlanContractPass(hand, contract, level, triFirst) {
-  const used = new Set();
-  const melds = [];
-  let escNeed = contract.esc, triNeed = contract.tri;
+// Escaliers candidats : tous les sous-runs (>=3, boucles comprises), + escaliers à 1 joker (un seul trou)
+function enumEscs(hand, withJoker) {
+  const bySuit = {};
+  hand.forEach((c) => { if (!c.joker) { bySuit[c.suit] = bySuit[c.suit] || {}; if (!bySuit[c.suit][c.rank]) bySuit[c.suit][c.rank] = c; } });
+  const out = [];
+  const seen = new Set();
+  for (const s in bySuit) {
+    const byRank = bySuit[s];
+    const present = Object.keys(byRank).map(Number);
+    if (present.length < 2) continue;
+    const line = [...new Set(present.flatMap((r) => [r, r + 13]))].sort((a, b) => a - b);
+    const segs = []; let seg = [line[0]];
+    for (let i = 1; i < line.length; i++) { if (line[i] === seg[seg.length - 1] + 1) seg.push(line[i]); else { segs.push(seg); seg = [line[i]]; } }
+    segs.push(seg);
+    for (const g of segs) {
+      for (let len = 3; len <= g.length && len <= 13; len++)
+        for (let off = 0; off + len <= g.length; off++) {
+          const cs = []; const idset = new Set(); let bad = false;
+          for (let k = off; k < off + len; k++) { const c = byRank[((g[k] - 1) % 13) + 1]; if (!c || idset.has(c.id)) { bad = true; break; } idset.add(c.id); cs.push(c); }
+          if (bad) continue;
+          const sig = cs.map((c) => c.id).sort().join(",");
+          if (!seen.has(sig)) { seen.add(sig); out.push({ cards: cs, jokerNeed: 0 }); }
+        }
+    }
+    if (withJoker) {
+      for (let i = 0; i + 2 < line.length; i++) {
+        if (line[i + 2] - line[i] === 3) {
+          const cs = [line[i], line[i + 1], line[i + 2]].map((v) => byRank[((v - 1) % 13) + 1]);
+          if (new Set(cs.map((c) => c.id)).size !== 3) continue;
+          const sig = "J" + cs.map((c) => c.id).sort().join(",");
+          if (!seen.has(sig)) { seen.add(sig); out.push({ cards: cs, jokerNeed: 1 }); }
+        }
+      }
+    }
+  }
+  out.sort((a, b) => (a.jokerNeed - b.jokerNeed) || (b.cards.length - a.cards.length));
+  return out;
+}
+// Planificateur avec retour arrière : trouve une combinaison DISJOINTE dès qu'elle existe
+function aiPlanContract(hand, contract, level) {
+  const needT = contract.tri || 0, needE = contract.esc || 0;
+  if (needT === 0 && needE === 0) return [];
   const jokers = hand.filter((c) => c.joker);
-  let jokerIdx = 0;
-  const takeTris = () => {
-    const remaining = hand.filter((c) => !c.joker && !used.has(c.id));
-    const byRank = {};
-    remaining.forEach((c) => { (byRank[c.rank] = byRank[c.rank] || []).push(c); });
-    for (const r in byRank) {
-      if (triNeed <= 0) break;
-      if (byRank[r].length >= 3) {
-        const cards = byRank[r]; // toutes les cartes identiques : chaque carte posée = une de moins en main
-        cards.forEach((c) => used.add(c.id));
-        melds.push({ type: "tri", cards });
-        triNeed--;
+  const triCands = enumTris(hand);
+  const escCands = enumEscs(hand, level === "difficile" && jokers.length > 0);
+  const used = new Set();
+  let jokersLeft = jokers.length, steps = 0;
+  function dfs(melds, ti, ei) {
+    if (ti >= needT && ei >= needE) return melds;
+    if (++steps > 200000) return null;
+    if (ti < needT) {
+      for (const t of triCands) {
+        if (t.some((c) => used.has(c.id))) continue;
+        t.forEach((c) => used.add(c.id));
+        const r = dfs([...melds, { type: "tri", cards: t }], ti + 1, ei);
+        if (r) return r;
+        t.forEach((c) => used.delete(c.id));
       }
+      return null;
     }
-  };
-  const takeEscs = () => {
-    const pool = hand.filter((c) => !used.has(c.id));
-    for (const run of findRuns(pool)) {
-      if (escNeed <= 0) break;
-      if (run.some((c) => used.has(c.id))) continue;
-      run.forEach((c) => used.add(c.id));
-      melds.push({ type: "esc", cards: run });
-      escNeed--;
+    for (const e of escCands) {
+      if (e.jokerNeed > jokersLeft) continue;
+      if (e.cards.some((c) => used.has(c.id))) continue;
+      let jk = null;
+      if (e.jokerNeed) { jk = jokers.find((j) => !used.has(j.id)); if (!jk) continue; }
+      e.cards.forEach((c) => used.add(c.id));
+      let cards = e.cards;
+      if (jk) { used.add(jk.id); jokersLeft--; cards = sortEscalier([...e.cards, jk]); }
+      const r = dfs([...melds, { type: "esc", cards }], ti, ei + 1);
+      if (r) return r;
+      e.cards.forEach((c) => used.delete(c.id));
+      if (jk) { used.delete(jk.id); jokersLeft++; }
     }
-    if (escNeed > 0 && level === "difficile") {
-      for (const jr of findJokerRuns(pool)) {
-        if (escNeed <= 0 || jokerIdx >= jokers.length) break;
-        if (jr.some((c) => used.has(c.id))) continue;
-        const jk = jokers[jokerIdx];
-        if (used.has(jk.id)) continue;
-        jokerIdx++;
-        const cards = [...jr, jk];
-        cards.forEach((c) => used.add(c.id));
-        melds.push({ type: "esc", cards });
-        escNeed--;
-      }
-    }
-  };
-  if (triFirst) { takeTris(); takeEscs(); } else { takeEscs(); takeTris(); }
-  if (escNeed > 0 || triNeed > 0) return null;
-  return melds;
+    return null;
+  }
+  return dfs([], 0, 0);
 }
 
 function aiPlanFullHand(hand) {
