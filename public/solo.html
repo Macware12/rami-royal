@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2216-P">
+<meta name="version" content="v2217-T">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -2126,13 +2126,18 @@ function tapCard(id) {
       const candidate = [...meld.cards, card];
       if (!validGroup(meld.type, candidate)) { setMsg("Cette carte ne complète pas cette combinaison."); return s; }
       setMsg(""); setSelected([]);
-      if (tuto) setTutoFlags((f) => ({ ...f, complete: true }));
       const melds = s.melds.map((m) => (m.id === meldId ? { ...m, cards: normMeld(m.type, candidate) } : m));
       const players = s.players.map((p, i) =>
         i === 0 ? { ...p, hand: p.hand.filter((c) => c.id !== card.id) } : p
       );
       let ns = { ...s, melds, players };
       ns = addLog(ns, "Tu complètes une combinaison avec " + cardName(card));
+      if (tuto) {
+        // Tutoriel : toutes les compétences sont démontrées (dernière mission) → on conclut par le diplôme
+        setTutoFlags((f) => ({ ...f, complete: true }));
+        ns = { ...ns, players: ns.players.map((p, i) => (i === 0 ? { ...p, hand: [] } : p)) };
+        return finishRound(ns, 0, null);
+      }
       ns = checkWin(ns, 0);
       return ns;
     });
