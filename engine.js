@@ -82,25 +82,36 @@ function findRuns(hand) {
   const bySuit = {};
   hand.filter((c) => !c.joker).forEach((c) => { (bySuit[c.suit] = bySuit[c.suit] || []).push(c); });
   const runs = [];
+  const seenSig = new Set();
   for (const s in bySuit) {
     const byRank = {};
     bySuit[s].forEach((c) => { if (!byRank[c.rank]) byRank[c.rank] = c; });
-    let vals = Object.keys(byRank).map(Number).sort((a, b) => a - b);
-    if (byRank[1]) vals = [...vals, 14];
-    vals = [...new Set(vals)].sort((a, b) => a - b);
-    let run = [vals[0]];
+    const present = Object.keys(byRank).map(Number);
+    if (present.length < 3) continue;
+    // Deux tours (1..26) : gère toutes les boucles autour de l'As (D-R-A, R-A-2, D-R-A-2…)
+    const line = [...new Set(present.flatMap((r) => [r, r + 13]))].sort((a, b) => a - b);
+    let run = [line[0]];
     const flush = () => {
-      if (run.length >= 3) {
-        const cards = run.map((v) => byRank[v === 14 ? 1 : v]);
-        if (new Set(cards.map((c) => c.id)).size === cards.length) runs.push(cards);
+      if (run.length < 3) return;
+      const seen = new Set(), cards = [];
+      for (const v of run) {
+        const card = byRank[((v - 1) % 13) + 1];
+        if (!card || seen.has(card.id)) break; // une carte au plus une fois (pas de tour complet)
+        seen.add(card.id); cards.push(card);
       }
+      if (cards.length < 3) return;
+      const sig = cards.map((c) => c.id).sort().join(",");
+      if (seenSig.has(sig)) return; // le doublage produit chaque run 2× : dédoublonnage
+      seenSig.add(sig);
+      runs.push(cards);
     };
-    for (let i = 1; i < vals.length; i++) {
-      if (vals[i] === run[run.length - 1] + 1) run.push(vals[i]);
-      else { flush(); run = [vals[i]]; }
+    for (let i = 1; i < line.length; i++) {
+      if (line[i] === run[run.length - 1] + 1) run.push(line[i]);
+      else { flush(); run = [line[i]]; }
     }
     flush();
   }
+  runs.sort((a, b) => b.length - a.length); // les plus longs d'abord (poser un maximum de cartes)
   return runs;
 }
 
@@ -108,15 +119,22 @@ function findJokerRuns(hand) {
   const bySuit = {};
   hand.filter((c) => !c.joker).forEach((c) => { (bySuit[c.suit] = bySuit[c.suit] || []).push(c); });
   const out = [];
+  const seenSig = new Set();
   for (const s in bySuit) {
     const byRank = {};
     bySuit[s].forEach((c) => { if (!byRank[c.rank]) byRank[c.rank] = c; });
-    let vals = Object.keys(byRank).map(Number);
-    if (byRank[1]) vals.push(14);
-    vals = [...new Set(vals)].sort((a, b) => a - b);
-    for (let i = 0; i + 2 < vals.length; i++) {
-      const trio = [vals[i], vals[i + 1], vals[i + 2]];
-      if (trio[2] - trio[0] === 3) out.push(trio.map((v) => byRank[v === 14 ? 1 : v]));
+    const present = Object.keys(byRank).map(Number);
+    if (present.length < 3) continue;
+    const line = [...new Set(present.flatMap((r) => [r, r + 13]))].sort((a, b) => a - b);
+    for (let i = 0; i + 2 < line.length; i++) {
+      if (line[i + 2] - line[i] === 3) { // 3 cartes présentes sur 4 positions (un seul trou pour le joker)
+        const cards = [line[i], line[i + 1], line[i + 2]].map((v) => byRank[((v - 1) % 13) + 1]);
+        if (new Set(cards.map((c) => c.id)).size !== 3) continue;
+        const sig = cards.map((c) => c.id).sort().join(",");
+        if (seenSig.has(sig)) continue;
+        seenSig.add(sig);
+        out.push(cards);
+      }
     }
   }
   return out;
