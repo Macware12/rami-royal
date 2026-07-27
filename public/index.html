@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2210-S">
+<meta name="version" content="v2211-L">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -1559,7 +1559,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2210-S</span>
+          <span className="opacity-60">v2211-L</span>
         </div>
       </div>
     );
@@ -1792,7 +1792,7 @@ function App() {
       </div>
 
       {/* Table regroupée par joueur */}
-      <div className="flex-1 relative" style={{ minHeight: 120 }}>
+      <div className="shrink-0 relative" style={{ minHeight: 90, maxHeight: "34vh" }}>
         <div ref={tableScrollRef} className="absolute inset-0 overflow-y-auto px-2 py-1 flex flex-col gap-1.5 content-start">
           {g.melds.length === 0 && <p className="text-emerald-400 text-xs italic px-1">Les combinaisons posées apparaîtront ici.</p>}
           {[...new Set(g.melds.map((m) => m.owner))].map((o) => (
@@ -1874,8 +1874,8 @@ function App() {
         </div>
       )}
 
-      {/* Pioche et défausse */}
-      <div className="shrink-0 flex items-center justify-center gap-8 py-2">
+      {/* Pioche et défausse — centrées dans l'espace libre du tapis */}
+      <div className="flex-1 flex items-center justify-center gap-8 py-2 min-h-0">
         <button ref={stockRef} onClick={() => myTurn && g.phase === "draw" && act({ type: "draw", source: "stock" })} className="flex flex-col items-center gap-1 active:scale-95 transition-transform">
           <div className="relative" style={{ width: 42, height: 58 }}>
             <div className="absolute" style={{ left: 4, top: 4 }}><Card faceDown card={{}} flat /></div>
