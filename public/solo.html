@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2261-U">
+<meta name="version" content="v2262-S">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2261-U">
+<link rel="stylesheet" href="/lib/tailwind.css?v2262-S">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -186,6 +186,26 @@ function fmtElapsed(startMs) {
   return h > 0 ? h + ":" + mm + ":" + ss : mm + ":" + ss;
 }
 const API_BASE = (window.RAMI_CONFIG && window.RAMI_CONFIG.server) || "";
+
+// Jeton de partie : preuve auprès du serveur que le défi a réellement été joué.
+// Demandé au lancement du défi, présenté à l'envoi du score. Conservé en local pour
+// survivre à un rechargement de page en cours de partie.
+function demanderJeton(cible) {
+  const acc = readJSON("rami-account");
+  store.del("rami-jeton");
+  if (!acc.code) return; // invité : pas de classement, donc pas besoin de jeton
+  fetch(API_BASE + "/defi/commencer", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code: acc.code, cible }),
+  }).then((r) => r.json()).then((d) => {
+    if (d && d.jeton) store.set("rami-jeton", JSON.stringify({ cible, jeton: d.jeton }));
+  }).catch(() => {}); // hors ligne : le score restera local, comme avant
+}
+function lireJeton(cible) {
+  const j = readJSON("rami-jeton");
+  return j && j.cible === cible ? j.jeton : null;
+}
+
 // Compte joueur (pseudo + code à 6 chiffres) — en mode invité, rien n'est conservé
 function compteApi(chemin, body) {
   return fetch(API_BASE + "/compte/" + chemin, {
@@ -1232,6 +1252,9 @@ function RamiRoyal() {
     const defi = Boolean(optionsRapides && optionsRapides.defi); // défi du jour : donne identique pour tous
     const defiAmi = (optionsRapides && optionsRapides.defiAmi) || null; // défi entre amis : { id, graine }
     const graineBase = defi ? "jour-" + cleDuJour() : defiAmi ? defiAmi.graine : null;
+    // Défi : on annonce au serveur que la partie commence (jeton anti-triche du classement)
+    if (defi) demanderJeton("jour-" + cleDuJour());
+    else if (defiAmi) demanderJeton("ami-" + String(defiAmi.id).toUpperCase());
     const name = (account.code && account.pseudo) || playerName.trim() || "Joueur 1"; // compte connecté : pseudo imposé
     const players = [
       { name, isAI: false, avatar: myAvatar, color: "#fbbf24" },
@@ -2593,7 +2616,8 @@ function tapCard(id) {
         if (accAmi.code) {
           fetch(API_BASE + "/defi/prive-score", {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ code: accAmi.code, id: g.defiAmi, total: g.players[0].total, won }),
+            body: JSON.stringify({ code: accAmi.code, id: g.defiAmi, total: g.players[0].total, won,
+              jeton: lireJeton("ami-" + String(g.defiAmi).toUpperCase()) }),
           }).catch(() => {});
         }
       }
@@ -2603,7 +2627,8 @@ function tapCard(id) {
         if (accDefi.code) {
           fetch(API_BASE + "/defi/score", {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ code: accDefi.code, date: cleDuJour(), total: g.players[0].total, won }),
+            body: JSON.stringify({ code: accDefi.code, date: cleDuJour(), total: g.players[0].total, won,
+              jeton: lireJeton("jour-" + cleDuJour()) }),
           }).catch(() => {}); // hors ligne : tant pis, le score reste local
         }
       }

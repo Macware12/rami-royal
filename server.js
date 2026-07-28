@@ -223,7 +223,7 @@ app.use("/compte", (err, req, res, next) => {
   if (!err) return next();
   res.status(err.status || 400).json({ erreur: err.type === "entity.too.large" ? "Photo trop lourde — réessaie avec une image plus petite." : "Requête invalide." });
 });
-const compteTries = new Map(); // anti force-brute sur les codes
+const compteTries = new Map(); // anti force-brute sur les codes (toutes requêtes)
 setInterval(() => compteTries.clear(), 60 * 1000);
 function tropDEssais(req, res) {
   const n = (compteTries.get(req.ip) || 0) + 1;
@@ -232,7 +232,61 @@ function tropDEssais(req, res) {
   if (n > 12) { res.status(429).json({ erreur: "Trop d'essais — réessaie dans une minute." }); return true; }
   return false;
 }
-const pseudoValide = (p) => typeof p === "string" && p.trim().length >= 2 && p.trim().length <= 20;
+
+// Deuxième verrou, bien plus serré : compte SEULEMENT les codes refusés.
+// Un joueur honnête se trompe une ou deux fois ; un script qui balaie les 900 000 codes
+// possibles enchaîne les échecs. 10 échecs par heure et par IP suffisent à rendre
+// le balayage inopérant (il faudrait des siècles), sans jamais gêner un vrai joueur.
+const codeEchecs = new Map(); // ip → { n, jusqu: horodatage de fin de blocage }
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, v] of codeEchecs) if (now > v.jusqu) codeEchecs.delete(ip);
+}, 10 * 60 * 1000);
+const MAX_ECHECS_CODE = 10;
+const FENETRE_ECHECS_MS = 60 * 60 * 1000; // 1 heure
+function bloquePourEchecs(req, res) {
+  const v = codeEchecs.get(req.ip);
+  if (v && v.n >= MAX_ECHECS_CODE && Date.now() < v.jusqu) {
+    res.status(429).json({ erreur: "Trop de codes incorrects — réessaie dans une heure." });
+    return true;
+  }
+  return false;
+}
+function noteEchecCode(req) {
+  const now = Date.now();
+  const v = codeEchecs.get(req.ip);
+  if (!v || now > v.jusqu) codeEchecs.set(req.ip, { n: 1, jusqu: now + FENETRE_ECHECS_MS });
+  else v.n++;
+  if (codeEchecs.size > 20000) codeEchecs.clear(); // borne mémoire
+}
+
+// Un pseudo doit rester lisible : ni chevrons (anti-HTML), ni caractères de contrôle invisibles
+const CARACTERES_INTERDITS = /[<>\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\ufeff]/;
+const pseudoValide = (p) => typeof p === "string" && p.trim().length >= 2 && p.trim().length <= 20
+  && !CARACTERES_INTERDITS.test(p);
+// Anti-squat de pseudos : un même appareil ne crée pas 50 comptes par jour.
+// 5 créations par IP et par jour couvre largement une famille sur le même wifi.
+const comptesCrees = new Map(); // ip → { n, jusqu }
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, v] of comptesCrees) if (now > v.jusqu) comptesCrees.delete(ip);
+}, 60 * 60 * 1000);
+function tropDeComptes(req, res) {
+  const v = comptesCrees.get(req.ip);
+  if (v && v.n >= 5 && Date.now() < v.jusqu) {
+    res.status(429).json({ erreur: "Trop de comptes créés depuis cet appareil — réessaie demain." });
+    return true;
+  }
+  return false;
+}
+function noteCompteCree(req) {
+  const now = Date.now();
+  const v = comptesCrees.get(req.ip);
+  if (!v || now > v.jusqu) comptesCrees.set(req.ip, { n: 1, jusqu: now + 24 * 3600 * 1000 });
+  else v.n++;
+  if (comptesCrees.size > 20000) comptesCrees.clear();
+}
+
 function trouveCompte(req) {
   const { pseudo, code } = req.body || {};
   const c = typeof code === "string" && /^[0-9]{6}$/.test(code.trim()) ? comptes.get(code.trim()) : null;
@@ -242,6 +296,7 @@ function trouveCompte(req) {
 
 app.post("/compte/creer", (req, res) => {
   if (tropDEssais(req, res)) return;
+  if (tropDeComptes(req, res)) return;
   if (!pseudoValide(req.body && req.body.pseudo)) return res.status(400).json({ erreur: "Pseudo invalide (2 à 20 caractères)." });
   if (comptes.size >= MAX_COMPTES) return res.status(503).json({ erreur: "Plus de place pour de nouveaux comptes." });
   // Un pseudo = un seul compte (comparaison sans tenir compte des majuscules)
@@ -254,14 +309,29 @@ app.post("/compte/creer", (req, res) => {
   const compte = { code, pseudo: req.body.pseudo.trim(), stats: cleanStats(req.body.stats),
     succes: cleanSucces(req.body.succes), createdAt: Date.now(), lastSeen: Date.now() };
   comptes.set(code, compte);
+  noteCompteCree(req);
   saveComptes();
   res.json(compteJson(compte));
 });
 
+// Suppression du compte — obligatoire pour l'App Store (règle 5.1.1(v) d'Apple : toute app
+// permettant de créer un compte doit permettre de le supprimer depuis l'app) et pour le RGPD
+// (droit à l'effacement). Efface le compte, ses scores de classement et ses résultats de défis.
+app.post("/compte/supprimer", (req, res) => {
+  if (tropDEssais(req, res) || bloquePourEchecs(req, res)) return;
+  const c = trouveCompte(req); // exige pseudo + code : on ne supprime pas le compte d'un autre
+  if (!c) { noteEchecCode(req); return res.status(404).json({ erreur: "Pseudo ou code incorrect." }); }
+  comptes.delete(c.code);
+  for (const jour of defiScores.values()) jour.delete(c.code);       // classement du défi du jour
+  for (const d of defisPrives.values()) delete d.scores[c.code];     // résultats des défis entre amis
+  saveComptes(); saveDefi(); saveDefisPrives();
+  res.json({ ok: true });
+});
+
 app.post("/compte/connexion", (req, res) => {
-  if (tropDEssais(req, res)) return;
+  if (tropDEssais(req, res) || bloquePourEchecs(req, res)) return;
   const c = trouveCompte(req);
-  if (!c) return res.status(404).json({ erreur: "Pseudo ou code incorrect." });
+  if (!c) { noteEchecCode(req); return res.status(404).json({ erreur: "Pseudo ou code incorrect." }); }
   c.lastSeen = Date.now(); saveComptes();
   res.json(compteJson(c));
 });
@@ -274,10 +344,10 @@ const compteJson = (c) => ({ code: c.code, pseudo: c.pseudo, stats: c.stats || {
 // Limite anti-abus : 1 changement par semaine (le premier est libre — faute de frappe pardonnée).
 const RENOMMAGE_DELAI_MS = 7 * 24 * 60 * 60 * 1000;
 app.post("/compte/renommer", (req, res) => {
-  if (tropDEssais(req, res)) return;
+  if (tropDEssais(req, res) || bloquePourEchecs(req, res)) return;
   const code = String((req.body && req.body.code) || "").trim();
   const c = /^[0-9]{6}$/.test(code) ? comptes.get(code) : null;
-  if (!c) return res.status(404).json({ erreur: "Code inexistant." });
+  if (!c) { noteEchecCode(req); return res.status(404).json({ erreur: "Code inexistant." }); }
   if (c.renamedAt && Date.now() - c.renamedAt < RENOMMAGE_DELAI_MS) {
     const jours = Math.ceil((RENOMMAGE_DELAI_MS - (Date.now() - c.renamedAt)) / 86400000);
     return res.status(429).json({ erreur: "Pseudo modifiable une fois par semaine — réessaie dans " + jours + " jour" + (jours > 1 ? "s" : "") + "." });
@@ -297,10 +367,10 @@ app.post("/compte/renommer", (req, res) => {
 
 // Profil : avatar (parmi les 10 du jeu) et/ou photo (petite image envoyée par le client)
 app.post("/compte/profil", (req, res) => {
-  if (tropDEssais(req, res)) return;
+  if (tropDEssais(req, res) || bloquePourEchecs(req, res)) return;
   const code = String((req.body && req.body.code) || "").trim();
   const c = /^[0-9]{6}$/.test(code) ? comptes.get(code) : null;
-  if (!c) return res.status(404).json({ erreur: "Code inexistant." });
+  if (!c) { noteEchecCode(req); return res.status(404).json({ erreur: "Code inexistant." }); }
   const { avatar, photo } = req.body || {};
   if (avatar !== undefined) {
     if (avatar !== null && !AVATARS_PROFIL.includes(avatar)) return res.status(400).json({ erreur: "Avatar inconnu." });
@@ -312,6 +382,17 @@ app.post("/compte/profil", (req, res) => {
       if (typeof photo !== "string" || !/^data:image\/(jpeg|png);base64,/.test(photo))
         return res.status(400).json({ erreur: "Format de photo invalide." });
       if (photo.length > 80000) return res.status(400).json({ erreur: "Photo trop lourde." });
+      // Vérifier que c'est VRAIMENT une image : base64 valide + signature de fichier JPEG/PNG.
+      // Sans ce contrôle, le champ accepte 80 Ko de données arbitraires par compte
+      // (détournement du serveur en espace de stockage gratuit, saturation de la base).
+      const b64 = photo.slice(photo.indexOf(",") + 1);
+      if (!/^[A-Za-z0-9+/]+={0,2}$/.test(b64)) return res.status(400).json({ erreur: "Format de photo invalide." });
+      let entete;
+      try { entete = Buffer.from(b64.slice(0, 16), "base64"); }
+      catch (e) { return res.status(400).json({ erreur: "Format de photo invalide." }); }
+      const estJpeg = entete[0] === 0xff && entete[1] === 0xd8 && entete[2] === 0xff;
+      const estPng = entete[0] === 0x89 && entete[1] === 0x50 && entete[2] === 0x4e && entete[3] === 0x47;
+      if (!estJpeg && !estPng) return res.status(400).json({ erreur: "Format de photo invalide." });
       c.photo = photo;
     }
   }
@@ -341,11 +422,54 @@ function saveDefi() {
   }, 1000);
 }
 
+// ---------- Jetons de partie : preuve qu'un défi a réellement été joué ----------
+// Sans cela, les scores sont simplement déclarés par le client : une requête suffit pour
+// s'annoncer premier mondial sans avoir joué. Le jeton est délivré au DÉBUT de la partie et
+// exigé à la soumission : il faut donc avoir ouvert le défi, et avoir mis un temps plausible.
+// Cela n'arrête pas un attaquant déterminé (le jeu tourne chez le joueur), mais élimine la
+// triche opportuniste — celle qui, elle, arriverait à coup sûr.
+const jetons = new Map(); // jeton → { compte, cible, emisA }
+const JETON_VIE_MS = 6 * 3600 * 1000;     // une partie peut être commencée puis finie plus tard
+// Durée minimale d'une partie de défi. En dessous, personne n'a joué honnêtement.
+// Ajustable par variable d'environnement (PARTIE_MIN_S) si les parties courtes s'avèrent
+// plus rapides que prévu chez les joueurs rapides.
+const PARTIE_MIN_MS = (parseInt(process.env.PARTIE_MIN_S, 10) || 45) * 1000;
+setInterval(() => {
+  const now = Date.now();
+  for (const [j, v] of jetons) if (now - v.emisA > JETON_VIE_MS) jetons.delete(j);
+}, 10 * 60 * 1000);
+
+// Le client appelle cette route au lancement d'un défi (du jour ou entre amis)
+app.post("/defi/commencer", (req, res) => {
+  if (tropDEssais(req, res) || bloquePourEchecs(req, res)) return;
+  const { code, cible } = req.body || {};
+  const c = typeof code === "string" && /^[0-9]{6}$/.test(code.trim()) ? comptes.get(code.trim()) : null;
+  if (!c) { noteEchecCode(req); return res.status(403).json({ erreur: "Compte requis." }); }
+  if (typeof cible !== "string" || !cible || cible.length > 40) return res.status(400).json({ erreur: "Défi invalide." });
+  if (jetons.size > 200000) return res.status(503).json({ erreur: "Serveur occupé — réessaie." });
+  const jeton = crypto.randomBytes(16).toString("hex");
+  jetons.set(jeton, { compte: c.code, cible, emisA: Date.now() });
+  res.json({ jeton });
+});
+
+// Vérifie et consomme un jeton. Renvoie un message d'erreur, ou null si tout va bien.
+function consommeJeton(jeton, compteCode, cible) {
+  if (typeof jeton !== "string" || !jeton) return "Partie non reconnue — relance le défi depuis l'accueil.";
+  const v = jetons.get(jeton);
+  if (!v) return "Partie expirée ou déjà enregistrée.";
+  if (v.compte !== compteCode || v.cible !== cible) return "Partie non reconnue.";
+  const duree = Date.now() - v.emisA;
+  if (duree > JETON_VIE_MS) { jetons.delete(jeton); return "Partie trop ancienne — le score n'a pas pu être enregistré."; }
+  if (duree < PARTIE_MIN_MS) return "Partie trop rapide pour être enregistrée.";
+  jetons.delete(jeton); // usage unique
+  return null;
+}
+
 app.post("/defi/score", (req, res) => {
-  if (tropDEssais(req, res)) return;
+  if (tropDEssais(req, res) || bloquePourEchecs(req, res)) return;
   const { code, date, total, won } = req.body || {};
   const c = typeof code === "string" && /^[0-9]{6}$/.test(code.trim()) ? comptes.get(code.trim()) : null;
-  if (!c) return res.status(403).json({ erreur: "Compte requis pour entrer au classement." });
+  if (!c) { noteEchecCode(req); return res.status(403).json({ erreur: "Compte requis pour entrer au classement." }); }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ""))) return res.status(400).json({ erreur: "Date invalide." });
   const dC = new Date(date + "T12:00:00Z").getTime();
   if (!isFinite(dC) || Math.abs(Date.now() - dC) > 36 * 3600 * 1000) return res.status(400).json({ erreur: "Ce défi est clos." });
@@ -353,6 +477,8 @@ app.post("/defi/score", (req, res) => {
   if (!jour) { jour = new Map(); defiScores.set(date, jour); }
   if (jour.has(c.code)) return res.json({ ok: true, deja: true }); // seul le premier essai compte
   if (jour.size >= 100000) return res.status(503).json({ erreur: "Classement complet." });
+  const pb = consommeJeton(req.body && req.body.jeton, c.code, "jour-" + date);
+  if (pb) return res.status(403).json({ erreur: pb });
   jour.set(c.code, { pseudo: c.pseudo, total: Math.max(0, Math.min(5000, parseInt(total, 10) || 0)), won: Boolean(won), at: Date.now() });
   saveDefi();
   res.json({ ok: true });
@@ -395,10 +521,10 @@ function genDefiId() {
 }
 
 app.post("/defi/creer", (req, res) => {
-  if (tropDEssais(req, res)) return;
+  if (tropDEssais(req, res) || bloquePourEchecs(req, res)) return;
   const code = String((req.body && req.body.code) || "").trim();
   const c = /^[0-9]{6}$/.test(code) ? comptes.get(code) : null;
-  if (!c) return res.status(403).json({ erreur: "Compte requis pour créer un défi." });
+  if (!c) { noteEchecCode(req); return res.status(403).json({ erreur: "Compte requis pour créer un défi." }); }
   if (defisPrives.size >= 20000) return res.status(503).json({ erreur: "Trop de défis en cours — réessaie plus tard." });
   const id = genDefiId();
   defisPrives.set(id, { graine: id + "-" + crypto.randomBytes(6).toString("hex"), createur: c.pseudo, createdAt: Date.now(), scores: {} });
@@ -425,15 +551,17 @@ app.get("/defi/prive", (req, res) => {
 });
 
 app.post("/defi/prive-score", (req, res) => {
-  if (tropDEssais(req, res)) return;
+  if (tropDEssais(req, res) || bloquePourEchecs(req, res)) return;
   const { code, id, total, won } = req.body || {};
   const c = typeof code === "string" && /^[0-9]{6}$/.test(code.trim()) ? comptes.get(code.trim()) : null;
-  if (!c) return res.status(403).json({ erreur: "Compte requis pour entrer aux résultats." });
+  if (!c) { noteEchecCode(req); return res.status(403).json({ erreur: "Compte requis pour entrer aux résultats." }); }
   const d = defisPrives.get(String(id || "").trim().toUpperCase());
   if (!d) return res.status(404).json({ erreur: "Défi introuvable ou expiré." });
   if (Date.now() - d.createdAt > 7 * 86400000) return res.status(400).json({ erreur: "Ce défi est clos." });
   if (d.scores[c.code]) return res.json({ ok: true, deja: true }); // premier essai seul compté
   if (Object.keys(d.scores).length >= 500) return res.status(503).json({ erreur: "Défi complet." });
+  const pb = consommeJeton(req.body && req.body.jeton, c.code, "ami-" + String(id || "").trim().toUpperCase());
+  if (pb) return res.status(403).json({ erreur: pb });
   d.scores[c.code] = { pseudo: c.pseudo, total: Math.max(0, Math.min(5000, parseInt(total, 10) || 0)), won: Boolean(won), at: Date.now() };
   saveDefisPrives();
   res.json({ ok: true });
@@ -441,18 +569,19 @@ app.post("/defi/prive-score", (req, res) => {
 
 // Lookup par code seul (pour reconnexion multi-appareil) : retourne le compte complet si code valide
 app.post("/compte/info", (req, res) => {
-  if (tropDEssais(req, res)) return;
+  if (tropDEssais(req, res) || bloquePourEchecs(req, res)) return;
   const code = (req.body && req.body.code) || "";
   if (!/^[0-9]{6}$/.test(String(code).trim())) return res.status(400).json({ erreur: "Code invalide." });
   const c = comptes.get(String(code).trim());
-  if (!c) return res.status(404).json({ erreur: "Code inexistant." });
+  if (!c) { noteEchecCode(req); return res.status(404).json({ erreur: "Code inexistant." }); }
   c.lastSeen = Date.now(); saveComptes();
   res.json(compteJson(c));
 });
 
 app.post("/compte/stats", (req, res) => {
+  if (tropDEssais(req, res) || bloquePourEchecs(req, res)) return; // ce verrou manquait sur cette route
   const c = trouveCompte(req);
-  if (!c) return res.status(404).json({ erreur: "Pseudo ou code incorrect." });
+  if (!c) { noteEchecCode(req); return res.status(404).json({ erreur: "Pseudo ou code incorrect." }); }
   c.stats = mergeStats(c.stats, cleanStats(req.body.stats));
   c.succes = mergeSucces(c.succes, cleanSucces(req.body.succes));
   c.lastSeen = Date.now(); saveComptes();
