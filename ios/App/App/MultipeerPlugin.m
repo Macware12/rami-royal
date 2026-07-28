@@ -1,13 +1,3 @@
-// Enregistrement du plugin Multipeer auprès de Capacitor
-// (le jeu l'appelle via window.Capacitor.Plugins.Multipeer)
+// (vide volontairement) — l'ancienne macro CAP_PLUGIN ne fonctionne plus avec
+// Capacitor 6 : le plugin est désormais enregistré par MainViewController.swift.
 #import <Foundation/Foundation.h>
-#import <Capacitor/Capacitor.h>
-
-CAP_PLUGIN(MultipeerPlugin, "Multipeer",
-  CAP_PLUGIN_METHOD(startHosting, CAPPluginReturnPromise);
-  CAP_PLUGIN_METHOD(startBrowsing, CAPPluginReturnPromise);
-  CAP_PLUGIN_METHOD(joinHost, CAPPluginReturnPromise);
-  CAP_PLUGIN_METHOD(send, CAPPluginReturnPromise);
-  CAP_PLUGIN_METHOD(connectedPeers, CAPPluginReturnPromise);
-  CAP_PLUGIN_METHOD(stopAll, CAPPluginReturnPromise);
-)

@@ -290,6 +290,10 @@ app.get("/", serveCompiled("index.html"));
 app.get("/index.html", serveCompiled("index.html"));
 app.get("/solo.html", serveCompiled("solo.html"));
 
+// Moteur et hôte de partie partagés (utilisés par le multijoueur local de l'app ; à la racine du projet)
+app.get("/lib/engine.js", (req, res) => res.sendFile(path.join(__dirname, "engine.js")));
+app.get("/lib/gamehost.js", (req, res) => res.sendFile(path.join(__dirname, "gamehost.js")));
+
 app.use(express.static(path.join(__dirname, "public"), {
   setHeaders: (res, filePath) => {
     if (filePath.endsWith(".html")) res.setHeader("Cache-Control", "no-cache, must-revalidate");

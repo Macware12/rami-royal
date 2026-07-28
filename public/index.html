@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2234-U">
+<meta name="version" content="v2235-U">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -19,6 +19,9 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 </script>
 <script src="/config.js"></script>
 <script src="/lib/socket.io.min.js"></script>
+<script src="/lib/engine.js"></script>
+<script src="/lib/gamehost.js"></script>
+<script src="/localnet.js"></script>
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
@@ -746,7 +749,46 @@ function Confetti() {
 // ---------- Application ----------
 // Adresse du serveur : vide sur le web (même origine), absolue dans l'app native (voir config.js)
 const API_BASE = (window.RAMI_CONFIG && window.RAMI_CONFIG.server) || "";
-const socket = API_BASE ? io(API_BASE) : io();
+const realSocket = API_BASE ? io(API_BASE) : io();
+// Enveloppe réseau : bascule entre le serveur en ligne et la partie LOCALE (app, sans internet).
+// L'interface utilise « socket » sans savoir lequel est branché derrière.
+const socket = {
+  _local: null,
+  _subs: [], // [ev, fn, fnEnveloppée]
+  get isLocal() { return Boolean(this._local); },
+  get connected() { return this._local ? true : realSocket.connected; },
+  get io() { return realSocket.io; },
+  connect() { if (!this._local) realSocket.connect(); },
+  on(ev, fn) {
+    const wrapped = (...a) => { if (!socket._local) fn(...a); }; // en mode local, le serveur en ligne est ignoré
+    this._subs.push([ev, fn, wrapped]);
+    realSocket.on(ev, wrapped);
+    if (this._local) this._local.on(ev, fn);
+    return this;
+  },
+  off(ev, fn) {
+    this._subs = this._subs.filter(([e, f, w]) => {
+      const match = e === ev && (!fn || f === fn);
+      if (match) { realSocket.off(ev, w); if (this._local) this._local.off(ev, f); }
+      return !match;
+    });
+    return this;
+  },
+  emit(ev, ...a) {
+    if (this._local) this._local.emit(ev, ...a);
+    else realSocket.emit(ev, ...a);
+    return this;
+  },
+  goLocal() {
+    if (this._local || !window.RamyLocalNet || !window.RamyLocalNet.available()) return false;
+    this._local = window.RamyLocalNet.create();
+    this._subs.forEach(([ev, fn]) => this._local.on(ev, fn));
+    return true;
+  },
+  goOnline() {
+    if (this._local) { const l = this._local; this._local = null; l.destroy(); }
+  },
+};
 function readJSONls(k) { try { return JSON.parse(store.get(k)) || {}; } catch (_) { return {}; } }
 // Synchronise les stats du compte (partagé avec le solo via localStorage)
 function compteStats(body) {
@@ -767,6 +809,8 @@ function App() {
 
   const [invite, setInvite] = useState(null);
   const [showMp, setShowMp] = useState(false);
+  const [showLocal, setShowLocal] = useState(false); // panneau « Multijoueur local » (app uniquement)
+  const [localTables, setLocalTables] = useState([]); // tables détectées à proximité
 
   function inviteJoin(code, pseudo) {
     const n = (pseudo || "").trim();
@@ -940,6 +984,7 @@ function App() {
       setTimeout(() => setEmotes((m) => (m[e.idx] && m[e.idx].id === e.id ? { ...m, [e.idx]: null } : m)), 3000);
     });
     socket.on("connect_error", () => setConnErr("Connexion au serveur impossible… nouvelle tentative."));
+    socket.on("localTables", (list) => setLocalTables(list || []));
     socket.on("fx", (e) => {
       if (!e) return;
       sfx(e.kind === "pose" ? "pose" : e.kind === "discard" ? "discard" : e.kind === "buy" || e.kind === "take" || e.kind === "exchange" ? "take" : "draw");
@@ -948,7 +993,7 @@ function App() {
     if (raw) { try { setSaved(JSON.parse(raw)); } catch (_) {} }
     const keepAlive = setInterval(() => { fetch("/ping").catch(() => {}); }, 240000);
     const resync = setInterval(() => { if (socket.connected) socket.emit("resync"); }, 10000);
-    return () => { clearInterval(keepAlive); clearInterval(resync); socket.off("state"); socket.off("info"); socket.off("fx"); socket.off("roomClosed"); socket.off("kicked"); socket.off("emote"); socket.off("disconnect"); socket.off("connect_error"); };
+    return () => { clearInterval(keepAlive); clearInterval(resync); socket.off("state"); socket.off("info"); socket.off("fx"); socket.off("roomClosed"); socket.off("kicked"); socket.off("emote"); socket.off("disconnect"); socket.off("connect_error"); socket.off("localTables"); };
   }, []);
 
   // Vérifie que la partie sauvegardée existe encore, et récupère son contexte (sinon on efface le bouton)
@@ -1164,8 +1209,28 @@ function App() {
     store.set("ramimp-avatar", avatar);
     socket.emit("createRoom", { name: n, options: { turnSeconds, level, shortMode }, avatar }, (res) => {
       if (!res.ok) return setMsg(res.error || "Erreur.");
-      store.set("ramimp-save", JSON.stringify({ code: res.code, token: res.token, name: n }));
+      if (res.code !== "LOCAL") store.set("ramimp-save", JSON.stringify({ code: res.code, token: res.token, name: n })); // pas de reprise en partie locale
       setSaved(null);
+    });
+  }
+  // ---------- Multijoueur local (app, sans internet) ----------
+  function openLocal() {
+    ensureAudio();
+    if (!socket.goLocal() && !socket.isLocal) { setMsg("Partie locale indisponible sur cet appareil."); return; }
+    setShowLocal(true); setShowMp(false); setMsg("");
+    socket.emit("browseLocal", { name: name.trim() || "Joueur" });
+  }
+  function closeLocal() {
+    setShowLocal(false); setLocalTables([]); setMsg("");
+    socket.goOnline(); // stoppe Multipeer et rebranche le serveur en ligne
+  }
+  function joinLocalTable(t) {
+    ensureAudio();
+    const n = name.trim() || "Joueur";
+    store.set("ramimp-name", n);
+    store.set("ramimp-avatar", avatar);
+    socket.emit("joinLocal", { id: t.id, name: n, avatar }, (res) => {
+      if (!res.ok) setMsg(res.error || "Connexion impossible.");
     });
   }
   function joinRoom() {
@@ -1190,6 +1255,7 @@ function App() {
     socket.emit("leaveGame");
     store.del("ramimp-save");
     setSrv(null); setStaged([]); setSelected([]); setShowQuit(false); setMsg("");
+    if (socket.isLocal) closeLocal(); // partie locale : on coupe aussi le Bluetooth
   }
 
   function tapCard(id) {
@@ -1498,8 +1564,8 @@ function App() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6" style={bgStyle}>
         {STYLE}
-        {showMp && (
-          <button onClick={() => setShowMp(false)} className="fixed top-3 left-3 z-40 btn-dark rounded-xl px-3 py-1.5 text-xs font-bold">← Accueil</button>
+        {(showMp || showLocal) && (
+          <button onClick={() => { setShowMp(false); if (showLocal) closeLocal(); }} className="fixed top-3 left-3 z-40 btn-dark rounded-xl px-3 py-1.5 text-xs font-bold">← Accueil</button>
         )}
         <div className="text-center" style={{ textShadow: "0 3px 10px rgba(0,0,0,.6)" }}>
           <h1 className="text-5xl text-amber-300" style={{ fontFamily: "Georgia, serif" }}>Ramy Gasy</h1>
@@ -1508,7 +1574,7 @@ function App() {
         {connErr && <p className="text-xs text-red-300">{connErr}</p>}
 
         {/* Mode solo */}
-        {!showMp && (<>
+        {!showMp && !showLocal && (<>
         <a href="/solo.html" className="panel rounded-2xl p-4 w-full max-w-xs flex items-center gap-3 text-emerald-100 no-underline">
           <span className="text-3xl">🎮</span>
           <span className="flex-1">
@@ -1528,7 +1594,7 @@ function App() {
         </a>
         </>)}
 
-        {!showMp && (
+        {!showMp && !showLocal && (
           <button onClick={() => setShowMp(true)}
             className="panel rounded-2xl p-4 w-full max-w-xs flex items-center gap-3 text-emerald-100 text-left" style={{ borderColor: "#f59e0b66" }}>
             <span className="text-3xl">🌐</span>
@@ -1538,6 +1604,78 @@ function App() {
             </span>
             <span className="text-amber-300 text-xl font-bold">→</span>
           </button>
+        )}
+
+        {/* Multijoueur local — uniquement dans l'app (Bluetooth/WiFi direct, sans internet) */}
+        {!showMp && !showLocal && window.RamyLocalNet && window.RamyLocalNet.available() && (
+          <button onClick={openLocal}
+            className="panel rounded-2xl p-4 w-full max-w-xs flex items-center gap-3 text-emerald-100 text-left" style={{ borderColor: "#38bdf866" }}>
+            <span className="text-3xl">📡</span>
+            <span className="flex-1">
+              <span className="block font-bold text-base text-sky-300">Multijoueur local</span>
+              <span className="block text-xs text-emerald-300">Sans internet — téléphones proches (avion ✈️)</span>
+            </span>
+            <span className="text-amber-300 text-xl font-bold">→</span>
+          </button>
+        )}
+
+        {showLocal && (
+        <div className="panel rounded-2xl p-5 w-full max-w-xs flex flex-col gap-4 text-emerald-100" style={{ borderColor: "#38bdf866" }}>
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">📡</span>
+            <div className="flex-1">
+              <span className="block font-bold text-base text-sky-300">Multijoueur local</span>
+              <span className="block text-[11px] text-emerald-300">Sans internet — Bluetooth et WiFi activés, appareils proches</span>
+            </div>
+          </div>
+          <label className="flex flex-col gap-2 text-sm">
+            Ton nom
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Joueur" maxLength={14}
+              className="bg-emerald-950/70 border border-emerald-600 rounded-xl p-2.5 text-emerald-100 placeholder-emerald-500" />
+          </label>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs text-emerald-300">Ton emoji</span>
+            <div className="flex flex-wrap gap-1.5 justify-center">
+              {AVATARS_POOL.map((a) => (
+                <button key={a} onClick={() => setAvatar(a)}
+                  className={`text-xl rounded-xl p-1.5 transition-all ${avatar === a ? "btn-gold scale-110" : "btn-dark"}`}>{a}</button>
+              ))}
+            </div>
+          </div>
+          <div className="border-t border-emerald-800 pt-3 flex flex-col gap-2">
+            <span className="text-xs text-amber-200 font-bold">1 · Crée une table (tu seras l'hôte)</span>
+            <div className="flex gap-2 text-xs">
+              {["facile", "moyen", "difficile"].map((l) => (
+                <button key={l} onClick={() => setLevel(l)} className={`flex-1 py-1.5 rounded-xl font-bold ${level === l ? "btn-gold" : "btn-dark"}`}>{l}</button>
+              ))}
+            </div>
+            <div className="flex gap-2 text-xs">
+              <button onClick={() => setShortMode(false)}
+                className={`flex-1 py-1.5 rounded-xl font-bold flex flex-col items-center gap-0.5 ${!shortMode ? "btn-gold" : "btn-dark"}`}>
+                <span>Normal (8)</span><span className="text-[9px] opacity-75">~30 min</span>
+              </button>
+              <button onClick={() => setShortMode(true)}
+                className={`flex-1 py-1.5 rounded-xl font-bold flex flex-col items-center gap-0.5 ${shortMode ? "btn-gold" : "btn-dark"}`}>
+                <span>⚡ Court (3)</span><span className="text-[9px] opacity-75">~10 min</span>
+              </button>
+            </div>
+            <button onClick={createRoom} className="btn-gold font-bold py-3 rounded-xl">📡 Créer une table</button>
+          </div>
+          <div className="border-t border-emerald-800 pt-3 flex flex-col gap-2">
+            <span className="text-xs text-amber-200 font-bold">2 · Ou rejoins une table proche</span>
+            {localTables.length === 0 ? (
+              <div className="text-[11px] text-emerald-400 text-center py-1">
+                <span className="animate-pulse">🔍 Recherche en cours…</span>
+                <span className="block mt-1">Demande à l'hôte de créer sa table, elle apparaîtra ici.</span>
+              </div>
+            ) : localTables.map((t) => (
+              <div key={t.id} className="flex items-center justify-between gap-2 bg-emerald-950/50 border border-emerald-800 rounded-xl px-3 py-2">
+                <span className="text-sm font-bold">🃏 Table de {t.name}</span>
+                <button onClick={() => joinLocalTable(t)} className="btn-gold font-bold px-3 py-1.5 rounded-xl text-xs">Rejoindre</button>
+              </div>
+            ))}
+          </div>
+        </div>
         )}
 
         {showMp && (
@@ -1649,8 +1787,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400 flex-wrap justify-center">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          {window.Capacitor && <a href="/local-test.html" className="underline">🔧 Test local</a>}
-          <span className="opacity-60">v2234-U</span>
+          <span className="opacity-60">v2235-U</span>
         </div>
       </div>
     );
@@ -1660,7 +1797,15 @@ function App() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-5 p-6 text-emerald-100" style={bgStyle}>
         {STYLE}
-        <h1 className="text-3xl text-amber-300" style={{ fontFamily: "Georgia, serif", textShadow: "0 3px 10px rgba(0,0,0,.6)" }}>Salon</h1>
+        <h1 className="text-3xl text-amber-300" style={{ fontFamily: "Georgia, serif", textShadow: "0 3px 10px rgba(0,0,0,.6)" }}>{srv.code === "LOCAL" ? "Table locale" : "Salon"}</h1>
+        {srv.code === "LOCAL" ? (
+        <div className="panel rounded-2xl px-6 py-4 text-center" style={{ borderColor: "#38bdf866" }}>
+          <div className="text-2xl">📡</div>
+          <div className="text-sm text-sky-200 font-bold mt-1">Partie locale — sans internet</div>
+          <div className="text-[11px] text-emerald-300 mt-1">Les joueurs proches voient ta table dans « Multijoueur local » et te rejoignent en un geste.</div>
+          <div className="text-[10px] text-emerald-400 mt-1">bots {srv.options.level}</div>
+        </div>
+        ) : (
         <div className="panel rounded-2xl px-8 py-4 text-center">
           <div className="text-[10px] uppercase tracking-widest text-emerald-300">Code à partager</div>
           <div className="text-4xl font-bold text-amber-300 tracking-[.3em]" style={{ fontFamily: "Georgia, serif" }}>{srv.code}</div>
@@ -1686,6 +1831,7 @@ function App() {
           }} className="btn-dark font-bold py-2 px-4 rounded-xl text-sm mt-1 ml-2">📋 Copier le code</button>
           <div className="text-[10px] text-emerald-400 mt-1">{srv.options.turnSeconds}s par tour · bots {srv.options.level}</div>
         </div>
+        )}
         <div className="panel rounded-2xl p-4 w-full max-w-xs">
           {srv.players.map((p) => (
             <div key={p.idx} className="flex items-center gap-2 py-1.5 border-b border-emerald-800 last:border-0">

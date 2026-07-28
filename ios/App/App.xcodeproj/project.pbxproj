@@ -11,6 +11,7 @@
 		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
 		504EC3081FED79650016851F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3071FED79650016851F /* AppDelegate.swift */; };
 		AA10RAMY0000000000000002 /* MultipeerPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10RAMY0000000000000001 /* MultipeerPlugin.swift */; };
+		AA10RAMY0000000000000006 /* MainViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10RAMY0000000000000005 /* MainViewController.swift */; };
 		AA10RAMY0000000000000004 /* MultipeerPlugin.m in Sources */ = {isa = PBXBuildFile; fileRef = AA10RAMY0000000000000003 /* MultipeerPlugin.m */; };
 		504EC30D1FED79650016851F /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30B1FED79650016851F /* Main.storyboard */; };
 		504EC30F1FED79650016851F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30E1FED79650016851F /* Assets.xcassets */; };
@@ -25,6 +26,7 @@
 		504EC3041FED79650016851F /* App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = App.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		504EC3071FED79650016851F /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		AA10RAMY0000000000000001 /* MultipeerPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultipeerPlugin.swift; sourceTree = "<group>"; };
+		AA10RAMY0000000000000005 /* MainViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainViewController.swift; sourceTree = "<group>"; };
 		AA10RAMY0000000000000003 /* MultipeerPlugin.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MultipeerPlugin.m; sourceTree = "<group>"; };
 		504EC30C1FED79650016851F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		504EC30E1FED79650016851F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -80,6 +82,7 @@
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				AA10RAMY0000000000000001 /* MultipeerPlugin.swift */,
+				AA10RAMY0000000000000005 /* MainViewController.swift */,
 				AA10RAMY0000000000000003 /* MultipeerPlugin.m */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
@@ -218,6 +221,7 @@
 			files = (
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				AA10RAMY0000000000000002 /* MultipeerPlugin.swift in Sources */,
+				AA10RAMY0000000000000006 /* MainViewController.swift in Sources */,
 				AA10RAMY0000000000000004 /* MultipeerPlugin.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -16,7 +16,19 @@ import Capacitor
 import MultipeerConnectivity
 
 @objc(MultipeerPlugin)
-public class MultipeerPlugin: CAPPlugin, MCSessionDelegate, MCNearbyServiceAdvertiserDelegate, MCNearbyServiceBrowserDelegate {
+public class MultipeerPlugin: CAPPlugin, CAPBridgedPlugin, MCSessionDelegate, MCNearbyServiceAdvertiserDelegate, MCNearbyServiceBrowserDelegate {
+
+    // Déclaration Capacitor 6 : identité + liste des méthodes exposées au JavaScript
+    public let identifier = "MultipeerPlugin"
+    public let jsName = "Multipeer"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "startHosting", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "startBrowsing", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "joinHost", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "send", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "connectedPeers", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "stopAll", returnType: CAPPluginReturnPromise),
+    ]
 
     // Doit faire 1-15 caractères (minuscules, chiffres, tirets) et être déclaré dans Info.plist
     let serviceType = "ramygasy"
@@ -123,6 +135,9 @@ public class MultipeerPlugin: CAPPlugin, MCSessionDelegate, MCNearbyServiceAdver
 
     // ---------- Côté invité : hôtes repérés / perdus ----------
     public func browser(_ browser: MCNearbyServiceBrowser, foundPeer peerID: MCPeerID, withDiscoveryInfo info: [String: String]?) {
+        // Sa propre table (écho Bonjour local) : on l'ignore. L'identifiant change à chaque
+        // découverte, seule la comparaison du nom est fiable ici.
+        if peerID == self.peerID || peerID.displayName == self.peerID?.displayName { return }
         foundPeers[String(peerID.hash)] = peerID
         notifyListeners("peerFound", data: ["id": String(peerID.hash), "name": peerID.displayName])
     }

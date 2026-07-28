@@ -854,6 +854,24 @@
       }
     }
 
+    // Changement d'emoji dans le salon (même règle que le serveur : on peut prendre celui d'un bot)
+    function setAvatar(idx, avatar) {
+      const p = room.players[idx];
+      if (!p || room.state !== "lobby") return "Changement d'emoji possible seulement dans le salon.";
+      if (!AVATARS_POOL.includes(avatar)) return "Emoji inconnu.";
+      const ownerIdx = room.players.findIndex((q, i) => i !== idx && q.avatar === avatar);
+      if (ownerIdx !== -1) {
+        const owner = room.players[ownerIdx];
+        if (!owner.isBot) return "Cet emoji est déjà pris par un autre joueur.";
+        p.avatar = avatar;
+        owner.avatar = freeAvatar(null);
+      } else {
+        p.avatar = avatar;
+      }
+      broadcast();
+      return null;
+    }
+
     // ---------- Présence (un invité se déconnecte / revient) ----------
     function setConnected(idx, connected) {
       const p = room.players[idx];
@@ -966,7 +984,7 @@
 
     return {
       addPlayer, removePlayer, startGame, nextRound, action,
-      rematchPropose, rematchVote, setConnected,
+      rematchPropose, rematchVote, setConnected, setAvatar,
       resync: (idx) => send(idx, "state", stateFor(idx)),
       stateFor, serialize, restore, destroy,
       get state() { return room.state; },
