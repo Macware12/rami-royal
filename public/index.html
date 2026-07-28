@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2228-U">
+<meta name="version" content="v2229-U">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,6 +25,9 @@ html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none
 input, textarea { -webkit-user-select: text; user-select: text; }
 
   html, body { margin: 0; padding: 0; background: #052e16; overscroll-behavior: none; }
+  /* App iOS : 100vh inclut la zone derrière les barres → léger débordement qui rend la page
+     défilable pour rien. 100dvh = hauteur réellement visible : plus de défilement fantôme. */
+  @supports (height: 100dvh) { .min-h-screen { min-height: 100dvh; } }
   * { -webkit-tap-highlight-color: transparent; }
 </style>
 </head>
@@ -1625,7 +1628,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2228-U</span>
+          <span className="opacity-60">v2229-U</span>
         </div>
       </div>
     );
