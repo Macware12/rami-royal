@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2226-U">
+<meta name="version" content="v2227-U">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -2897,7 +2897,13 @@ function tapCard(id) {
       </div>
 
       {/* Rappel du contrat — une seule ligne compacte */}
-      <div className="shrink-0 flex justify-center px-3 pt-1.5">
+      <div className="shrink-0 flex justify-center px-3 pt-1.5 relative">
+        {!tuto && me && !me.posed && (
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-emerald-950/60 border border-emerald-800 rounded-lg px-1.5 py-1" title="Tes achats restants cette manche">
+            <span className="text-[10px]">🛒</span>
+            {[0, 1, 2].map((k) => <span key={k} style={{ width: 5, height: 5, borderRadius: 99, background: k < me.buysLeft ? "#a3e635" : "#3f3f46" }} />)}
+          </div>
+        )}
         <div className="panel rounded-full px-4 py-1 flex items-center gap-2" style={{ borderColor: "#f59e0b88" }}>
           <span className="text-[10px]">🎯</span>
           <span className="text-sm font-bold text-amber-300 leading-none whitespace-nowrap"
@@ -3106,13 +3112,7 @@ function tapCard(id) {
         )}
 
         {/* Barre d'actions principale */}
-        <div className="flex gap-2 justify-center mt-2 flex-wrap relative">
-          {!tuto && me && !me.posed && (
-            <div className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-emerald-950/60 border border-emerald-800 rounded-lg px-2 py-1.5" title="Tes achats restants cette manche">
-              <span className="text-xs">🛒</span>
-              {[0, 1, 2].map((k) => <span key={k} style={{ width: 6, height: 6, borderRadius: 99, background: k < me.buysLeft ? "#a3e635" : "#3f3f46" }} />)}
-            </div>
-          )}
+        <div className="flex gap-2 justify-center mt-2 flex-wrap">
           {!me.posed && selTriOk && !g.roundOver && (
             <button onClick={() => stageSelection("tri")} className="btn-green px-4 py-2 rounded-xl text-sm font-bold">
               ✓ C'est un tri !
