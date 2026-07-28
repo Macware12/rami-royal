@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2231-U">
+<meta name="version" content="v2232-U">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -39,8 +39,14 @@ input, textarea { -webkit-user-select: text; user-select: text; }
   /* Safe areas : l'app s'étend sous l'encoche/la barre d'état — on décale le contenu juste ce qu'il faut */
   html.native-app body { box-sizing: border-box; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
   /* Les écrans prennent la hauteur du cadre (déjà réduit des safe areas), pas celle de l'écran entier */
+  html.native-app #root { height: 100%; }
   html.native-app .fit-screen { height: 100%; }
   html.native-app .min-h-screen { min-height: 100%; }
+  /* Les éléments flottants en haut d'écran ignorent le rembourrage du body : on les décale sous l'encoche */
+  html.native-app .fixed.top-3 { top: calc(env(safe-area-inset-top) + 0.75rem); }
+  html.native-app .fixed.top-12 { top: calc(env(safe-area-inset-top) + 3rem); }
+  html.native-app .fixed.top-14 { top: calc(env(safe-area-inset-top) + 3.5rem); }
+  html.native-app .fixed.top-24 { top: calc(env(safe-area-inset-top) + 6rem); }
   * { -webkit-tap-highlight-color: transparent; }
 </style>
 </head>
@@ -1641,7 +1647,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2231-U</span>
+          <span className="opacity-60">v2232-U</span>
         </div>
       </div>
     );
