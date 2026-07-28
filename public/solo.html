@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2260-U">
+<meta name="version" content="v2261-U">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2260-U">
+<link rel="stylesheet" href="/lib/tailwind.css?v2261-U">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -250,8 +250,8 @@ function cleDuJour() {
   const d = new Date();
   return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 }
-function graineDuJour(extra) {
-  const cle = cleDuJour() + "#" + (extra == null ? 0 : extra);
+function graineDe(base, extra) {
+  const cle = base + "#" + (extra == null ? 0 : extra);
   let h = 2166136261;
   for (let i = 0; i < cle.length; i++) { h ^= cle.charCodeAt(i); h = Math.imul(h, 16777619); }
   return function () { // mulberry32 : générateur reproductible
@@ -261,6 +261,7 @@ function graineDuJour(extra) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+function graineDuJour(extra) { return graineDe("jour-" + cleDuJour(), extra); }
 
 // ---------- Partage du score : image prête pour WhatsApp & co ----------
 function partagerScore(ranking, defi) {
@@ -1229,10 +1230,12 @@ function RamiRoyal() {
     const lvlChoisi = (optionsRapides && optionsRapides.level) || level;
     const courtChoisi = optionsRapides && optionsRapides.shortMode !== undefined ? optionsRapides.shortMode : shortMode;
     const defi = Boolean(optionsRapides && optionsRapides.defi); // défi du jour : donne identique pour tous
+    const defiAmi = (optionsRapides && optionsRapides.defiAmi) || null; // défi entre amis : { id, graine }
+    const graineBase = defi ? "jour-" + cleDuJour() : defiAmi ? defiAmi.graine : null;
     const name = (account.code && account.pseudo) || playerName.trim() || "Joueur 1"; // compte connecté : pseudo imposé
     const players = [
       { name, isAI: false, avatar: myAvatar, color: "#fbbf24" },
-      ...Array.from({ length: defi ? 2 : nbAI }, (_, i) => ({
+      ...Array.from({ length: (defi || defiAmi) ? 2 : nbAI }, (_, i) => ({
         name: "Joueur " + (i + 2), isAI: true,
         avatar: AVATARS_POOL.filter((a) => a !== myAvatar)[i % (AVATARS_POOL.length - 1)], color: AVATAR_COLORS[i % AVATAR_COLORS.length],
       })),
@@ -1241,8 +1244,8 @@ function RamiRoyal() {
     store.set("rami-name", name);
     store.set("rami-avatar", myAvatar);
     store.set("rami-level", lvlChoisi);
-    const manchesFinales = courtChoisi ? genererManchesAleatoires(defi ? graineDuJour("manches") : undefined).map((i) => MANCHES[i]) : MANCHES;
-    setG({ ...newRound(players, 0, null, null, manchesFinales, defi ? graineDuJour(0) : undefined), level: lvlChoisi, shortMode: courtChoisi, manches: manchesFinales, defi, startedAt: Date.now() });
+    const manchesFinales = courtChoisi ? genererManchesAleatoires(graineBase ? graineDe(graineBase, "manches") : undefined).map((i) => MANCHES[i]) : MANCHES;
+    setG({ ...newRound(players, 0, null, null, manchesFinales, graineBase ? graineDe(graineBase, 0) : undefined), level: lvlChoisi, shortMode: courtChoisi, manches: manchesFinales, defi, defiAmi: defiAmi ? defiAmi.id : null, graineBase, startedAt: Date.now() });
     setSelected([]);
     setMsg("");
     showIntro(0, manchesFinales);
@@ -1415,6 +1418,17 @@ function RamiRoyal() {
     if (window.location.search.indexOf("defi=1") !== -1) {
       window.history.replaceState(null, "", window.location.pathname);
       setTimeout(() => startGame({ defi: true, level: "difficile", shortMode: true }), 0);
+    }
+    const mAmi = window.location.search.match(/defiami=([A-Za-z0-9]{5})/);
+    if (mAmi) {
+      window.history.replaceState(null, "", window.location.pathname);
+      fetch(API_BASE + "/defi/prive?id=" + mAmi[1].toUpperCase())
+        .then((r) => r.json())
+        .then((d) => {
+          if (d && d.graine) setTimeout(() => startGame({ defiAmi: { id: d.id, graine: d.graine }, level: "difficile", shortMode: true }), 0);
+          else setMsg(d && d.erreur ? d.erreur : "Défi introuvable.");
+        })
+        .catch(() => setMsg("Défi injoignable — vérifie ta connexion."));
     }
     setHasSave(Boolean(store.get("rami-save")));
     const savedName = store.get("rami-name"); if (savedName) setPlayerName(savedName);
@@ -2574,6 +2588,15 @@ function tapCard(id) {
       store.del("rami-save");
       const ranking = [...g.players].sort((a, b) => a.total - b.total);
       const won = ranking[0] === g.players[0];
+      if (g.defiAmi) {
+        const accAmi = readJSON("rami-account");
+        if (accAmi.code) {
+          fetch(API_BASE + "/defi/prive-score", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code: accAmi.code, id: g.defiAmi, total: g.players[0].total, won }),
+          }).catch(() => {});
+        }
+      }
       if (g.defi) {
         store.set("rami-defi", JSON.stringify({ date: cleDuJour(), total: g.players[0].total, won }));
         const accDefi = readJSON("rami-account");
@@ -2623,8 +2646,8 @@ function tapCard(id) {
       return;
     }
     showIntro(g.mancheIdx + 1, g.manches);
-    setG((s) => ({ ...newRound(s.players, s.mancheIdx + 1, s.players.map((p) => p.total), s.history, s.manches, s.defi ? graineDuJour(s.mancheIdx + 1) : undefined),
-      level: s.level, shortMode: s.shortMode, manches: s.manches, defi: s.defi, startedAt: s.startedAt }));
+    setG((s) => ({ ...newRound(s.players, s.mancheIdx + 1, s.players.map((p) => p.total), s.history, s.manches, s.graineBase ? graineDe(s.graineBase, s.mancheIdx + 1) : undefined),
+      level: s.level, shortMode: s.shortMode, manches: s.manches, defi: s.defi, defiAmi: s.defiAmi, graineBase: s.graineBase, startedAt: s.startedAt }));
     setSelected([]);
     setMsg("");
   }
@@ -2999,7 +3022,7 @@ function tapCard(id) {
             🏆 Succès débloqué : {succesBanner.nom} !
           </div>
         )}
-        <h1 className="text-3xl text-amber-300" style={{ fontFamily: "Georgia, serif", textShadow: "0 3px 10px rgba(0,0,0,.6)" }}>{g.defi ? "🗓️ Défi du jour terminé !" : "Partie terminée"}</h1>
+        <h1 className="text-3xl text-amber-300" style={{ fontFamily: "Georgia, serif", textShadow: "0 3px 10px rgba(0,0,0,.6)" }}>{g.defi ? "🗓️ Défi du jour terminé !" : g.defiAmi ? "⚔️ Défi terminé !" : "Partie terminée"}</h1>
         <div className="panel rounded-2xl p-5 w-full max-w-xs">
           {ranking.map((p, i) => (
             <div key={p.name} className={`flex justify-between py-2 border-b border-emerald-800 last:border-0 ${i === 0 ? "text-amber-300 font-bold" : ""}`}>
@@ -3022,6 +3045,11 @@ function tapCard(id) {
         {g.defi && (
           <a href="/?classement=1" className="btn-gold font-bold py-2.5 px-6 rounded-xl text-sm no-underline">
             🏆 Voir le classement du jour
+          </a>
+        )}
+        {g.defiAmi && (
+          <a href={"/?voirdefi=" + g.defiAmi} className="btn-gold font-bold py-2.5 px-6 rounded-xl text-sm no-underline">
+            ⚔️ Voir les résultats du défi
           </a>
         )}
         <button onClick={() => partagerScore(ranking, g.defi)} className="btn-dark font-bold py-2.5 px-6 rounded-xl text-sm">
@@ -3082,7 +3110,7 @@ function tapCard(id) {
             <div className="text-amber-300 font-bold text-sm" style={{ fontFamily: "Georgia, serif" }}>
               {tuto ? "🎓 Tutoriel" : `Manche ${g.mancheIdx + 1}/${(g.manches || MANCHES).length}`}
             </div>
-            <div className="text-[10px] text-emerald-400">{g.defi ? "🗓️ Défi du jour · " : ""}IA {g.level || "moyen"} · {g.stock.length} en pioche{g.startedAt && !tuto ? " · ⏱ " + fmtElapsed(g.startedAt) : ""}</div>
+            <div className="text-[10px] text-emerald-400">{g.defi ? "🗓️ Défi du jour · " : g.defiAmi ? "⚔️ Défi " + g.defiAmi + " · " : ""}IA {g.level || "moyen"} · {g.stock.length} en pioche{g.startedAt && !tuto ? " · ⏱ " + fmtElapsed(g.startedAt) : ""}</div>
           </div>
         </div>
         <div className="flex items-center gap-1.5">

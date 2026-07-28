@@ -372,6 +372,73 @@ app.get("/defi/classement", (req, res) => {
   });
 });
 
+// ---------- Défis entre amis : même donne pour tous les participants ----------
+// Le créateur obtient un code à 5 caractères + une graine secrète ; chaque participant
+// joue la MÊME distribution (graine) et le premier essai seul compte. Expire après 7 jours.
+const DEFIS_PRIVES_FILE = process.env.DEFIS_PRIVES_FILE || path.join(__dirname, "defis-prives-save.json");
+const defisPrives = new Map(); // id → { graine, createur, createdAt, scores: { codeCompte: { pseudo, total, won, at } } }
+let defisPrivesTimer = null;
+function saveDefisPrives() {
+  clearTimeout(defisPrivesTimer);
+  defisPrivesTimer = setTimeout(() => {
+    const limite = Date.now() - 8 * 86400000;
+    for (const [id, d] of defisPrives) if (d.createdAt < limite) defisPrives.delete(id);
+    storage.save("defis-prives", Object.fromEntries(defisPrives), DEFIS_PRIVES_FILE)
+      .catch((e) => console.error("Sauvegarde défis privés impossible:", e.message));
+  }, 1000);
+}
+function genDefiId() {
+  const lettres = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+  let id = "";
+  do { id = ""; for (let i = 0; i < 5; i++) id += lettres[crypto.randomInt(lettres.length)]; } while (defisPrives.has(id));
+  return id;
+}
+
+app.post("/defi/creer", (req, res) => {
+  if (tropDEssais(req, res)) return;
+  const code = String((req.body && req.body.code) || "").trim();
+  const c = /^[0-9]{6}$/.test(code) ? comptes.get(code) : null;
+  if (!c) return res.status(403).json({ erreur: "Compte requis pour créer un défi." });
+  if (defisPrives.size >= 20000) return res.status(503).json({ erreur: "Trop de défis en cours — réessaie plus tard." });
+  const id = genDefiId();
+  defisPrives.set(id, { graine: id + "-" + crypto.randomBytes(6).toString("hex"), createur: c.pseudo, createdAt: Date.now(), scores: {} });
+  saveDefisPrives();
+  res.json({ id });
+});
+
+app.get("/defi/prive", (req, res) => {
+  const id = String(req.query.id || "").trim().toUpperCase();
+  const d = defisPrives.get(id);
+  if (!d) return res.status(404).json({ erreur: "Défi introuvable — vérifie le code (il expire après 7 jours)." });
+  const entries = Object.keys(d.scores).map((k) => ({ code: k, ...d.scores[k] }));
+  entries.sort((a, b) => ((b.won ? 1 : 0) - (a.won ? 1 : 0)) || (a.total - b.total) || (a.at - b.at));
+  const moiCode = String(req.query.code || "").trim();
+  const rang = moiCode ? entries.findIndex((e) => e.code === moiCode) + 1 : 0;
+  res.json({
+    id, createur: d.createur, graine: d.graine,
+    joursRestants: Math.max(0, Math.ceil((d.createdAt + 7 * 86400000 - Date.now()) / 86400000)),
+    participants: entries.length,
+    top: entries.slice(0, 20).map((e, i) => ({ rang: i + 1, pseudo: e.pseudo, total: e.total, won: e.won })),
+    rang: rang || null,
+    dejaJoue: Boolean(moiCode && d.scores[moiCode]),
+  });
+});
+
+app.post("/defi/prive-score", (req, res) => {
+  if (tropDEssais(req, res)) return;
+  const { code, id, total, won } = req.body || {};
+  const c = typeof code === "string" && /^[0-9]{6}$/.test(code.trim()) ? comptes.get(code.trim()) : null;
+  if (!c) return res.status(403).json({ erreur: "Compte requis pour entrer aux résultats." });
+  const d = defisPrives.get(String(id || "").trim().toUpperCase());
+  if (!d) return res.status(404).json({ erreur: "Défi introuvable ou expiré." });
+  if (Date.now() - d.createdAt > 7 * 86400000) return res.status(400).json({ erreur: "Ce défi est clos." });
+  if (d.scores[c.code]) return res.json({ ok: true, deja: true }); // premier essai seul compté
+  if (Object.keys(d.scores).length >= 500) return res.status(503).json({ erreur: "Défi complet." });
+  d.scores[c.code] = { pseudo: c.pseudo, total: Math.max(0, Math.min(5000, parseInt(total, 10) || 0)), won: Boolean(won), at: Date.now() };
+  saveDefisPrives();
+  res.json({ ok: true });
+});
+
 // Lookup par code seul (pour reconnexion multi-appareil) : retourne le compte complet si code valide
 app.post("/compte/info", (req, res) => {
   if (tropDEssais(req, res)) return;
@@ -1669,9 +1736,11 @@ function flushComptes() {
   clearTimeout(defiTimer);
   const outDefi = {};
   for (const [date, jour] of defiScores) outDefi[date] = Object.fromEntries(jour);
+  clearTimeout(defisPrivesTimer);
   return Promise.all([
     storage.save("comptes", [...comptes.values()], ACCOUNTS_FILE),
     storage.save("defi", outDefi, DEFI_FILE),
+    storage.save("defis-prives", Object.fromEntries(defisPrives), DEFIS_PRIVES_FILE),
   ]).catch(() => {});
 }
 process.on("SIGTERM", () => { saveRooms(); Promise.resolve(flushComptes()).finally(() => setTimeout(() => process.exit(0), 800)); });
@@ -1705,6 +1774,10 @@ process.on("SIGINT", () => { saveRooms(); Promise.resolve(flushComptes()).finall
     if (dataDefi && typeof dataDefi === "object")
       Object.keys(dataDefi).forEach((date) => defiScores.set(date, new Map(Object.entries(dataDefi[date] || {}))));
     if (defiScores.size) console.log(defiScores.size + " jour(s) de défi chargé(s)");
+    const dataPrives = await storage.load("defis-prives", DEFIS_PRIVES_FILE);
+    if (dataPrives && typeof dataPrives === "object")
+      Object.keys(dataPrives).forEach((id) => defisPrives.set(id, dataPrives[id]));
+    if (defisPrives.size) console.log(defisPrives.size + " défi(s) privé(s) chargé(s)");
     await loadRooms();
   } catch (e) {
     console.error("ATTENTION — stockage indisponible, démarrage en mémoire seule :", e.message);

@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2260-U">
+<meta name="version" content="v2261-U">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2260-U">
+<link rel="stylesheet" href="/lib/tailwind.css?v2261-U">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -883,6 +883,34 @@ function App() {
   }
   const [cptStats, setCptStats] = useState(false); // modale statistiques depuis le profil
   const [defiClassement, setDefiClassement] = useState(null); // null | "chargement" | { données du classement }
+  const [defiAmi, setDefiAmi] = useState(null); // null | "menu" | { id } — modale défi entre amis
+  const [defiAmiData, setDefiAmiData] = useState(null); // "chargement" | données | { erreur }
+  const [defiAmiCode, setDefiAmiCode] = useState("");
+  function ouvrirDefiAmi(id) {
+    const propre = String(id || "").trim().toUpperCase();
+    if (propre.length !== 5) { setDefiAmiData({ erreur: "Le code d'un défi fait 5 caractères." }); return; }
+    setDefiAmi({ id: propre }); setDefiAmiData("chargement");
+    const acc = readJSONls("rami-account");
+    fetch(API_BASE + "/defi/prive?id=" + propre + (acc.code ? "&code=" + acc.code : ""))
+      .then((r) => r.json())
+      .then((d) => setDefiAmiData(d && d.id ? d : { erreur: (d && d.erreur) || "Défi introuvable." }))
+      .catch(() => setDefiAmiData({ erreur: "Serveur injoignable — vérifie ta connexion." }));
+  }
+  function creerDefiAmi() {
+    const acc = readJSONls("rami-account");
+    if (!acc.code) { setCptErr(""); setCptNouveau(null); setCptMode("choix"); setCptOpen(true); return; } // compte requis
+    setDefiAmiData("chargement");
+    fetch(API_BASE + "/defi/creer", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: acc.code }) })
+      .then((r) => r.json())
+      .then((d) => { if (d && d.id) ouvrirDefiAmi(d.id); else setDefiAmiData({ erreur: (d && d.erreur) || "Création impossible." }); })
+      .catch(() => setDefiAmiData({ erreur: "Serveur injoignable — vérifie ta connexion." }));
+  }
+  function partagerDefiAmi(id, createur) {
+    const url = window.location.origin + "/?defiami=" + id;
+    const texte = "⚔️ " + (createur || "Un ami") + " te défie au Ramy Gasy ! Même donne pour tous — fais mieux que " + (createur || "lui") + " : " + url;
+    if (navigator.share) navigator.share({ title: "Défi Ramy Gasy", text: texte, url }).catch(() => {});
+    else if (navigator.clipboard) navigator.clipboard.writeText(texte).then(() => setMsg("Invitation copiée — colle-la à tes amis !")).catch(() => setMsg(url));
+  }
   function ouvrirClassement() {
     setDefiClassement("chargement");
     const acc = readJSONls("rami-account");
@@ -1151,6 +1179,17 @@ function App() {
     if (window.location.search.indexOf("classement=1") !== -1) {
       window.history.replaceState(null, "", window.location.pathname);
       ouvrirClassement();
+    }
+    const mVoir = window.location.search.match(/voirdefi=([A-Za-z0-9]{5})/);
+    if (mVoir) {
+      window.history.replaceState(null, "", window.location.pathname);
+      ouvrirDefiAmi(mVoir[1]);
+    }
+    const mAmi = window.location.search.match(/defiami=([A-Za-z0-9]{5})/);
+    if (mAmi) {
+      // Lien d'invitation reçu : on montre d'abord le défi (qui l'a créé, qui a joué), le bouton Jouer fait le reste
+      window.history.replaceState(null, "", window.location.pathname);
+      ouvrirDefiAmi(mAmi[1]);
     }
     const keepAlive = setInterval(() => { fetch("/ping").catch(() => {}); }, 240000);
     const resync = setInterval(() => { if (socket.connected) socket.emit("resync"); }, 10000);
@@ -1786,6 +1825,15 @@ function App() {
             )}
             {dejaJoue ? carteSolo : carteTuto}
             {dejaJoue ? carteTuto : carteSolo}
+            <button onClick={() => { setDefiAmi("menu"); setDefiAmiData(null); setDefiAmiCode(""); }}
+              className="panel rounded-2xl p-4 w-full max-w-xs flex items-center gap-3 text-emerald-100 text-left" style={{ borderColor: "#f8717166" }}>
+              <span className="text-3xl">⚔️</span>
+              <span className="flex-1">
+                <span className="block font-bold text-base text-red-200">Défier tes amis</span>
+                <span className="block text-xs text-emerald-300">La même donne que toi — que le meilleur gagne</span>
+              </span>
+              <span className="text-amber-300 text-xl font-bold">→</span>
+            </button>
             {(() => {
               let defiFait = null;
               try { const d = JSON.parse(store.get("rami-defi") || "null"); if (d && d.date === cleDuJour()) defiFait = d; } catch (_) {}
@@ -1959,6 +2007,69 @@ function App() {
                   {cptErr && <div className="text-red-300 text-xs text-center">{cptErr}</div>}
                 </React.Fragment>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Défi entre amis : créer, rejoindre, résultats */}
+        {defiAmi && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => { setDefiAmi(null); setDefiAmiData(null); }}>
+            <div className="panel rounded-2xl p-5 w-full max-w-sm flex flex-col gap-3 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+              <div className="flex justify-between items-center">
+                <h3 className="text-amber-300 font-bold text-lg">⚔️ Défi entre amis</h3>
+                <button onClick={() => { setDefiAmi(null); setDefiAmiData(null); }} className="text-emerald-400 text-xl px-3 py-1 -mr-2">✕</button>
+              </div>
+              {defiAmi === "menu" ? (
+                <React.Fragment>
+                  <p className="text-[11px] text-emerald-300 leading-relaxed">Crée un défi : tes amis reçoivent <b>exactement la même donne</b> que toi (mêmes cartes, mêmes contrats) et vos scores sont comparés. Valable 7 jours — seul le premier essai de chacun compte.</p>
+                  <button onClick={creerDefiAmi} className="btn-gold font-bold py-2.5 rounded-xl text-sm">✨ Créer un défi</button>
+                  {!readJSONls("rami-account").code && <p className="text-[10px] text-emerald-400 text-center">(un compte est nécessaire — la fenêtre s'ouvrira automatiquement)</p>}
+                  <div className="text-center text-[10px] text-emerald-400">— ou —</div>
+                  <div className="flex gap-2 items-stretch">
+                    <input value={defiAmiCode} onChange={(e) => setDefiAmiCode(e.target.value.toUpperCase())} placeholder="CODE" maxLength={5}
+                      className="flex-1 min-w-0 bg-emerald-950/70 border border-emerald-600 rounded-xl p-2.5 text-center tracking-widest font-bold uppercase placeholder-emerald-600" />
+                    <button onClick={() => ouvrirDefiAmi(defiAmiCode)} disabled={defiAmiCode.trim().length !== 5}
+                      className={`px-4 rounded-xl font-bold text-sm ${defiAmiCode.trim().length === 5 ? "btn-green" : "bg-emerald-950/60 border border-emerald-800 text-emerald-600"}`}>
+                      Voir
+                    </button>
+                  </div>
+                  {defiAmiData && defiAmiData.erreur && <div className="text-red-300 text-xs text-center">{defiAmiData.erreur === true ? "Erreur." : defiAmiData.erreur}</div>}
+                </React.Fragment>
+              ) : defiAmiData === "chargement" ? (
+                <div className="text-center text-emerald-300 text-sm py-6 animate-pulse">Chargement du défi…</div>
+              ) : defiAmiData && defiAmiData.erreur ? (
+                <React.Fragment>
+                  <div className="text-center text-emerald-300 text-sm py-4">{defiAmiData.erreur === true ? "Défi introuvable." : defiAmiData.erreur}</div>
+                  <button onClick={() => { setDefiAmi("menu"); setDefiAmiData(null); }} className="btn-dark font-bold py-2 rounded-xl text-xs">← Retour</button>
+                </React.Fragment>
+              ) : defiAmiData ? (
+                <React.Fragment>
+                  <div className="text-[11px] text-emerald-400 -mt-2">
+                    Défi de <b className="text-amber-300">{defiAmiData.createur}</b> · code <b className="text-amber-300 tracking-widest">{defiAmiData.id}</b>
+                    <span> · expire dans {defiAmiData.joursRestants} j</span>
+                  </div>
+                  {defiAmiData.participants === 0 ? (
+                    <div className="text-center text-emerald-300 text-sm py-4">Personne n'a encore joué ce défi —<br />lance-toi ou invite tes amis !</div>
+                  ) : (
+                    <div className="flex flex-col">
+                      {defiAmiData.top.map((e) => (
+                        <div key={e.rang} className={`flex items-center gap-2 py-1.5 border-b border-emerald-900 last:border-0 ${e.rang <= 3 ? "text-amber-200 font-bold" : "text-emerald-100"}`}>
+                          <span className="w-8 text-center">{e.rang === 1 ? "🥇" : e.rang === 2 ? "🥈" : e.rang === 3 ? "🥉" : e.rang + "."}</span>
+                          <span className="flex-1 truncate text-sm">{e.pseudo}</span>
+                          <span className="text-sm">{e.total} pts{e.won ? " 🏆" : ""}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {defiAmiData.rang ? <div className="text-[11px] text-emerald-300 text-center">Ta place : <b className="text-amber-300">{defiAmiData.rang}ᵉ</b> sur {defiAmiData.participants}</div> : null}
+                  {!defiAmiData.dejaJoue && (
+                    <a href={"/solo.html?defiami=" + defiAmiData.id} className="btn-gold font-bold py-2.5 rounded-xl text-sm text-center no-underline">▶ Jouer ce défi</a>
+                  )}
+                  {defiAmiData.dejaJoue && <div className="text-[10px] text-emerald-400 text-center">✓ Tu as déjà joué ce défi — premier essai seul compté.</div>}
+                  <button onClick={() => partagerDefiAmi(defiAmiData.id, defiAmiData.createur)} className="btn-dark font-bold py-2 rounded-xl text-xs">📤 Inviter des amis</button>
+                  <button onClick={() => { setDefiAmi("menu"); setDefiAmiData(null); }} className="text-[11px] text-emerald-400 underline">← Autres défis</button>
+                </React.Fragment>
+              ) : null}
             </div>
           </div>
         )}
@@ -2286,7 +2397,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400 flex-wrap justify-center">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2260-U</span>
+          <span className="opacity-60">v2261-U</span>
         </div>
       </div>
     );
