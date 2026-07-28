@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2230-U">
+<meta name="version" content="v2231-U">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -48,6 +48,11 @@ input, textarea { -webkit-user-select: text; user-select: text; }
      supprime le rebond élastique d'iOS que overscroll-behavior ne bloque pas dans WKWebView */
   html.native-app, html.native-app body { position: fixed; inset: 0; width: 100%; height: 100%; overflow: hidden; }
   html.native-app body { overflow-y: auto; -webkit-overflow-scrolling: auto; }
+  /* Safe areas : l'app s'étend sous l'encoche/la barre d'état — on décale le contenu juste ce qu'il faut */
+  html.native-app body { box-sizing: border-box; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+  /* Les écrans prennent la hauteur du cadre (déjà réduit des safe areas), pas celle de l'écran entier */
+  html.native-app .fit-screen { height: 100%; }
+  html.native-app .min-h-screen { min-height: 100%; }
   * { -webkit-tap-highlight-color: transparent; }
 </style>
 </head>
