@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2249-U">
+<meta name="version" content="v2250-U">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -825,16 +825,47 @@ function App() {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     }).then((r) => r.json().then((d) => { if (!r.ok) throw new Error(d.erreur || "Erreur serveur"); return d; }));
   }
+  const [cptStats, setCptStats] = useState(false); // modale statistiques depuis le profil
   function cptActiver(d) {
-    store.set("rami-account", JSON.stringify({ pseudo: d.pseudo, code: d.code }));
+    store.set("rami-account", JSON.stringify({ pseudo: d.pseudo, code: d.code, avatar: d.avatar || null, photo: d.photo || null, renamedAt: d.renamedAt || null }));
     store.set("rami-stats", JSON.stringify(d.stats || {}));
     store.set("rami-succes", JSON.stringify(d.succes || {}));
     store.set("rami-name", d.pseudo);
     store.set("ramimp-name", d.pseudo);
+    if (d.avatar) { store.set("ramimp-avatar", d.avatar); setAvatar(d.avatar); } // l'avatar du compte devient celui de la table
     setName(d.pseudo);
     setCptBusy(false); setCptErr(""); setCptCode("");
     cptMaj((x) => x + 1);
   }
+  // Mise à jour du profil (avatar parmi les 10 du jeu, ou photo)
+  function cptProfil(patch) {
+    setCptBusy(true); setCptErr("");
+    compteApi("profil", Object.assign({ code: compteActif.code }, patch))
+      .then((d) => { cptActiver(d); })
+      .catch((e) => { setCptBusy(false); setCptErr(e.message || "Serveur injoignable — réessaie."); });
+  }
+  // Photo choisie : réduite à 128px côté client (≈ 8 Ko) avant envoi
+  function cptChargerPhoto(file) {
+    if (!file || !file.type || !file.type.startsWith("image/")) return;
+    const img = new Image();
+    img.onload = () => {
+      const cote = 128;
+      const cv = document.createElement("canvas");
+      cv.width = cote; cv.height = cote;
+      const cx = cv.getContext("2d");
+      const min = Math.min(img.width, img.height); // recadrage carré centré
+      cx.drawImage(img, (img.width - min) / 2, (img.height - min) / 2, min, min, 0, 0, cote, cote);
+      cptProfil({ photo: cv.toDataURL("image/jpeg", 0.8) });
+    };
+    img.onerror = () => setCptErr("Image illisible — essaie un autre fichier.");
+    img.src = URL.createObjectURL(file);
+  }
+  // Jours restants avant de pouvoir re-changer de pseudo (le serveur fait foi)
+  const cptRenameJours = (() => {
+    if (!compteActif || !compteActif.renamedAt) return 0;
+    const reste = 7 * 86400000 - (Date.now() - compteActif.renamedAt);
+    return reste > 0 ? Math.ceil(reste / 86400000) : 0;
+  })();
   function cptCreer() {
     const p = cptPseudo.trim();
     if (p.length < 2) { setCptErr("Choisis d'abord un pseudo (2 caractères minimum)."); return; }
@@ -1671,17 +1702,21 @@ function App() {
           </button>
         )}
 
-        {/* Compte joueur — pastille discrète en haut à droite, séparée des menus de jeu */}
+        {/* Compte joueur — pastille en haut à droite, séparée des menus de jeu */}
         {!showMp && !showLocal && (
           <button onClick={() => { setCptErr(""); setCptNouveau(null); setCptMode("choix"); setCptPseudo(name.trim()); setCptOpen(true); }}
-            className="fixed top-3 right-3 z-40 panel rounded-full px-3 py-1.5 flex items-center gap-1.5 text-emerald-100"
+            className={`fixed top-3 right-3 z-40 rounded-full px-3.5 py-2 flex items-center gap-2 ${nomVerrouille ? "panel text-emerald-100" : "btn-gold"}`}
             style={nomVerrouille ? { borderColor: "#f59e0b88" } : {}}
             title={nomVerrouille ? "Gérer mon compte" : "Se connecter / Créer un compte"}>
-            <span className="text-base leading-none">👤</span>
-            {nomVerrouille ? (
-              <span className="text-xs font-bold text-amber-300 max-w-[110px] truncate">{nomVerrouille}</span>
+            {nomVerrouille && compteActif.photo ? (
+              <img src={compteActif.photo} alt="" className="w-6 h-6 rounded-full object-cover" style={{ border: "1px solid #f59e0b" }} />
             ) : (
-              <span className="text-xs font-bold">Se connecter</span>
+              <span className="text-base leading-none">{(nomVerrouille && compteActif.avatar) || "👤"}</span>
+            )}
+            {nomVerrouille ? (
+              <span className="text-sm font-bold text-amber-300 max-w-[120px] truncate">{nomVerrouille}</span>
+            ) : (
+              <span className="text-sm font-bold">Se connecter</span>
             )}
           </button>
         )}
@@ -1713,15 +1748,52 @@ function App() {
                   <button onClick={() => { setCptMode("choix"); setCptErr(""); }} disabled={cptBusy} className="text-[11px] text-emerald-400 underline">← Retour</button>
                   {cptErr && <div className="text-red-300 text-xs text-center">{cptErr}</div>}
                 </React.Fragment>
+              ) : nomVerrouille && cptMode === "avatar" ? (
+                <React.Fragment>
+                  <h3 className="text-amber-300 font-bold text-center">🎨 Avatar et photo</h3>
+                  <p className="text-[11px] text-emerald-300 text-center">Choisis un avatar du jeu…</p>
+                  <div className="flex flex-wrap gap-1.5 justify-center">
+                    {AVATARS_POOL.map((a) => (
+                      <button key={a} onClick={() => cptProfil({ avatar: a })} disabled={cptBusy}
+                        className={`text-xl rounded-xl p-1.5 transition-all ${compteActif.avatar === a ? "btn-gold scale-110" : "btn-dark"}`}>{a}</button>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-emerald-300 text-center">… ou charge ta photo (recadrée en rond) :</p>
+                  {compteActif.photo && (
+                    <img src={compteActif.photo} alt="" className="w-16 h-16 rounded-full object-cover self-center" style={{ border: "2px solid #f59e0b" }} />
+                  )}
+                  <label className="btn-dark font-bold py-2 rounded-xl text-xs text-center cursor-pointer">
+                    📷 {compteActif.photo ? "Changer la photo" : "Charger une photo"}
+                    <input type="file" accept="image/*" className="hidden" style={{ display: "none" }}
+                      onChange={(e) => { const f = e.target.files && e.target.files[0]; e.target.value = ""; cptChargerPhoto(f); }} />
+                  </label>
+                  {compteActif.photo && (
+                    <button onClick={() => cptProfil({ photo: null })} disabled={cptBusy} className="text-[11px] text-red-300 underline">Supprimer la photo</button>
+                  )}
+                  <button onClick={() => { setCptMode("choix"); setCptErr(""); }} disabled={cptBusy} className="text-[11px] text-emerald-400 underline">← Retour</button>
+                  {cptErr && <div className="text-red-300 text-xs text-center">{cptErr}</div>}
+                </React.Fragment>
               ) : nomVerrouille ? (
                 <React.Fragment>
-                  <h3 className="text-amber-300 font-bold text-center">👤 {compteActif.pseudo}</h3>
+                  <div className="flex flex-col items-center gap-1">
+                    {compteActif.photo ? (
+                      <img src={compteActif.photo} alt="" className="w-16 h-16 rounded-full object-cover" style={{ border: "2px solid #f59e0b" }} />
+                    ) : (
+                      <span className="text-4xl">{compteActif.avatar || "👤"}</span>
+                    )}
+                    <h3 className="text-amber-300 font-bold text-center">{compteActif.pseudo}</h3>
+                  </div>
                   <p className="text-[11px] text-emerald-300 text-center">Ton code secret — c'est lui qui permet de retrouver ton compte sur n'importe quel appareil :</p>
                   <div className="text-3xl font-bold text-amber-300 tracking-[.3em] text-center" style={{ fontFamily: "Georgia, serif" }}>{compteActif.code}</div>
                   <button onClick={() => { if (navigator.clipboard) navigator.clipboard.writeText(compteActif.code).catch(() => {}); }}
                     className="btn-dark font-bold py-2 rounded-xl text-xs">📋 Copier le code</button>
+                  <button onClick={() => { setCptStats(true); }} className="btn-dark font-bold py-2 rounded-xl text-xs">📊 Mes statistiques</button>
+                  <button onClick={() => { setCptErr(""); setCptMode("avatar"); }} className="btn-dark font-bold py-2 rounded-xl text-xs">🎨 Avatar et photo</button>
                   <button onClick={() => { setCptPseudo(compteActif.pseudo); setCptErr(""); setCptMode("renommer"); }}
-                    className="btn-dark font-bold py-2 rounded-xl text-xs">✏️ Changer de pseudo</button>
+                    disabled={cptRenameJours > 0}
+                    className="btn-dark font-bold py-2 rounded-xl text-xs disabled:opacity-40">
+                    ✏️ Changer de pseudo{cptRenameJours > 0 ? " (dans " + cptRenameJours + " j)" : ""}
+                  </button>
                   <button onClick={cptDeconnecter} className="btn-red font-bold py-2 rounded-xl text-xs">🔓 Se déconnecter de cet appareil</button>
                   <p className="text-[10px] text-emerald-500 text-center">Tes stats restent liées au compte — reconnecte-toi avec le code pour les retrouver.</p>
                 </React.Fragment>
@@ -1761,6 +1833,78 @@ function App() {
             </div>
           </div>
         )}
+
+        {/* Statistiques du compte (mêmes palmarès que dans le solo : solo + multijoueur) */}
+        {cptStats && (() => {
+          const st = readJSONls("rami-stats");
+          const Stat = ({ v, lbl, cls }) => (
+            <div className="panel rounded-xl py-2 flex flex-col items-center">
+              <div className={"text-xl font-bold " + (cls || "text-amber-300")}>{v}</div>
+              <div className="text-[9px] text-emerald-300 mt-0.5 text-center px-1 leading-tight">{lbl}</div>
+            </div>
+          );
+          const Section = ({ b, titre, emoji }) => {
+            const games = b.games || 0, wins = b.wins || 0, losses = Math.max(0, games - wins);
+            const rate = games ? Math.round((wins / games) * 100) : 0;
+            const avg = games ? Math.round((b.sumScore || 0) / games) : null;
+            const fastest = b.fastestWinMs ? fmtElapsed(Date.now() - b.fastestWinMs) : null;
+            let favLabel = null, favAvg = Infinity;
+            Object.keys(b.contracts || {}).forEach((lbl) => { const c = b.contracts[lbl]; if (c && c.n > 0) { const a = c.sum / c.n; if (a < favAvg) { favAvg = a; favLabel = lbl; } } });
+            return (
+              <div className="flex flex-col gap-2 border-t border-emerald-800 pt-3 first:border-0 first:pt-0">
+                <div className="text-sm font-bold text-amber-200">{emoji} {titre}</div>
+                {games === 0 ? (
+                  <div className="text-center text-emerald-400 text-xs py-2 italic">Aucune partie terminée pour l'instant.</div>
+                ) : (
+                  <React.Fragment>
+                    <div className="flex items-center gap-3">
+                      <div className="text-3xl font-bold text-amber-300" style={{ fontFamily: "Georgia, serif" }}>{rate}%</div>
+                      <div className="flex-1">
+                        <div className="w-full h-2 rounded-full overflow-hidden bg-emerald-950 flex">
+                          <div style={{ width: rate + "%", background: "#fcd34d" }} />
+                          <div style={{ width: (100 - rate) + "%", background: "#7f1d1d" }} />
+                        </div>
+                        <div className="flex justify-between text-[10px] mt-0.5"><span className="text-amber-300">🏆 {wins}</span><span className="text-emerald-300">{games} parties</span><span className="text-red-300">{losses} perdues</span></div>
+                      </div>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+                      <Stat v={b.bestScore != null ? b.bestScore : "—"} lbl="Record (pts)" />
+                      <Stat v={avg != null ? avg : "—"} lbl="Score moyen" cls="text-emerald-200" />
+                      <Stat v={b.bestManche != null ? b.bestManche : "—"} lbl="Meill. manche" cls="text-emerald-200" />
+                      <Stat v={fastest || "—"} lbl="Victoire + rapide" cls="text-cyan-300" />
+                      <Stat v={"🔥" + (b.streak || 0)} lbl="Série en cours" cls="text-orange-300" />
+                      <Stat v={"⭐" + (b.bestStreak || 0)} lbl="Meill. série" cls="text-orange-300" />
+                    </div>
+                    {favLabel && (
+                      <div className="text-[10px] text-emerald-300 text-center">🎯 Contrat préféré : <b className="text-amber-300">{favLabel}</b> ({Math.round(favAvg)} pts/manche)</div>
+                    )}
+                  </React.Fragment>
+                )}
+              </div>
+            );
+          };
+          const mp = st.mp || {};
+          return (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setCptStats(false)}>
+              <div className="panel rounded-2xl p-5 w-full max-w-sm flex flex-col gap-3 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                <div className="flex justify-between items-center">
+                  <h3 className="text-amber-300 font-bold text-lg">📊 Mes statistiques</h3>
+                  <button onClick={() => setCptStats(false)} className="text-emerald-400 text-xl">✕</button>
+                </div>
+                {nomVerrouille && <div className="text-[11px] text-emerald-400 -mt-2">👤 {nomVerrouille} · synchronisé sur tous tes appareils</div>}
+                {(st.games || 0) === 0 && (mp.games || 0) === 0 ? (
+                  <div className="text-center text-emerald-300 text-sm py-6">🎴 Aucune partie terminée pour l'instant.<br />Joue une partie complète et tes stats apparaîtront ici !</div>
+                ) : (
+                  <React.Fragment>
+                    <Section b={st} titre="Solo (vs bots)" emoji="🤖" />
+                    <Section b={mp} titre="Multijoueur (vs joueurs)" emoji="🌐" />
+                  </React.Fragment>
+                )}
+                <button onClick={() => setCptStats(false)} className="btn-gold font-bold py-2.5 rounded-xl text-sm">Fermer</button>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Multijoueur local — uniquement dans l'app (Bluetooth/WiFi direct, sans internet) */}
         {!showMp && !showLocal && window.RamyLocalNet && window.RamyLocalNet.available() && (
@@ -1969,7 +2113,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400 flex-wrap justify-center">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2249-U</span>
+          <span className="opacity-60">v2250-U</span>
         </div>
       </div>
     );

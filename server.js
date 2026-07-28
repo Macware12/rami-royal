@@ -235,7 +235,7 @@ app.post("/compte/creer", (req, res) => {
     succes: cleanSucces(req.body.succes), createdAt: Date.now(), lastSeen: Date.now() };
   comptes.set(code, compte);
   saveComptes();
-  res.json({ code, pseudo: compte.pseudo, stats: compte.stats, succes: compte.succes });
+  res.json(compteJson(compte));
 });
 
 app.post("/compte/connexion", (req, res) => {
@@ -243,25 +243,61 @@ app.post("/compte/connexion", (req, res) => {
   const c = trouveCompte(req);
   if (!c) return res.status(404).json({ erreur: "Pseudo ou code incorrect." });
   c.lastSeen = Date.now(); saveComptes();
-  res.json({ code: c.code, pseudo: c.pseudo, stats: c.stats || {}, succes: c.succes || {} });
+  res.json(compteJson(c));
 });
 
-// Changer de pseudo sans perdre sa progression (le compte reste identifié par son code)
+// Réponse standard des routes compte (avatar et photo de profil inclus)
+const compteJson = (c) => ({ code: c.code, pseudo: c.pseudo, stats: c.stats || {}, succes: c.succes || {},
+  avatar: c.avatar || null, photo: c.photo || null, renamedAt: c.renamedAt || null });
+
+// Changer de pseudo sans perdre sa progression (le compte reste identifié par son code).
+// Limite anti-abus : 1 changement par semaine (le premier est libre — faute de frappe pardonnée).
+const RENOMMAGE_DELAI_MS = 7 * 24 * 60 * 60 * 1000;
 app.post("/compte/renommer", (req, res) => {
   if (tropDEssais(req, res)) return;
   const code = String((req.body && req.body.code) || "").trim();
   const c = /^[0-9]{6}$/.test(code) ? comptes.get(code) : null;
   if (!c) return res.status(404).json({ erreur: "Code inexistant." });
+  if (c.renamedAt && Date.now() - c.renamedAt < RENOMMAGE_DELAI_MS) {
+    const jours = Math.ceil((RENOMMAGE_DELAI_MS - (Date.now() - c.renamedAt)) / 86400000);
+    return res.status(429).json({ erreur: "Pseudo modifiable une fois par semaine — réessaie dans " + jours + " jour" + (jours > 1 ? "s" : "") + "." });
+  }
   if (!pseudoValide(req.body && req.body.pseudo)) return res.status(400).json({ erreur: "Pseudo invalide (2 à 20 caractères)." });
   const voulu = req.body.pseudo.trim();
   for (const a of comptes.values()) {
     if (a !== c && a.pseudo.toLowerCase() === voulu.toLowerCase())
       return res.status(409).json({ erreur: "Ce pseudo est déjà pris — choisis-en un autre." });
   }
+  if (voulu !== c.pseudo) c.renamedAt = Date.now(); // reprendre le même pseudo ne consomme pas le quota
   c.pseudo = voulu;
   c.lastSeen = Date.now();
   saveComptes();
-  res.json({ code: c.code, pseudo: c.pseudo, stats: c.stats || {}, succes: c.succes || {} });
+  res.json(compteJson(c));
+});
+
+// Profil : avatar (parmi les 10 du jeu) et/ou photo (petite image envoyée par le client)
+app.post("/compte/profil", (req, res) => {
+  if (tropDEssais(req, res)) return;
+  const code = String((req.body && req.body.code) || "").trim();
+  const c = /^[0-9]{6}$/.test(code) ? comptes.get(code) : null;
+  if (!c) return res.status(404).json({ erreur: "Code inexistant." });
+  const { avatar, photo } = req.body || {};
+  if (avatar !== undefined) {
+    if (avatar !== null && !AVATARS_POOL.includes(avatar)) return res.status(400).json({ erreur: "Avatar inconnu." });
+    c.avatar = avatar;
+  }
+  if (photo !== undefined) {
+    if (photo === null) c.photo = null; // suppression de la photo
+    else {
+      if (typeof photo !== "string" || !/^data:image\/(jpeg|png);base64,/.test(photo))
+        return res.status(400).json({ erreur: "Format de photo invalide." });
+      if (photo.length > 80000) return res.status(400).json({ erreur: "Photo trop lourde." });
+      c.photo = photo;
+    }
+  }
+  c.lastSeen = Date.now();
+  saveComptes();
+  res.json(compteJson(c));
 });
 
 // Lookup par code seul (pour reconnexion multi-appareil) : retourne le compte complet si code valide
@@ -272,7 +308,7 @@ app.post("/compte/info", (req, res) => {
   const c = comptes.get(String(code).trim());
   if (!c) return res.status(404).json({ erreur: "Code inexistant." });
   c.lastSeen = Date.now(); saveComptes();
-  res.json({ code: c.code, pseudo: c.pseudo, stats: c.stats || {}, succes: c.succes || {} });
+  res.json(compteJson(c));
 });
 
 app.post("/compte/stats", (req, res) => {
