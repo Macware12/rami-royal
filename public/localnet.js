@@ -101,7 +101,12 @@
     }
 
     // ---------- Abonnements au plugin natif ----------
-    function sub(name, fn) { MP.addListener(name, fn).then((h) => { if (dead) h.remove(); else pluginSubs.push(h); }); }
+    // Selon la version de Capacitor, addListener renvoie l'abonnement directement OU via une promesse
+    function sub(name, fn) {
+      const r = MP.addListener(name, fn);
+      if (r && typeof r.then === "function") r.then((h) => { if (dead) { if (h && h.remove) h.remove(); } else pluginSubs.push(h); });
+      else if (r) { if (dead && r.remove) r.remove(); else pluginSubs.push(r); }
+    }
 
     sub("peerFound", (p) => {
       if (role === "host") return;
