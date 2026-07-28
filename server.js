@@ -224,6 +224,11 @@ app.post("/compte/creer", (req, res) => {
   if (tropDEssais(req, res)) return;
   if (!pseudoValide(req.body && req.body.pseudo)) return res.status(400).json({ erreur: "Pseudo invalide (2 à 20 caractères)." });
   if (comptes.size >= MAX_COMPTES) return res.status(503).json({ erreur: "Plus de place pour de nouveaux comptes." });
+  // Un pseudo = un seul compte (comparaison sans tenir compte des majuscules)
+  const voulu = req.body.pseudo.trim().toLowerCase();
+  for (const c of comptes.values()) {
+    if (c.pseudo.toLowerCase() === voulu) return res.status(409).json({ erreur: "Ce pseudo est déjà pris — choisis-en un autre." });
+  }
   let code;
   do { code = String(crypto.randomInt(100000, 1000000)); } while (comptes.has(code));
   const compte = { code, pseudo: req.body.pseudo.trim(), stats: cleanStats(req.body.stats),
