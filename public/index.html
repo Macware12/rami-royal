@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2245-U">
+<meta name="version" content="v2246-U">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -802,7 +802,14 @@ function App() {
   const comptePseudo = (() => {
     try { return JSON.parse(store.get("rami-account") || "{}").pseudo || store.get("rami-name") || ""; } catch (_) { return ""; }
   })();
-  const [name, setName] = useState(store.get("ramimp-name") || comptePseudo);
+  // Connecté à un compte : le pseudo du compte est OBLIGATOIRE en multijoueur (identité fiable
+  // pour les futurs défis et classements) — le champ de saisie disparaît.
+  const compteActif = (() => {
+    try { const a = JSON.parse(store.get("rami-account") || "{}"); return a && a.code ? a : null; } catch (_) { return null; }
+  })();
+  const nomVerrouille = compteActif ? compteActif.pseudo : null;
+  const [name, setName] = useState(nomVerrouille || store.get("ramimp-name") || comptePseudo);
+  const nomJoueur = () => (nomVerrouille || name).trim() || "Joueur";
   const [inviteInfo, setInviteInfo] = useState(null);
   const [avatar, setAvatar] = useState(store.get("ramimp-avatar") || AVATARS_POOL[0]);
   const [joinCode, setJoinCode] = useState("");
@@ -813,7 +820,7 @@ function App() {
   const [localTables, setLocalTables] = useState([]); // tables détectées à proximité
 
   function inviteJoin(code, pseudo) {
-    const n = (pseudo || "").trim();
+    const n = nomVerrouille || (pseudo || "").trim(); // compte connecté : pseudo du compte imposé
     if (!n) return setMsg("Choisis un pseudo pour entrer !");
     ensureAudio();
     store.set("ramimp-name", n);
@@ -1204,7 +1211,7 @@ function App() {
 
   function createRoom() {
     ensureAudio();
-    const n = name.trim() || "Joueur";
+    const n = nomJoueur();
     store.set("ramimp-name", n);
     store.set("ramimp-avatar", avatar);
     socket.emit("createRoom", { name: n, options: { turnSeconds, level, shortMode }, avatar }, (res) => {
@@ -1219,7 +1226,7 @@ function App() {
       ensureAudio();
       if (!socket.goLocal() && !socket.isLocal) { setMsg("Partie locale indisponible sur cet appareil."); return; }
       setShowLocal(true); setShowMp(false); setMsg("");
-      socket.emit("browseLocal", { name: name.trim() || "Joueur" });
+      socket.emit("browseLocal", { name: nomJoueur() });
     } catch (e) {
       setMsg("⚠️ Erreur locale : " + (e && e.message ? e.message : e)); // diagnostic visible à l'écran
     }
@@ -1230,7 +1237,7 @@ function App() {
   }
   function joinLocalTable(t) {
     ensureAudio();
-    const n = name.trim() || "Joueur";
+    const n = nomJoueur();
     store.set("ramimp-name", n);
     store.set("ramimp-avatar", avatar);
     socket.emit("joinLocal", { id: t.id, name: n, avatar }, (res) => {
@@ -1239,7 +1246,7 @@ function App() {
   }
   function joinRoom() {
     ensureAudio();
-    const n = name.trim() || "Joueur";
+    const n = nomJoueur();
     store.set("ramimp-name", n);
     store.set("ramimp-avatar", avatar);
     socket.emit("joinRoom", { code: joinCode.trim().toUpperCase(), name: n, avatar }, (res) => {
@@ -1632,11 +1639,21 @@ function App() {
               <span className="block text-[11px] text-emerald-300">Sans internet — Bluetooth et WiFi activés, appareils proches</span>
             </div>
           </div>
+          {nomVerrouille ? (
+            <div className="flex items-center gap-2 bg-emerald-950/50 border border-amber-500/40 rounded-xl px-3 py-2">
+              <span className="text-lg">👤</span>
+              <div className="flex-1">
+                <div className="text-sm font-bold text-amber-300">{nomVerrouille}</div>
+                <div className="text-[10px] text-emerald-400">Connecté — tu joues sous ton pseudo de compte</div>
+              </div>
+            </div>
+          ) : (
           <label className="flex flex-col gap-2 text-sm">
             Ton nom
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Joueur" maxLength={14}
               className="bg-emerald-950/70 border border-emerald-600 rounded-xl p-2.5 text-emerald-100 placeholder-emerald-500" />
           </label>
+          )}
           <div className="flex flex-col gap-1.5">
             <span className="text-xs text-emerald-300">Ton emoji</span>
             <div className="flex flex-wrap gap-1.5 justify-center">
@@ -1691,11 +1708,21 @@ function App() {
               <span className="block text-[11px] text-emerald-300">Avec tes amis, chacun sur son téléphone</span>
             </div>
           </div>
+          {nomVerrouille ? (
+            <div className="flex items-center gap-2 bg-emerald-950/50 border border-amber-500/40 rounded-xl px-3 py-2">
+              <span className="text-lg">👤</span>
+              <div className="flex-1">
+                <div className="text-sm font-bold text-amber-300">{nomVerrouille}</div>
+                <div className="text-[10px] text-emerald-400">Connecté — tu joues sous ton pseudo de compte</div>
+              </div>
+            </div>
+          ) : (
           <label className="flex flex-col gap-2 text-sm">
             Ton nom
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Joueur" maxLength={14}
               className="bg-emerald-950/70 border border-emerald-600 rounded-xl p-2.5 text-emerald-100 placeholder-emerald-500" />
           </label>
+          )}
           <div className="flex flex-col gap-1.5">
             <span className="text-xs text-emerald-300">Ton emoji</span>
             <div className="flex flex-wrap gap-1.5 justify-center">
@@ -1772,10 +1799,16 @@ function App() {
                   {inviteInfo.joueurs} joueur{inviteInfo.joueurs > 1 ? "s" : ""} déjà à table{inviteInfo.enPartie ? " — partie en cours, tu pourras entrer à la prochaine manche" : ""}
                 </div>
               )}
+              {nomVerrouille ? (
+                <div className="text-xs text-emerald-300">Salon <b className="text-amber-300 tracking-widest">{invite}</b> — tu entres en tant que <b className="text-amber-300">{nomVerrouille}</b> 👤</div>
+              ) : (
+              <React.Fragment>
               <div className="text-xs text-emerald-300">Salon <b className="text-amber-300 tracking-widest">{invite}</b> — choisis ton pseudo :</div>
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ton pseudo" maxLength={14}
                 onKeyDown={(e) => e.key === "Enter" && inviteJoin(invite, name)}
                 className="bg-emerald-950/70 border border-emerald-600 rounded-xl p-2.5 text-emerald-100 placeholder-emerald-500 text-center" />
+              </React.Fragment>
+              )}
               <div className="flex flex-wrap gap-1 justify-center">
                 {AVATARS_POOL.map((a) => (
                   <button key={a} onClick={() => setAvatar(a)}
@@ -1791,7 +1824,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400 flex-wrap justify-center">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2245-U</span>
+          <span className="opacity-60">v2246-U</span>
         </div>
       </div>
     );
