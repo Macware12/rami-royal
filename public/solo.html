@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2225-U">
+<meta name="version" content="v2226-U">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -2882,15 +2882,7 @@ function tapCard(id) {
             <div className="text-amber-300 font-bold text-sm" style={{ fontFamily: "Georgia, serif" }}>
               {tuto ? "🎓 Tutoriel" : `Manche ${g.mancheIdx + 1}/${(g.manches || MANCHES).length}`}
             </div>
-            <div className="text-[10px] text-emerald-400 flex items-center gap-1 flex-wrap">
-              <span>IA {g.level || "moyen"} · {g.stock.length} en pioche{g.startedAt && !tuto ? " · ⏱ " + fmtElapsed(g.startedAt) : ""}</span>
-              {!tuto && me && !me.posed && (
-                <span className="flex items-center gap-0.5" title="Tes achats restants cette manche">
-                  <span>· 🛒</span>
-                  {[0, 1, 2].map((k) => <span key={k} style={{ width: 5, height: 5, borderRadius: 99, background: k < me.buysLeft ? "#a3e635" : "#3f3f46" }} />)}
-                </span>
-              )}
-            </div>
+            <div className="text-[10px] text-emerald-400">IA {g.level || "moyen"} · {g.stock.length} en pioche{g.startedAt && !tuto ? " · ⏱ " + fmtElapsed(g.startedAt) : ""}</div>
           </div>
         </div>
         <div className="flex items-center gap-1.5">
@@ -3114,7 +3106,13 @@ function tapCard(id) {
         )}
 
         {/* Barre d'actions principale */}
-        <div className="flex gap-2 justify-center mt-2 flex-wrap">
+        <div className="flex gap-2 justify-center mt-2 flex-wrap relative">
+          {!tuto && me && !me.posed && (
+            <div className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-emerald-950/60 border border-emerald-800 rounded-lg px-2 py-1.5" title="Tes achats restants cette manche">
+              <span className="text-xs">🛒</span>
+              {[0, 1, 2].map((k) => <span key={k} style={{ width: 6, height: 6, borderRadius: 99, background: k < me.buysLeft ? "#a3e635" : "#3f3f46" }} />)}
+            </div>
+          )}
           {!me.posed && selTriOk && !g.roundOver && (
             <button onClick={() => stageSelection("tri")} className="btn-green px-4 py-2 rounded-xl text-sm font-bold">
               ✓ C'est un tri !
