@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2241-U">
+<meta name="version" content="v2242-U">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -2674,7 +2674,7 @@ function tapCard(id) {
             Distribuer les cartes 🎴
           </button>
           {(() => {
-            const tuile = "relative bg-gradient-to-b from-emerald-900/70 to-emerald-950/80 border border-emerald-700/60 rounded-2xl px-3 py-2.5 flex items-center gap-2.5 no-underline text-left transition-transform duration-100 active:scale-95 shadow-[0_2px_6px_rgba(0,0,0,.35)]";
+            const tuile = "relative bg-gradient-to-b from-emerald-900/70 to-emerald-950/80 border border-emerald-700/60 rounded-2xl px-3 py-2.5 flex items-center justify-center gap-2 no-underline text-center transition-transform duration-100 active:scale-95 shadow-[0_2px_6px_rgba(0,0,0,.35)]";
             const lbl = "text-xs font-bold text-emerald-100 leading-tight";
             const ico = { filter: "drop-shadow(0 2px 3px rgba(0,0,0,.5))" };
             const nbSucces = Object.keys(readJSON("rami-succes")).length;
@@ -2690,11 +2690,10 @@ function tapCard(id) {
                 </button>
                 <button onClick={() => setShowSucces(true)} className={tuile}>
                   <span className="text-xl leading-none" style={ico}>🏆</span>
-                  <span className={lbl}>Succès</span>
-                  <span className="ml-auto text-[10px] font-bold text-amber-300">{nbSucces}/{SUCCES_LIST.length}</span>
+                  <span className={lbl}>Succès <span className="text-[10px] font-bold text-amber-300">{nbSucces}/{SUCCES_LIST.length}</span></span>
                 </button>
                 {account.code ? (
-                  <button onClick={() => { if (window.confirm("Se déconnecter du compte " + account.pseudo + " ?")) deconnecterCompte(); }}
+                  <button onClick={() => { setLoginErr(""); setNewCode(null); setShowLogin(true); }}
                     className={tuile} style={{ borderColor: "#f59e0b88" }}>
                     <span className="text-xl leading-none" style={ico}>👤</span>
                     <span className="text-xs font-bold text-amber-300 leading-tight truncate">{account.pseudo}</span>
@@ -2722,6 +2721,17 @@ function tapCard(id) {
                     <button onClick={() => { if (navigator.clipboard) navigator.clipboard.writeText(newCode).catch(() => {}); }}
                       className="btn-dark font-bold py-2 rounded-xl text-xs">📋 Copier le code</button>
                     <button onClick={() => { setShowLogin(false); setNewCode(null); setLoginMode("choix"); }} className="btn-gold font-bold py-2.5 rounded-xl text-sm">C'est noté !</button>
+                  </React.Fragment>
+                ) : account.code ? (
+                  <React.Fragment>
+                    <h3 className="text-amber-300 font-bold text-center">👤 {account.pseudo}</h3>
+                    <p className="text-[11px] text-emerald-300 text-center">Ton code secret — c'est lui qui permet de retrouver ton compte sur n'importe quel appareil :</p>
+                    <div className="text-3xl font-bold text-amber-300 tracking-[.3em] text-center" style={{ fontFamily: "Georgia, serif" }}>{account.code}</div>
+                    <button onClick={() => { if (navigator.clipboard) navigator.clipboard.writeText(account.code).catch(() => {}); }}
+                      className="btn-dark font-bold py-2 rounded-xl text-xs">📋 Copier le code</button>
+                    <button onClick={() => { deconnecterCompte(); setShowLogin(false); }}
+                      className="btn-red font-bold py-2 rounded-xl text-xs">🔓 Se déconnecter de cet appareil</button>
+                    <p className="text-[10px] text-emerald-500 text-center">Tes stats restent liées au compte — reconnecte-toi avec le code pour les retrouver.</p>
                   </React.Fragment>
                 ) : loginMode === "choix" ? (
                   <React.Fragment>
