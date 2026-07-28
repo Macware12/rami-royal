@@ -1552,6 +1552,21 @@ process.on("SIGINT", () => { saveRooms(); Promise.resolve(flushComptes()).finall
     else console.log("Stockage : fichiers locaux (définir DATABASE_URL pour Postgres)");
     const data = await storage.load("comptes", ACCOUNTS_FILE);
     if (Array.isArray(data)) data.forEach((c) => c && c.code && comptes.set(c.code, c));
+    // Ménage des doublons historiques (avant la règle « un pseudo = un compte ») :
+    // par pseudo, on garde le compte vu le plus récemment
+    const parPseudo = new Map();
+    let purges = 0;
+    for (const c of comptes.values()) {
+      const clef = (c.pseudo || "").toLowerCase();
+      const autre = parPseudo.get(clef);
+      if (!autre) { parPseudo.set(clef, c); continue; }
+      const garde = (c.lastSeen || 0) >= (autre.lastSeen || 0) ? c : autre;
+      const vire = garde === c ? autre : c;
+      comptes.delete(vire.code);
+      parPseudo.set(clef, garde);
+      purges++;
+    }
+    if (purges > 0) { console.log(purges + " doublon(s) de pseudo purgé(s)"); saveComptes(); }
     if (comptes.size) console.log(comptes.size + " compte(s) chargé(s)");
     await loadRooms();
   } catch (e) {
