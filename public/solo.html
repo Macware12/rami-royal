@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2259-U">
+<meta name="version" content="v2260-U">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2259-U">
+<link rel="stylesheet" href="/lib/tailwind.css?v2260-U">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -2574,7 +2574,16 @@ function tapCard(id) {
       store.del("rami-save");
       const ranking = [...g.players].sort((a, b) => a.total - b.total);
       const won = ranking[0] === g.players[0];
-      if (g.defi) store.set("rami-defi", JSON.stringify({ date: cleDuJour(), total: g.players[0].total, won }));
+      if (g.defi) {
+        store.set("rami-defi", JSON.stringify({ date: cleDuJour(), total: g.players[0].total, won }));
+        const accDefi = readJSON("rami-account");
+        if (accDefi.code) {
+          fetch(API_BASE + "/defi/score", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code: accDefi.code, date: cleDuJour(), total: g.players[0].total, won }),
+          }).catch(() => {}); // hors ligne : tant pis, le score reste local
+        }
+      }
       const acc = readJSON("rami-account");
       const st = acc.code ? readJSON("rami-stats") : { ...stats }; // invité : stats de la session seulement
       st.games = (st.games || 0) + 1;
@@ -3009,6 +3018,11 @@ function tapCard(id) {
             </span>
             <span className="text-amber-300 font-bold">→</span>
           </button>
+        )}
+        {g.defi && (
+          <a href="/?classement=1" className="btn-gold font-bold py-2.5 px-6 rounded-xl text-sm no-underline">
+            🏆 Voir le classement du jour
+          </a>
         )}
         <button onClick={() => partagerScore(ranking, g.defi)} className="btn-dark font-bold py-2.5 px-6 rounded-xl text-sm">
           📤 Partager le score

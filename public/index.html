@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2259-U">
+<meta name="version" content="v2260-U">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2259-U">
+<link rel="stylesheet" href="/lib/tailwind.css?v2260-U">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -882,6 +882,15 @@ function App() {
     }).then((r) => r.json().then((d) => { if (!r.ok) throw new Error(d.erreur || "Erreur serveur"); return d; }));
   }
   const [cptStats, setCptStats] = useState(false); // modale statistiques depuis le profil
+  const [defiClassement, setDefiClassement] = useState(null); // null | "chargement" | { données du classement }
+  function ouvrirClassement() {
+    setDefiClassement("chargement");
+    const acc = readJSONls("rami-account");
+    fetch(API_BASE + "/defi/classement?date=" + cleDuJour() + (acc.code ? "&code=" + acc.code : ""))
+      .then((r) => r.json())
+      .then((d) => setDefiClassement(d && d.top ? d : { erreur: true }))
+      .catch(() => setDefiClassement({ erreur: true }));
+  }
   function cptActiver(d) {
     store.set("rami-account", JSON.stringify({ pseudo: d.pseudo, code: d.code, avatar: d.avatar || null, photo: d.photo || null, renamedAt: d.renamedAt || null }));
     store.set("rami-stats", JSON.stringify(d.stats || {}));
@@ -1139,6 +1148,10 @@ function App() {
     });
     const raw = store.get("ramimp-save");
     if (raw) { try { setSaved(JSON.parse(raw)); } catch (_) {} }
+    if (window.location.search.indexOf("classement=1") !== -1) {
+      window.history.replaceState(null, "", window.location.pathname);
+      ouvrirClassement();
+    }
     const keepAlive = setInterval(() => { fetch("/ping").catch(() => {}); }, 240000);
     const resync = setInterval(() => { if (socket.connected) socket.emit("resync"); }, 10000);
     return () => { clearInterval(keepAlive); clearInterval(resync); socket.off("state"); socket.off("info"); socket.off("fx"); socket.off("roomClosed"); socket.off("kicked"); socket.off("emote"); socket.off("disconnect"); socket.off("connect_error"); socket.off("localTables"); };
@@ -1776,12 +1789,21 @@ function App() {
             {(() => {
               let defiFait = null;
               try { const d = JSON.parse(store.get("rami-defi") || "null"); if (d && d.date === cleDuJour()) defiFait = d; } catch (_) {}
-              return (
+              return defiFait ? (
+                <button onClick={ouvrirClassement} className="panel rounded-2xl p-4 w-full max-w-xs flex items-center gap-3 text-emerald-100 text-left" style={{ borderColor: "#c084fc66" }}>
+                  <span className="text-3xl">🏆</span>
+                  <span className="flex-1">
+                    <span className="block font-bold text-base text-purple-200">Défi du jour · classement</span>
+                    <span className="block text-xs text-emerald-300">✓ Fait — {defiFait.total} pts{defiFait.won ? " 🏆" : ""} · voir le monde entier</span>
+                  </span>
+                  <span className="text-amber-300 text-xl font-bold">→</span>
+                </button>
+              ) : (
                 <a href="/solo.html?defi=1" className="panel rounded-2xl p-4 w-full max-w-xs flex items-center gap-3 text-emerald-100 no-underline" style={{ borderColor: "#c084fc66" }}>
                   <span className="text-3xl">🗓️</span>
                   <span className="flex-1">
                     <span className="block font-bold text-base text-purple-200">Défi du jour</span>
-                    <span className="block text-xs text-emerald-300">{defiFait ? "✓ Fait aujourd'hui — " + defiFait.total + " pts" + (defiFait.won ? " 🏆" : "") : "La même donne pour tous, chaque jour"}</span>
+                    <span className="block text-xs text-emerald-300">La même donne pour tous, chaque jour</span>
                   </span>
                   <span className="text-amber-300 text-xl font-bold">→</span>
                 </a>
@@ -1935,6 +1957,49 @@ function App() {
                     className="btn-dark font-bold py-2.5 rounded-xl text-sm disabled:opacity-40">{cptBusy ? "…" : "Me connecter"}</button>
                   <button onClick={() => setCptMode("choix")} disabled={cptBusy} className="text-[11px] text-emerald-400 underline">← Retour</button>
                   {cptErr && <div className="text-red-300 text-xs text-center">{cptErr}</div>}
+                </React.Fragment>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Classement mondial du Défi du jour */}
+        {defiClassement && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setDefiClassement(null)}>
+            <div className="panel rounded-2xl p-5 w-full max-w-sm flex flex-col gap-3 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+              <div className="flex justify-between items-center">
+                <h3 className="text-amber-300 font-bold text-lg">🏆 Défi du jour</h3>
+                <button onClick={() => setDefiClassement(null)} className="text-emerald-400 text-xl px-3 py-1 -mr-2">✕</button>
+              </div>
+              {defiClassement === "chargement" ? (
+                <div className="text-center text-emerald-300 text-sm py-6 animate-pulse">Chargement du classement…</div>
+              ) : defiClassement.erreur ? (
+                <div className="text-center text-emerald-300 text-sm py-6">Classement indisponible — vérifie ta connexion.</div>
+              ) : (
+                <React.Fragment>
+                  <div className="text-[11px] text-emerald-400 -mt-2">
+                    {new Date().toLocaleDateString("fr-FR")} · {defiClassement.participants} participant{defiClassement.participants > 1 ? "s" : ""}
+                    {defiClassement.rang ? <span> · <b className="text-amber-300">ta place : {defiClassement.rang}ᵉ</b></span> : null}
+                  </div>
+                  {defiClassement.participants === 0 ? (
+                    <div className="text-center text-emerald-300 text-sm py-5">Personne au classement pour l'instant —<br />sois le premier du monde ! 🌍</div>
+                  ) : (
+                    <div className="flex flex-col">
+                      {defiClassement.top.map((e) => (
+                        <div key={e.rang} className={`flex items-center gap-2 py-1.5 border-b border-emerald-900 last:border-0 ${e.rang <= 3 ? "text-amber-200 font-bold" : "text-emerald-100"}`}>
+                          <span className="w-8 text-center">{e.rang === 1 ? "🥇" : e.rang === 2 ? "🥈" : e.rang === 3 ? "🥉" : e.rang + "."}</span>
+                          <span className="flex-1 truncate text-sm">{e.pseudo}</span>
+                          <span className="text-sm">{e.total} pts{e.won ? " 🏆" : ""}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {!readJSONls("rami-account").code && (
+                    <div className="text-[11px] text-emerald-300 text-center">Crée un compte (pastille 👤 en haut) pour entrer au classement !</div>
+                  )}
+                  <div className="text-[10px] text-emerald-400 text-center">Seul le premier essai du jour compte — même donne pour tout le monde.</div>
+                  <a href="/solo.html?defi=1" className="btn-dark font-bold py-2 rounded-xl text-xs text-center no-underline">🔁 Rejouer pour le plaisir (hors classement)</a>
+                  <button onClick={() => setDefiClassement(null)} className="btn-gold font-bold py-2.5 rounded-xl text-sm">Fermer</button>
                 </React.Fragment>
               )}
             </div>
@@ -2221,7 +2286,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400 flex-wrap justify-center">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2259-U</span>
+          <span className="opacity-60">v2260-U</span>
         </div>
       </div>
     );

@@ -217,6 +217,7 @@ function mergeSucces(a, b) {
 }
 
 app.use("/compte", express.json({ limit: "120kb" })); // assez pour la photo de profil (≤ 80 Ko, validée par la route)
+app.use("/defi", express.json({ limit: "4kb" }));     // scores du défi du jour
 // Erreur de lecture du corps (trop lourd, JSON invalide…) : réponse JSON propre plutôt qu'une page HTML
 app.use("/compte", (err, req, res, next) => {
   if (!err) return next();
@@ -317,6 +318,58 @@ app.post("/compte/profil", (req, res) => {
   c.lastSeen = Date.now();
   saveComptes();
   res.json(compteJson(c));
+});
+
+// ---------- Défi du jour : classement mondial ----------
+// Un score par compte et par jour (le PREMIER essai seul compte — même donne pour tous,
+// rejouer pour améliorer serait tricher). Classement : victoires d'abord, puis petit total.
+const DEFI_FILE = process.env.DEFI_FILE || path.join(__dirname, "defi-save.json");
+const defiScores = new Map(); // "AAAA-MM-JJ" → Map(code → { pseudo, total, won, at })
+let defiTimer = null;
+function saveDefi() {
+  clearTimeout(defiTimer);
+  defiTimer = setTimeout(() => {
+    // Sérialisation + purge des jours de plus d'une semaine
+    const limite = Date.now() - 8 * 86400000;
+    const out = {};
+    for (const [date, jour] of defiScores) {
+      const t = new Date(date + "T12:00:00Z").getTime();
+      if (isFinite(t) && t < limite) { defiScores.delete(date); continue; }
+      out[date] = Object.fromEntries(jour);
+    }
+    storage.save("defi", out, DEFI_FILE).catch((e) => console.error("Sauvegarde défi impossible:", e.message));
+  }, 1000);
+}
+
+app.post("/defi/score", (req, res) => {
+  if (tropDEssais(req, res)) return;
+  const { code, date, total, won } = req.body || {};
+  const c = typeof code === "string" && /^[0-9]{6}$/.test(code.trim()) ? comptes.get(code.trim()) : null;
+  if (!c) return res.status(403).json({ erreur: "Compte requis pour entrer au classement." });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ""))) return res.status(400).json({ erreur: "Date invalide." });
+  const dC = new Date(date + "T12:00:00Z").getTime();
+  if (!isFinite(dC) || Math.abs(Date.now() - dC) > 36 * 3600 * 1000) return res.status(400).json({ erreur: "Ce défi est clos." });
+  let jour = defiScores.get(date);
+  if (!jour) { jour = new Map(); defiScores.set(date, jour); }
+  if (jour.has(c.code)) return res.json({ ok: true, deja: true }); // seul le premier essai compte
+  if (jour.size >= 100000) return res.status(503).json({ erreur: "Classement complet." });
+  jour.set(c.code, { pseudo: c.pseudo, total: Math.max(0, Math.min(5000, parseInt(total, 10) || 0)), won: Boolean(won), at: Date.now() });
+  saveDefi();
+  res.json({ ok: true });
+});
+
+app.get("/defi/classement", (req, res) => {
+  const date = String(req.query.date || "");
+  const jour = defiScores.get(date);
+  const entries = jour ? [...jour.entries()].map(([code, e]) => ({ code, ...e })) : [];
+  entries.sort((a, b) => ((b.won ? 1 : 0) - (a.won ? 1 : 0)) || (a.total - b.total) || (a.at - b.at));
+  const moiCode = String(req.query.code || "").trim();
+  const rang = moiCode ? entries.findIndex((e) => e.code === moiCode) + 1 : 0;
+  res.json({
+    date, participants: entries.length,
+    top: entries.slice(0, 20).map((e, i) => ({ rang: i + 1, pseudo: e.pseudo, total: e.total, won: e.won })),
+    rang: rang || null,
+  });
 });
 
 // Lookup par code seul (pour reconnexion multi-appareil) : retourne le compte complet si code valide
@@ -1613,7 +1666,13 @@ async function loadRooms() {
 // Sauvegarde immédiate à l'arrêt (déploiement Render : SIGTERM avant extinction)
 function flushComptes() {
   clearTimeout(comptesTimer);
-  return storage.save("comptes", [...comptes.values()], ACCOUNTS_FILE).catch(() => {});
+  clearTimeout(defiTimer);
+  const outDefi = {};
+  for (const [date, jour] of defiScores) outDefi[date] = Object.fromEntries(jour);
+  return Promise.all([
+    storage.save("comptes", [...comptes.values()], ACCOUNTS_FILE),
+    storage.save("defi", outDefi, DEFI_FILE),
+  ]).catch(() => {});
 }
 process.on("SIGTERM", () => { saveRooms(); Promise.resolve(flushComptes()).finally(() => setTimeout(() => process.exit(0), 800)); });
 process.on("SIGINT", () => { saveRooms(); Promise.resolve(flushComptes()).finally(() => setTimeout(() => process.exit(0), 300)); });
@@ -1642,6 +1701,10 @@ process.on("SIGINT", () => { saveRooms(); Promise.resolve(flushComptes()).finall
     }
     if (purges > 0) { console.log(purges + " doublon(s) de pseudo purgé(s)"); saveComptes(); }
     if (comptes.size) console.log(comptes.size + " compte(s) chargé(s)");
+    const dataDefi = await storage.load("defi", DEFI_FILE);
+    if (dataDefi && typeof dataDefi === "object")
+      Object.keys(dataDefi).forEach((date) => defiScores.set(date, new Map(Object.entries(dataDefi[date] || {}))));
+    if (defiScores.size) console.log(defiScores.size + " jour(s) de défi chargé(s)");
     await loadRooms();
   } catch (e) {
     console.error("ATTENTION — stockage indisponible, démarrage en mémoire seule :", e.message);
