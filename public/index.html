@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2258-U">
+<meta name="version" content="v2259-U">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2258-U">
+<link rel="stylesheet" href="/lib/tailwind.css?v2259-U">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -1170,6 +1170,13 @@ function App() {
   }, []);
 
   useEffect(() => { SFX_MUTED = muted; store.set("ramimp-muted", muted ? "1" : "0"); }, [muted]);
+  useEffect(() => {
+    // Célébration : petite salve de vibrations quand on remporte la partie
+    if (srv && srv.state === "over") {
+      const r = [...srv.players].sort((a, b) => a.total - b.total);
+      if (r[0] && r[0].idx === youIdx) vibrate([60, 80, 60, 80, 160]);
+    }
+  }, [srv && srv.state]);
 
   // Sécurité du glisser-déposer : ne jamais laisser une carte fantôme
   useEffect(() => {
@@ -1811,6 +1818,13 @@ function App() {
             ) : (
               <span className="text-sm font-bold">Se connecter</span>
             )}
+            {(() => {
+              try {
+                const n = Object.keys(JSON.parse(store.get("rami-succes") || "{}")).length;
+                const v = parseInt(store.get("rami-succes-vus") || "0", 10) || 0;
+                return n > v ? <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-amber-400 border border-amber-600" title="Nouveau succès !" /> : null;
+              } catch (_) { return null; }
+            })()}
           </button>
         )}
 
@@ -1819,7 +1833,7 @@ function App() {
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 flex items-center justify-center p-4" onClick={() => !cptBusy && setCptOpen(false)}>
             <div className="panel rounded-2xl p-5 w-full max-w-sm flex flex-col gap-3 relative" onClick={(e) => e.stopPropagation()}>
               <button onClick={() => { if (!cptBusy) { setCptOpen(false); setCptMode("choix"); setCptErr(""); setCptNouveau(null); } }}
-                className="absolute top-3 right-3 text-emerald-400 text-xl">✕</button>
+                className="absolute top-1 right-1 p-2.5 text-emerald-400 text-xl leading-none">✕</button>
               {cptNouveau ? (
                 <React.Fragment>
                   <h3 className="text-amber-300 font-bold text-center">✨ Compte créé !</h3>
@@ -1982,7 +1996,7 @@ function App() {
               <div className="panel rounded-2xl p-5 w-full max-w-sm flex flex-col gap-3 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                 <div className="flex justify-between items-center">
                   <h3 className="text-amber-300 font-bold text-lg">📊 Mes statistiques</h3>
-                  <button onClick={() => setCptStats(false)} className="text-emerald-400 text-xl">✕</button>
+                  <button onClick={() => setCptStats(false)} className="text-emerald-400 text-xl px-3 py-1 -mr-2">✕</button>
                 </div>
                 {nomVerrouille && <div className="text-[11px] text-emerald-400 -mt-2">👤 {nomVerrouille} · synchronisé sur tous tes appareils</div>}
                 {(st.games || 0) === 0 && (mp.games || 0) === 0 ? (
@@ -2207,7 +2221,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400 flex-wrap justify-center">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2258-U</span>
+          <span className="opacity-60">v2259-U</span>
         </div>
       </div>
     );
@@ -2312,6 +2326,17 @@ function App() {
             </div>
           ))}
         </div>
+        {!nomVerrouille && (
+          <button onClick={() => { setCptErr(""); setCptNouveau(null); setCptMode("choix"); setCptOpen(true); quitRoom(); }}
+            className="panel rounded-2xl px-4 py-3 w-full max-w-xs text-left flex items-center gap-3" style={{ borderColor: "#f59e0b88" }}>
+            <span className="text-2xl">👤</span>
+            <span className="flex-1">
+              <span className="block text-sm font-bold text-amber-300">{ranking[0].idx === youIdx ? "Belle victoire ! Garde-la précieusement" : "Ne perds pas ta progression"}</span>
+              <span className="block text-[11px] text-emerald-300">Crée ton compte gratuit : stats et succès sur tous tes appareils</span>
+            </span>
+            <span className="text-amber-300 font-bold">→</span>
+          </button>
+        )}
         <button onClick={() => partagerScore(ranking, false)} className="btn-dark font-bold py-2.5 px-6 rounded-xl text-sm">
           📤 Partager le score
         </button>
@@ -2851,7 +2876,7 @@ function App() {
             <div className="text-sm">
               {g.roundOver.summary.map((r, k) => (
                 <div key={k} className="flex justify-between py-1 border-b border-emerald-800 last:border-0">
-                  <span>{r.name}</span>
+                  <span>{((srv.players.find((p) => p.name === r.name)) || {}).avatar} {r.name}</span>
                   <span>+{r.pts}{r.bonus !== 0 ? ` ${r.bonus}` : ""} → <b>{r.total}</b></span>
                 </div>
               ))}

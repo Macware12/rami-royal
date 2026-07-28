@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2258-U">
+<meta name="version" content="v2259-U">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2258-U">
+<link rel="stylesheet" href="/lib/tailwind.css?v2259-U">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -1271,6 +1271,11 @@ function RamiRoyal() {
   useEffect(() => {
     if (myTurn && screen === "game" && g && g.phase === "draw") buzz([30, 40, 30]);
   }, [myTurn, screen]);
+  useEffect(() => {
+    // Célébration : petite salve de vibrations quand on remporte la partie
+    if (screen === "final" && g && [...g.players].sort((a, b) => a.total - b.total)[0].name === g.players[0].name)
+      buzz([60, 80, 60, 80, 160]);
+  }, [screen]);
 
   // ----- Animations -----
   function rectFor(key) {
@@ -2791,7 +2796,7 @@ function tapCard(id) {
                   <span className="text-xl leading-none" style={ico}>📊</span>
                   <span className={lbl}>Statistiques</span>
                 </button>
-                <button onClick={() => setShowSucces(true)} className={tuile}>
+                <button onClick={() => { store.set("rami-succes-vus", String(Object.keys(readJSON("rami-succes")).length)); setShowSucces(true); }} className={tuile}>
                   <span className="text-xl leading-none" style={ico}>🏆</span>
                   <span className={lbl}>Succès <span className="text-[10px] font-bold text-amber-300">{nbSucces}/{SUCCES_LIST.length}</span></span>
                 </button>
@@ -2815,7 +2820,7 @@ function tapCard(id) {
             <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 flex items-center justify-center p-4" onClick={() => !loginBusy && setShowLogin(false)}>
               <div className="panel rounded-2xl p-5 w-full max-w-sm flex flex-col gap-3 relative" onClick={(e) => e.stopPropagation()}>
               <button onClick={() => { !loginBusy && setShowLogin(false); setLoginMode("choix"); setLoginErr(""); setNewCode(null); }}
-                className="absolute top-3 right-3 text-emerald-400 hover:text-emerald-300 text-xl">✕</button>
+                className="absolute top-1 right-1 p-2.5 text-emerald-400 hover:text-emerald-300 text-xl leading-none">✕</button>
                 {newCode ? (
                   <React.Fragment>
                     <h3 className="text-amber-300 font-bold text-center">✨ Compte créé !</h3>
@@ -2927,7 +2932,7 @@ function tapCard(id) {
                 <div className="panel rounded-2xl p-5 w-full max-w-sm flex flex-col gap-3 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                   <div className="flex justify-between items-center">
                     <h3 className="text-amber-300 font-bold text-lg">📊 Mes statistiques</h3>
-                    <button onClick={() => setShowStats(false)} className="text-emerald-400 text-xl">✕</button>
+                    <button onClick={() => setShowStats(false)} className="text-emerald-400 text-xl px-3 py-1 -mr-2">✕</button>
                   </div>
                   {account.code
                     ? <div className="text-[11px] text-emerald-400 -mt-2">👤 {account.pseudo} · synchronisé sur tous tes appareils</div>
@@ -2994,6 +2999,17 @@ function tapCard(id) {
             </div>
           ))}
         </div>
+        {!account.code && (
+          <button onClick={() => { setLoginErr(""); setNewCode(null); setShowLogin(true); quitToHome(); }}
+            className="panel rounded-2xl px-4 py-3 w-full max-w-xs text-left flex items-center gap-3" style={{ borderColor: "#f59e0b88" }}>
+            <span className="text-2xl">👤</span>
+            <span className="flex-1">
+              <span className="block text-sm font-bold text-amber-300">{ranking[0].name === g.players[0].name ? "Belle victoire ! Garde-la précieusement" : "Ne perds pas ta progression"}</span>
+              <span className="block text-[11px] text-emerald-300">Crée ton compte gratuit : stats et succès sur tous tes appareils</span>
+            </span>
+            <span className="text-amber-300 font-bold">→</span>
+          </button>
+        )}
         <button onClick={() => partagerScore(ranking, g.defi)} className="btn-dark font-bold py-2.5 px-6 rounded-xl text-sm">
           📤 Partager le score
         </button>
@@ -3538,7 +3554,7 @@ function tapCard(id) {
             <div className="text-sm">
               {g.roundOver.summary.map((r) => (
                 <div key={r.name} className="flex justify-between py-1 border-b border-emerald-800 last:border-0">
-                  <span>{r.name}</span>
+                  <span>{(g.players.find((p) => p.name === r.name) || {}).avatar} {r.name}</span>
                   <span>+{r.pts}{r.bonus !== 0 ? ` ${r.bonus}` : ""} → <b>{r.total}</b></span>
                 </div>
               ))}
