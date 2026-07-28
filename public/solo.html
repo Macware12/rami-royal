@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2262-S">
+<meta name="version" content="v2263-S">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2262-S">
+<link rel="stylesheet" href="/lib/tailwind.css?v2263-S">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -2604,6 +2604,20 @@ function tapCard(id) {
     succesSession.current = {};
     setAccount({}); setStats({}); setShowLogin(false); setNewCode(null);
   }
+  // Suppression définitive du compte (exigée par Apple, règle 5.1.1(v), et par le RGPD).
+  // Le serveur efface le compte, ses stats, et ses scores dans les classements et défis.
+  function supprimerCompte() {
+    setLoginBusy(true); setLoginErr("");
+    compteApi("supprimer", { pseudo: account.pseudo, code: account.code })
+      .then(() => {
+        store.del("rami-account"); store.del("rami-stats"); store.del("rami-succes");
+        store.del("rami-jeton"); store.del("rami-defi");
+        succesSession.current = {};
+        setLoginBusy(false); setLoginMode("choix");
+        setAccount({}); setStats({}); setShowLogin(false); setNewCode(null);
+      })
+      .catch((e) => { setLoginBusy(false); setLoginErr(e.message || "Serveur injoignable — réessaie."); });
+  }
 
   function nextManche() {
     const manches = g.manches || MANCHES;
@@ -2887,6 +2901,24 @@ function tapCard(id) {
                       className="btn-dark font-bold py-2 rounded-xl text-xs">📋 Copier le code</button>
                     <button onClick={() => { setShowLogin(false); setNewCode(null); setLoginMode("choix"); }} className="btn-gold font-bold py-2.5 rounded-xl text-sm">C'est noté !</button>
                   </React.Fragment>
+                ) : account.code && loginMode === "supprimer" ? (
+                  <React.Fragment>
+                    <h3 className="text-red-300 font-bold text-center">⚠️ Supprimer mon compte</h3>
+                    <p className="text-[11px] text-emerald-200 leading-relaxed">
+                      Cette action est <b className="text-red-300">définitive</b>. Seront effacés pour toujours :
+                      ton pseudo <b>{account.pseudo}</b>, ton code secret, tes statistiques, tes succès,
+                      ainsi que tes scores dans les classements et les défis.
+                    </p>
+                    <p className="text-[11px] text-emerald-300 leading-relaxed">
+                      Si tu veux seulement quitter cet appareil sans rien perdre, utilise plutôt « Se déconnecter ».
+                    </p>
+                    <button onClick={supprimerCompte} disabled={loginBusy} className="btn-red font-bold py-2.5 rounded-xl text-sm">
+                      {loginBusy ? "…" : "Oui, supprimer définitivement"}
+                    </button>
+                    <button onClick={() => { setLoginMode("choix"); setLoginErr(""); }} disabled={loginBusy}
+                      className="btn-dark font-bold py-2.5 rounded-xl text-sm">Annuler</button>
+                    {loginErr && <div className="text-red-300 text-xs text-center">{loginErr}</div>}
+                  </React.Fragment>
                 ) : account.code ? (
                   <React.Fragment>
                     <h3 className="text-amber-300 font-bold text-center">👤 {account.pseudo}</h3>
@@ -2897,6 +2929,8 @@ function tapCard(id) {
                     <button onClick={() => { deconnecterCompte(); setShowLogin(false); }}
                       className="btn-red font-bold py-2 rounded-xl text-xs">🔓 Se déconnecter de cet appareil</button>
                     <p className="text-[10px] text-emerald-400 text-center">Tes stats restent liées au compte — reconnecte-toi avec le code pour les retrouver.</p>
+                    <button onClick={() => { setLoginErr(""); setLoginMode("supprimer"); }}
+                      className="text-[11px] text-red-300 underline mt-1">Supprimer définitivement mon compte</button>
                   </React.Fragment>
                 ) : loginMode === "choix" ? (
                   <React.Fragment>

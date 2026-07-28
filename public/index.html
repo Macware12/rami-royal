@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2262-S">
+<meta name="version" content="v2263-S">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2262-S">
+<link rel="stylesheet" href="/lib/tailwind.css?v2263-S">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -987,6 +987,20 @@ function App() {
     setCptOpen(false); setCptNouveau(null); setCptMode("choix");
     cptMaj((x) => x + 1);
   }
+  // Suppression définitive du compte (exigée par Apple, règle 5.1.1(v), et par le RGPD).
+  // Le serveur efface le compte, ses stats, et ses scores dans les classements et défis.
+  function cptSupprimer() {
+    setCptBusy(true); setCptErr("");
+    compteApi("supprimer", { pseudo: compteActif.pseudo, code: compteActif.code })
+      .then(() => {
+        store.del("rami-account"); store.del("rami-stats"); store.del("rami-succes");
+        store.del("rami-jeton"); store.del("rami-defi");
+        setCptBusy(false); setCptOpen(false); setCptNouveau(null); setCptMode("choix");
+        cptMaj((x) => x + 1);
+        setMsg("Ton compte a été supprimé définitivement.");
+      })
+      .catch((e) => { setCptBusy(false); setCptErr(e.message || "Serveur injoignable — réessaie."); });
+  }
   const [inviteInfo, setInviteInfo] = useState(null);
   const [avatar, setAvatar] = useState(store.get("ramimp-avatar") || AVATARS_POOL[0]);
   const [joinCode, setJoinCode] = useState("");
@@ -1925,6 +1939,24 @@ function App() {
                   <button onClick={() => { setCptMode("choix"); setCptErr(""); }} disabled={cptBusy} className="text-[11px] text-emerald-400 underline">← Retour</button>
                   {cptErr && <div className="text-red-300 text-xs text-center">{cptErr}</div>}
                 </React.Fragment>
+              ) : nomVerrouille && cptMode === "supprimer" ? (
+                <React.Fragment>
+                  <h3 className="text-red-300 font-bold text-center">⚠️ Supprimer mon compte</h3>
+                  <p className="text-[11px] text-emerald-200 leading-relaxed">
+                    Cette action est <b className="text-red-300">définitive</b>. Seront effacés pour toujours :
+                    ton pseudo <b>{compteActif.pseudo}</b>, ton code secret, tes statistiques, tes succès,
+                    ainsi que tes scores dans les classements et les défis.
+                  </p>
+                  <p className="text-[11px] text-emerald-300 leading-relaxed">
+                    Si tu veux seulement quitter cet appareil sans rien perdre, utilise plutôt « Se déconnecter ».
+                  </p>
+                  <button onClick={cptSupprimer} disabled={cptBusy} className="btn-red font-bold py-2.5 rounded-xl text-sm">
+                    {cptBusy ? "…" : "Oui, supprimer définitivement"}
+                  </button>
+                  <button onClick={() => { setCptMode("choix"); setCptErr(""); }} disabled={cptBusy}
+                    className="btn-dark font-bold py-2.5 rounded-xl text-sm">Annuler</button>
+                  {cptErr && <div className="text-red-300 text-xs text-center">{cptErr}</div>}
+                </React.Fragment>
               ) : nomVerrouille && cptMode === "avatar" ? (
                 <React.Fragment>
                   <h3 className="text-amber-300 font-bold text-center">🎨 Avatar et photo</h3>
@@ -1973,6 +2005,8 @@ function App() {
                   </button>
                   <button onClick={cptDeconnecter} className="btn-red font-bold py-2 rounded-xl text-xs">🔓 Se déconnecter de cet appareil</button>
                   <p className="text-[10px] text-emerald-400 text-center">Tes stats restent liées au compte — reconnecte-toi avec le code pour les retrouver.</p>
+                  <button onClick={() => { setCptErr(""); setCptMode("supprimer"); }}
+                    className="text-[11px] text-red-300 underline mt-1">Supprimer définitivement mon compte</button>
                 </React.Fragment>
               ) : cptMode === "choix" ? (
                 <React.Fragment>
@@ -2397,7 +2431,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400 flex-wrap justify-center">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2262-S</span>
+          <span className="opacity-60">v2263-S</span>
         </div>
       </div>
     );
