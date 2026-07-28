@@ -202,7 +202,12 @@ function mergeSucces(a, b) {
   return out;
 }
 
-app.use("/compte", express.json({ limit: "8kb" }));
+app.use("/compte", express.json({ limit: "120kb" })); // assez pour la photo de profil (≤ 80 Ko, validée par la route)
+// Erreur de lecture du corps (trop lourd, JSON invalide…) : réponse JSON propre plutôt qu'une page HTML
+app.use("/compte", (err, req, res, next) => {
+  if (!err) return next();
+  res.status(err.status || 400).json({ erreur: err.type === "entity.too.large" ? "Photo trop lourde — réessaie avec une image plus petite." : "Requête invalide." });
+});
 const compteTries = new Map(); // anti force-brute sur les codes
 setInterval(() => compteTries.clear(), 60 * 1000);
 function tropDEssais(req, res) {
