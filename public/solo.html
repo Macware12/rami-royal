@@ -10,11 +10,13 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2229-U">
+<meta name="version" content="v2230-U">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
 <script>
+// App native (Capacitor) : on fige la page pour supprimer le rebond/défilement fantôme d'iOS
+if (window.Capacitor) document.documentElement.classList.add("native-app");
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(function () {});
 // Signal de présence anonyme pour les statistiques temps réel
 (function () {
@@ -42,6 +44,10 @@ input, textarea { -webkit-user-select: text; user-select: text; }
   /* App iOS : 100vh inclut la zone derrière les barres → léger débordement qui rend la page
      défilable pour rien. 100dvh = hauteur réellement visible : plus de défilement fantôme. */
   @supports (height: 100dvh) { .min-h-screen { min-height: 100dvh; } }
+  /* App native : page figée (les zones internes gardent leur propre défilement) —
+     supprime le rebond élastique d'iOS que overscroll-behavior ne bloque pas dans WKWebView */
+  html.native-app, html.native-app body { position: fixed; inset: 0; width: 100%; height: 100%; overflow: hidden; }
+  html.native-app body { overflow-y: auto; -webkit-overflow-scrolling: auto; }
   * { -webkit-tap-highlight-color: transparent; }
 </style>
 </head>
