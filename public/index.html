@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2251-U">
+<meta name="version" content="v2252-U">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -1709,7 +1709,7 @@ function App() {
             style={nomVerrouille ? { borderColor: "#f59e0b88" } : {}}
             title={nomVerrouille ? "Gérer mon compte" : "Se connecter / Créer un compte"}>
             {nomVerrouille && compteActif.photo ? (
-              <img src={compteActif.photo} alt="" style={{ width: 24, height: 24, borderRadius: "50%", objectFit: "cover", border: "1px solid #f59e0b", flexShrink: 0 }} />
+              <img src={compteActif.photo} alt="" className="w-6 h-6 rounded-full object-cover shrink-0" style={{ border: "1px solid #f59e0b" }} />
             ) : (
               <span className="text-base leading-none">{(nomVerrouille && compteActif.avatar) || "👤"}</span>
             )}
@@ -1760,7 +1760,7 @@ function App() {
                   </div>
                   <p className="text-[11px] text-emerald-300 text-center">… ou charge ta photo (recadrée en rond) :</p>
                   {compteActif.photo && (
-                    <img src={compteActif.photo} alt="" className="self-center" style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover", border: "2px solid #f59e0b" }} />
+                    <img src={compteActif.photo} alt="" className="w-16 h-16 rounded-full object-cover self-center" style={{ border: "2px solid #f59e0b" }} />
                   )}
                   <label className="btn-dark font-bold py-2 rounded-xl text-xs text-center cursor-pointer">
                     📷 {compteActif.photo ? "Changer la photo" : "Charger une photo"}
@@ -1777,7 +1777,7 @@ function App() {
                 <React.Fragment>
                   <div className="flex flex-col items-center gap-1">
                     {compteActif.photo ? (
-                      <img src={compteActif.photo} alt="" style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover", border: "2px solid #f59e0b" }} />
+                      <img src={compteActif.photo} alt="" className="w-16 h-16 rounded-full object-cover" style={{ border: "2px solid #f59e0b" }} />
                     ) : (
                       <span className="text-4xl">{compteActif.avatar || "👤"}</span>
                     )}
@@ -1867,7 +1867,7 @@ function App() {
                         <div className="flex justify-between text-[10px] mt-0.5"><span className="text-amber-300">🏆 {wins}</span><span className="text-emerald-300">{games} parties</span><span className="text-red-300">{losses} perdues</span></div>
                       </div>
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+                    <div className="grid grid-cols-3 gap-1.5">
                       <Stat v={b.bestScore != null ? b.bestScore : "—"} lbl="Record (pts)" />
                       <Stat v={avg != null ? avg : "—"} lbl="Score moyen" cls="text-emerald-200" />
                       <Stat v={b.bestManche != null ? b.bestManche : "—"} lbl="Meill. manche" cls="text-emerald-200" />
@@ -2113,7 +2113,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400 flex-wrap justify-center">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2251-U</span>
+          <span className="opacity-60">v2252-U</span>
         </div>
       </div>
     );

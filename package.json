@@ -7,7 +7,8 @@
     "start": "node server.js",
     "test": "node tests/engine.test.js && node tests/gamehost.test.js",
     "cap:build": "node scripts/build-native.js",
-    "cap:sync": "node scripts/build-native.js && npx cap sync"
+    "cap:sync": "node scripts/build-native.js && npx cap sync",
+    "css": "tailwindcss -c tailwind.config.js -i tailwind.source.css -o public/lib/tailwind.css --minify"
   },
   "engines": {
     "node": ">=18"
@@ -23,6 +24,7 @@
     "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
-    "@capacitor/cli": "6.2.1"
+    "@capacitor/cli": "6.2.1",
+    "tailwindcss": "3.4.17"
   }
 }
