@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2256-U">
+<meta name="version" content="v2257-U">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2256-U">
+<link rel="stylesheet" href="/lib/tailwind.css?v2257-U">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -65,7 +65,10 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 </style>
 </head>
 <body>
-<div id="root"></div>
+<div id="root"><div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;">
+<div style="font-family:Georgia,serif;font-size:40px;color:#fcd34d;text-shadow:0 3px 10px rgba(0,0,0,.6);">Ramy Gasy</div>
+<div style="font-family:-apple-system,'Segoe UI',sans-serif;font-size:13px;color:#6ee7b7;">🎴 Préparation de la table…</div>
+</div></div>
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef } = React;
 
@@ -907,12 +910,12 @@ function OpponentCard({ p, active, refCb }) {
       className={`relative flex flex-col items-center rounded-2xl px-1.5 pt-1.5 pb-1 min-w-[80px] transition-all panel ${active ? "pulse-gold" : ""}`}
       style={active ? { borderColor: "#fbbf24" } : {}}>
       {active && (
-        <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[9px] btn-gold font-bold px-1.5 rounded-full whitespace-nowrap" style={{ animation: "floaty 1.2s ease-in-out infinite" }}>
+        <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[10px] btn-gold font-bold px-1.5 rounded-full whitespace-nowrap" style={{ animation: "floaty 1.2s ease-in-out infinite" }}>
           joue…
         </span>
       )}
       {p.hand.length <= 2 && (
-        <span className="absolute -top-2 right-1 text-[9px] bg-red-600 text-white font-bold px-1.5 rounded-full animate-pulse">⚠ {p.hand.length}</span>
+        <span className="absolute -top-2 right-1 text-[10px] bg-red-600 text-white font-bold px-1.5 rounded-full animate-pulse">⚠ {p.hand.length}</span>
       )}
       <div className="flex items-center gap-1.5">
         <span className="flex items-center justify-center rounded-full text-sm shrink-0"
@@ -922,7 +925,7 @@ function OpponentCard({ p, active, refCb }) {
         <CardFan count={p.hand.length} />
       </div>
       <span className="text-[10px] font-bold leading-tight">{p.name}</span>
-      <div className="flex items-center gap-1 text-[9px] text-emerald-300">
+      <div className="flex items-center gap-1 text-[10px] text-emerald-300">
         <span className="bg-emerald-900/80 border border-emerald-700 rounded px-1">{p.total}</span>
         {p.posed ? <span className="text-amber-300 font-bold">✓</span> : (
           <span className="flex gap-0.5 items-center">
@@ -1038,6 +1041,7 @@ function RamiRoyal() {
   const [muted, setMuted] = useState(store.get("rami-muted") === "1");
   const [intro, setIntro] = useState(null);
   const [hasSave, setHasSave] = useState(false);
+  const [showCfg, setShowCfg] = useState(!store.get("rami-level")); // réglages repliés pour les habitués
   const [wTick, setWTick] = useState(0);
   const [clockTick, setClockTick] = useState(0); // rafraîchit le chrono de partie chaque seconde
   const [anims, setAnims] = useState([]);
@@ -1153,8 +1157,11 @@ function RamiRoyal() {
     setScreen("game");
   }
 
-  function startGame() {
+  function startGame(optionsRapides) {
     setTuto(false);
+    store.set("rami-played", "1"); // l'accueil s'adapte : « Apprendre » n'est plus mis en avant
+    const lvlChoisi = (optionsRapides && optionsRapides.level) || level;
+    const courtChoisi = optionsRapides && optionsRapides.shortMode !== undefined ? optionsRapides.shortMode : shortMode;
     const name = (account.code && account.pseudo) || playerName.trim() || "Joueur 1"; // compte connecté : pseudo imposé
     const players = [
       { name, isAI: false, avatar: myAvatar, color: "#fbbf24" },
@@ -1166,9 +1173,9 @@ function RamiRoyal() {
     ensureAudio();
     store.set("rami-name", name);
     store.set("rami-avatar", myAvatar);
-    store.set("rami-level", level);
-    const manchesFinales = shortMode ? genererManchesAleatoires().map((i) => MANCHES[i]) : MANCHES;
-    setG({ ...newRound(players, 0, null, null, manchesFinales), level, shortMode, manches: manchesFinales, startedAt: Date.now() });
+    store.set("rami-level", lvlChoisi);
+    const manchesFinales = courtChoisi ? genererManchesAleatoires().map((i) => MANCHES[i]) : MANCHES;
+    setG({ ...newRound(players, 0, null, null, manchesFinales), level: lvlChoisi, shortMode: courtChoisi, manches: manchesFinales, startedAt: Date.now() });
     setSelected([]);
     setMsg("");
     showIntro(0, manchesFinales);
@@ -1328,6 +1335,10 @@ function RamiRoyal() {
       window.history.replaceState(null, "", window.location.pathname);
       setIntroSlide(0);
       setScreen("tutoIntro"); // on explique les bases AVANT de lancer la partie guidée
+    }
+    if (window.location.search.indexOf("reprendre=1") !== -1) {
+      window.history.replaceState(null, "", window.location.pathname);
+      if (store.get("rami-save")) setTimeout(resumeGame, 0); // reprise en un geste depuis l'accueil
     }
     setHasSave(Boolean(store.get("rami-save")));
     const savedName = store.get("rami-name"); if (savedName) setPlayerName(savedName);
@@ -2614,6 +2625,19 @@ function tapCard(id) {
           <p className="text-emerald-200 text-xs mt-0.5">Le rami à contrats de Madagascar</p>
         </div>
         <div className="panel rounded-2xl p-4 w-full max-w-md flex flex-col gap-2.5 text-emerald-100">
+          {hasSave && (
+            <button onClick={resumeGame} className="btn-green font-bold py-3 rounded-xl text-base">
+              ▶ Reprendre la partie en cours
+            </button>
+          )}
+          <button onClick={startGame} className="btn-gold font-bold py-3 rounded-xl text-base">
+            {hasSave ? "Nouvelle partie 🎴" : "Distribuer les cartes 🎴"}
+          </button>
+          <button onClick={() => setShowCfg((v) => !v)} className="btn-dark rounded-xl py-2 px-3 text-xs font-bold">
+            ⚙️ Personnaliser — {nbAI} IA · {level} · {shortMode ? "court ⚡" : "normal"} {showCfg ? "▲" : "▼"}
+          </button>
+          {showCfg && (
+          <div className="flex flex-col gap-2.5">
           {account.code ? (
             <div className="flex items-center gap-2 bg-emerald-950/50 border border-amber-500/40 rounded-xl px-3 py-2">
               <span className="text-lg">👤</span>
@@ -2634,7 +2658,7 @@ function tapCard(id) {
           )}
           <div className="flex flex-col gap-1">
             <span className="text-xs text-emerald-300">Ton emoji</span>
-            <div className="flex flex-wrap gap-1 justify-center">
+            <div className="grid grid-cols-5 gap-1.5 justify-items-center">
               {AVATARS_POOL.map((a) => (
                 <button key={a} onClick={() => { setMyAvatar(a); store.set("rami-avatar", a); }}
                   className={`text-lg rounded-lg p-1 transition-all ${myAvatar === a ? "btn-gold scale-110" : "btn-dark"}`}>{a}</button>
@@ -2678,9 +2702,8 @@ function tapCard(id) {
               </button>
             </div>
           </label>
-          <button onClick={startGame} className="btn-gold font-bold py-2.5 rounded-xl text-base">
-            Distribuer les cartes 🎴
-          </button>
+          </div>
+          )}
           {(() => {
             const tuile = "btn-dark rounded-xl px-3 py-2.5 flex items-center justify-center gap-2 no-underline text-center transition-transform duration-100 active:scale-95";
             const lbl = "text-xs font-bold leading-tight";
@@ -2715,12 +2738,12 @@ function tapCard(id) {
               </div>
             );
           })()}
-          <a href="/confidentialite.html" className="text-[10px] text-emerald-500 text-center underline">Politique de confidentialité</a>
+          <a href="/confidentialite.html" className="text-[10px] text-emerald-400 text-center underline">Politique de confidentialité</a>
           {showLogin && (
             <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 flex items-center justify-center p-4" onClick={() => !loginBusy && setShowLogin(false)}>
               <div className="panel rounded-2xl p-5 w-full max-w-sm flex flex-col gap-3 relative" onClick={(e) => e.stopPropagation()}>
               <button onClick={() => { !loginBusy && setShowLogin(false); setLoginMode("choix"); setLoginErr(""); setNewCode(null); }}
-                className="absolute top-3 right-3 text-emerald-500 hover:text-emerald-300 text-xl">✕</button>
+                className="absolute top-3 right-3 text-emerald-400 hover:text-emerald-300 text-xl">✕</button>
                 {newCode ? (
                   <React.Fragment>
                     <h3 className="text-amber-300 font-bold text-center">✨ Compte créé !</h3>
@@ -2739,14 +2762,14 @@ function tapCard(id) {
                       className="btn-dark font-bold py-2 rounded-xl text-xs">📋 Copier le code</button>
                     <button onClick={() => { deconnecterCompte(); setShowLogin(false); }}
                       className="btn-red font-bold py-2 rounded-xl text-xs">🔓 Se déconnecter de cet appareil</button>
-                    <p className="text-[10px] text-emerald-500 text-center">Tes stats restent liées au compte — reconnecte-toi avec le code pour les retrouver.</p>
+                    <p className="text-[10px] text-emerald-400 text-center">Tes stats restent liées au compte — reconnecte-toi avec le code pour les retrouver.</p>
                   </React.Fragment>
                 ) : loginMode === "choix" ? (
                   <React.Fragment>
                     <h3 className="text-amber-300 font-bold text-center">👤 Mon compte</h3>
                     <p className="text-[11px] text-emerald-300 leading-relaxed">Un compte = ton pseudo + un code secret à 6 chiffres. Tes stats te suivent partout (téléphone, ordinateur…).</p>
                     <button onClick={() => setLoginMode("creer")} className="btn-gold font-bold py-2.5 rounded-xl text-sm">✨ Créer un compte</button>
-                    <div className="text-center text-[10px] text-emerald-500">— ou —</div>
+                    <div className="text-center text-[10px] text-emerald-400">— ou —</div>
                     <button onClick={() => { setLoginMode("reconnecter"); setLoginCode(""); setLoginErr(""); }} className="btn-dark font-bold py-2.5 rounded-xl text-sm">🔑 Me reconnecter</button>
                   </React.Fragment>
                 ) : loginMode === "creer" ? (
@@ -2782,7 +2805,7 @@ function tapCard(id) {
             const Stat = ({ v, lbl, cls }) => (
               <div className="panel rounded-xl py-2 flex flex-col items-center">
                 <div className={"text-xl font-bold " + (cls || "text-amber-300")}>{v}</div>
-                <div className="text-[9px] text-emerald-300 mt-0.5 text-center px-1 leading-tight">{lbl}</div>
+                <div className="text-[10px] text-emerald-300 mt-0.5 text-center px-1 leading-tight">{lbl}</div>
               </div>
             );
             // Une section de palmarès pour un « bucket » de stats (solo ou multi)
@@ -2836,7 +2859,7 @@ function tapCard(id) {
                   </div>
                   {account.code
                     ? <div className="text-[11px] text-emerald-400 -mt-2">👤 {account.pseudo} · synchronisé sur tous tes appareils</div>
-                    : <div className="text-[11px] text-emerald-500 -mt-2">Mode invité — connecte-toi pour garder tes stats</div>}
+                    : <div className="text-[11px] text-emerald-400 -mt-2">Mode invité — connecte-toi pour garder tes stats</div>}
                   {soloEmpty && mpEmpty ? (
                     <div className="text-center text-emerald-300 text-sm py-6">🎴 Aucune partie terminée pour l'instant.<br />Joue une partie complète et tes stats apparaîtront ici !</div>
                   ) : (
@@ -2872,11 +2895,7 @@ function tapCard(id) {
               </div>
             </div>
           )}
-          {hasSave && (
-            <button onClick={resumeGame} className="btn-green font-bold py-2.5 rounded-xl text-sm">
-              ▶ Reprendre la partie en cours
-            </button>
-          )}
+
         </div>
       </div>
     );
@@ -3056,7 +3075,7 @@ function tapCard(id) {
                   else if (!curDone) { visibles.push(it); curDone = true; }
                 }
                 return visibles.map(([k, lbl]) => (
-                  <span key={k} className={`text-[9px] px-1.5 py-0.5 rounded-full ${tutoFlags[k] ? "bg-emerald-400 text-emerald-950" : "bg-amber-300 text-emerald-950 animate-pulse"}`}>
+                  <span key={k} className={`text-[10px] px-1.5 py-0.5 rounded-full ${tutoFlags[k] ? "bg-emerald-400 text-emerald-950" : "bg-amber-300 text-emerald-950 animate-pulse"}`}>
                     {tutoFlags[k] ? "✓ " : "→ "}{lbl}
                   </span>
                 ));
@@ -3215,7 +3234,7 @@ function tapCard(id) {
               </button>
               {!contract.poseTout && (
                 <button onClick={autoStage} className="btn-dark px-4 py-2 rounded-xl text-sm font-bold">
-                  🪄 Préparer ma pose
+                  ✨ Classer mes cartes
                 </button>
               )}
             </>
@@ -3244,7 +3263,7 @@ function tapCard(id) {
             : !me.posed && g.staged.length > 0 && (needTri > 0 || needEsc > 0)
               ? `Encore ${[needTri > 0 ? `${needTri} tri` : null, needEsc > 0 ? `${needEsc} escalier${needEsc > 1 ? "s" : ""}` : null].filter(Boolean).join(" + ")} pour compléter le contrat`
             : !me.posed && g.staged.length > 0 && !myTurn ? "Contrat prêt ! Attends ton tour pour poser."
-            : !me.posed && myTurn && g.phase === "play" ? "Touche 3 cartes identiques (tri) ou qui se suivent (escalier), ou utilise 🪄"
+            : !me.posed && myTurn && g.phase === "play" ? "Touche 3 cartes identiques (tri) ou qui se suivent (escalier), ou utilise ✨"
             : me.posed && myTurn && g.phase === "play" ? "Glisse une carte sur une combinaison pour la compléter, ou sur la défausse pour la jeter (confirme ensuite 🔒)"
             : ""}
         </div>
@@ -3295,7 +3314,7 @@ function tapCard(id) {
                 <div className="flex flex-wrap gap-2">
                   {g.melds.filter((m) => m.owner === o).map((m) => (
                     <div key={m.id} className="rounded-xl p-1.5 panel">
-                      <div className="text-[9px] uppercase text-emerald-400 font-bold mb-0.5">{m.type === "tri" ? "Tri" : "Escalier"}</div>
+                      <div className="text-[10px] uppercase text-emerald-400 font-bold mb-0.5">{m.type === "tri" ? "Tri" : "Escalier"}</div>
                       <div className="flex gap-0.5 flex-wrap">
                         {m.cards.map((c) => c.joker
                           ? <span key={c.id} className="joker-glow"><Card card={c} small flat /></span>
@@ -3346,7 +3365,21 @@ function tapCard(id) {
               <li><b>Pose</b> quand le contrat est complet (bouton doré), en une seule fois.</li>
               <li><b>Jette</b> une carte pour finir ton tour : glisse-la sur la défausse, puis <b>touche la défausse pour confirmer</b> 🔒 (touche une carte de ta main pour annuler). Premier à vider sa main = gagnant de la manche !</li>
             </ol>
-            <p className="text-[11px] text-emerald-300 mt-3"><a href="/regles.html" className="text-amber-300 underline">📖 Règles complètes</a>. Un groupe « Prêt » n'est pas figé : touche-le avec une carte sélectionnée (ou glisse-la dessus) pour l'y ajouter. Gestes : glisse la carte de la défausse dans ta main pour la prendre à l'endroit voulu, glisse une carte sur la défausse pour la jeter, sur une combinaison pour la compléter, ou dans ta main pour la réorganiser. Après chaque défausse, une fenêtre de 5 secondes s'ouvre : chacun peut demander à <b>acheter</b> la carte jetée (+1 carte de pénalité, 3 achats max par manche). Priorité dans le sens du jeu ; sans réponse avant la fin du décompte, personne n'achète. Le joueur dont c'est le tour ensuite est prioritaire sur tous les acheteurs : s'il veut la carte, il la prend gratuitement et aucun achat ne peut la lui souffler (bandeau vert « Je la prends »). 🚫 Après un achat, la défausse est bloquée : la carte révélée en dessous ne peut être ni prise ni achetée, jusqu'à la prochaine carte jetée. Le joker remplace n'importe quelle carte (min. 3 vraies cartes par combinaison, jamais 2 jokers côte à côte). Un joker jeté dans la défausse est perdu : personne ne peut le prendre ni l'acheter. Échange : si un escalier posé contient un joker (halo violet) et que tu as la carte correspondant à sa position exacte, glisse-la sur cet escalier pour récupérer le joker — possible seulement après avoir posé ton contrat, et jamais sur un tri. Cartes restantes = points : 2-9 → 5 · 10-R → 10 · As → 15 · Joker → 20. Le plus petit total après 8 manches gagne !</p>
+            <div className="mt-3 flex flex-col gap-1.5 text-[11px] text-emerald-300">
+              <a href="/regles.html" className="text-amber-300 underline font-bold">📖 Règles complètes</a>
+              <details className="bg-emerald-950/40 rounded-lg px-2.5 py-1.5">
+                <summary className="font-bold text-emerald-100 cursor-pointer">👆 Les gestes</summary>
+                <p className="mt-1 leading-relaxed">Un groupe « Prêt » n'est pas figé : touche-le avec une carte sélectionnée (ou glisse-la dessus) pour l'y ajouter. Glisse la carte de la défausse dans ta main pour la prendre à l'endroit voulu, glisse une carte sur la défausse pour la jeter, sur une combinaison pour la compléter, ou dans ta main pour la réorganiser.</p>
+              </details>
+              <details className="bg-emerald-950/40 rounded-lg px-2.5 py-1.5">
+                <summary className="font-bold text-emerald-100 cursor-pointer">🛒 L'achat et la priorité</summary>
+                <p className="mt-1 leading-relaxed">Après chaque défausse, une fenêtre de 5 secondes s'ouvre : chacun peut demander à <b>acheter</b> la carte jetée (+1 carte de pénalité, 3 achats max par manche). Priorité dans le sens du jeu ; sans réponse, personne n'achète. Le joueur dont c'est le tour ensuite est prioritaire sur tous : s'il veut la carte, il la prend gratuitement (bandeau vert « Je la prends »). 🚫 Après un achat, la défausse est bloquée jusqu'à la prochaine carte jetée.</p>
+              </details>
+              <details className="bg-emerald-950/40 rounded-lg px-2.5 py-1.5">
+                <summary className="font-bold text-emerald-100 cursor-pointer">🃏 Le joker et les points</summary>
+                <p className="mt-1 leading-relaxed">Le joker remplace n'importe quelle carte (min. 3 vraies cartes par combinaison, jamais 2 jokers côte à côte). Jeté dans la défausse, il est perdu pour tous. Échange : si un escalier posé contient un joker (halo violet) et que tu as la carte de sa position exacte, glisse-la dessus pour le récupérer — après avoir posé, jamais sur un tri. Cartes restantes = points : 2-9 → 5 · 10-R → 10 · As → 15 · Joker → 20. Le plus petit total après 8 manches gagne !</p>
+              </details>
+            </div>
             <div className="mt-3 text-[11px] text-emerald-200">
               <b className="text-amber-200">Les 8 manches :</b> {MANCHES.map((m, i) => `${i + 1}. ${m.label}`).join(" · ")}
             </div>
@@ -3435,9 +3468,17 @@ function tapCard(id) {
                 </div>
               ))}
             </div>
-            <button onClick={() => { if (tuto) { setTuto(false); quitToHome(); } else nextManche(); }} className="mt-4 w-full btn-gold font-bold py-2.5 rounded-xl">
-              {tuto ? "🎓 Terminer le tutoriel" : g.mancheIdx + 1 >= MANCHES.length ? "Voir le classement final" : `Manche ${g.mancheIdx + 2} →`}
-            </button>
+            {tuto ? (
+              <div className="mt-4 flex flex-col gap-2">
+                <button onClick={() => { setLevel("facile"); setShortMode(true); startGame({ level: "facile", shortMode: true }); }}
+                  className="w-full btn-gold font-bold py-2.5 rounded-xl">🎉 Ta première vraie partie (facile · ~10 min)</button>
+                <button onClick={() => { setTuto(false); quitToHome(); }} className="w-full btn-dark font-bold py-2 rounded-xl text-sm">🏠 Retour à l'accueil</button>
+              </div>
+            ) : (
+              <button onClick={nextManche} className="mt-4 w-full btn-gold font-bold py-2.5 rounded-xl">
+                {g.mancheIdx + 1 >= MANCHES.length ? "Voir le classement final" : `Manche ${g.mancheIdx + 2} →`}
+              </button>
+            )}
           </div>
         </div>
       )}
