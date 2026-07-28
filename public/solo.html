@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2255-U">
+<meta name="version" content="v2256-U">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2255-U">
+<link rel="stylesheet" href="/lib/tailwind.css?v2256-U">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -49,13 +49,13 @@ input, textarea { -webkit-user-select: text; user-select: text; }
   html.native-app, html.native-app body { position: fixed; inset: 0; width: 100%; height: 100%; overflow: hidden; }
   html.native-app body { overflow-y: auto; -webkit-overflow-scrolling: auto; }
   /* Safe areas : l'app s'étend sous l'encoche/la barre d'état — on décale le contenu juste ce qu'il faut */
-  html.native-app body { box-sizing: border-box; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+  html.native-app body { box-sizing: border-box; padding-top: env(safe-area-inset-top); }
   /* Bandeau opaque sous la barre d'état : le contenu qui défile ne passe plus sous l'heure */
   html.native-app body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: env(safe-area-inset-top); background: #052e16; z-index: 90; }
   /* Les écrans prennent la hauteur du cadre (déjà réduit des safe areas), pas celle de l'écran entier */
   html.native-app #root { height: 100%; }
-  html.native-app .fit-screen { height: 100%; }
-  html.native-app .min-h-screen { min-height: 100%; }
+  html.native-app .fit-screen { height: 100%; box-sizing: border-box; padding-bottom: env(safe-area-inset-bottom); }
+  html.native-app .min-h-screen { min-height: 100%; box-sizing: border-box; padding-bottom: calc(env(safe-area-inset-bottom) + 0.5rem); }
   /* Les éléments flottants en haut d'écran ignorent le rembourrage du body : on les décale sous l'encoche */
   html.native-app .fixed.top-3 { top: calc(env(safe-area-inset-top) + 0.75rem); }
   html.native-app .fixed.top-12 { top: calc(env(safe-area-inset-top) + 3rem); }
