@@ -290,8 +290,14 @@ app.get("/", serveCompiled("index.html"));
 app.get("/index.html", serveCompiled("index.html"));
 app.get("/solo.html", serveCompiled("solo.html"));
 
-// Moteur et hôte de partie partagés (utilisés par le multijoueur local de l'app ; à la racine du projet)
-app.get("/lib/engine.js", (req, res) => res.sendFile(path.join(__dirname, "engine.js")));
+// Moteur et hôte de partie partagés (utilisés par le multijoueur local de l'app ; à la racine du projet).
+// Le moteur est encapsulé : chargé tel quel, ses constantes globales (SUITS…) entreraient en
+// collision avec celles du client et feraient planter toute la page.
+const engineNavigateur = "// Version navigateur (portée isolée) — générée depuis engine.js\n" +
+  "(function(){var module={exports:{}};\n" +
+  require("fs").readFileSync(path.join(__dirname, "engine.js"), "utf8") +
+  "\n})();\n";
+app.get("/lib/engine.js", (req, res) => { res.type("application/javascript").send(engineNavigateur); });
 app.get("/lib/gamehost.js", (req, res) => res.sendFile(path.join(__dirname, "gamehost.js")));
 
 app.use(express.static(path.join(__dirname, "public"), {

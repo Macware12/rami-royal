@@ -21,8 +21,12 @@ fs.writeFileSync(path.join(DEST, "config.js"),
 // un SW ne ferait que servir d'anciennes versions après une mise à jour de l'app)
 fs.rmSync(path.join(DEST, "sw.js"), { force: true });
 
-// Moteur + hôte de partie : nécessaires au multijoueur local (le téléphone hôte fait tourner la partie)
-fs.copyFileSync(path.join(__dirname, "..", "engine.js"), path.join(DEST, "lib", "engine.js"));
+// Moteur + hôte de partie : nécessaires au multijoueur local (le téléphone hôte fait tourner la partie).
+// Le moteur est encapsulé pour ne pas polluer la portée globale du navigateur (collision SUITS…).
+const engineSrc = fs.readFileSync(path.join(__dirname, "..", "engine.js"), "utf8");
+fs.writeFileSync(path.join(DEST, "lib", "engine.js"),
+  "// Version navigateur (portée isolée) — générée depuis engine.js\n(function(){var module={exports:{}};\n" +
+  engineSrc + "\n})();\n");
 fs.copyFileSync(path.join(__dirname, "..", "gamehost.js"), path.join(DEST, "lib", "gamehost.js"));
 
 console.log("www-native/ prêt (serveur : " + SERVEUR + ")");
