@@ -115,8 +115,9 @@ app.get("/stats.json", (req, res) => {
 const PRECOMPILED = {};
 // ---------- Comptes joueurs (pseudo + code secret à 6 chiffres) ----------
 // Deux modes côté client : invité (rien n'est gardé) ou connecté (stats retrouvables partout).
-// Persistance fichier, comme les salons — ACCOUNTS_FILE à pointer vers un disque persistant sur Render.
-const fsComptes = require("fs");
+// Persistance via storage.js : Postgres si DATABASE_URL est défini (survit aux déploiements
+// Render), fichier local sinon (développement).
+const storage = require("./storage");
 const ACCOUNTS_FILE = process.env.ACCOUNTS_FILE || path.join(__dirname, "comptes-save.json");
 const comptes = new Map(); // code → { code, pseudo, stats, succes, createdAt, lastSeen }
 const MAX_COMPTES = 100000;
@@ -124,15 +125,10 @@ let comptesTimer = null;
 function saveComptes() {
   clearTimeout(comptesTimer);
   comptesTimer = setTimeout(() => {
-    try { fsComptes.writeFileSync(ACCOUNTS_FILE, JSON.stringify([...comptes.values()])); }
-    catch (e) { console.error("Sauvegarde des comptes impossible:", e.message); }
+    storage.save("comptes", [...comptes.values()], ACCOUNTS_FILE)
+      .catch((e) => console.error("Sauvegarde des comptes impossible:", e.message));
   }, 1000);
 }
-try {
-  if (fsComptes.existsSync(ACCOUNTS_FILE))
-    JSON.parse(fsComptes.readFileSync(ACCOUNTS_FILE, "utf8")).forEach((c) => c && c.code && comptes.set(c.code, c));
-  if (comptes.size) console.log(comptes.size + " compte(s) chargé(s)");
-} catch (e) { console.error("Lecture des comptes impossible:", e.message); }
 
 // Un « bucket » de stats (solo à la racine, multi sous .mp)
 function cleanBucket(s) {
@@ -1481,7 +1477,6 @@ setInterval(() => {
 process.on("unhandledRejection", (e) => console.error("PROMESSE REJETÉE:", e));
 
 // ---------- Persistance des salons : les parties survivent aux redémarrages ----------
-const fs = require("fs");
 const SAVE_FILE = process.env.ROOMS_FILE || path.join(__dirname, "rooms-save.json");
 
 function saveRooms() {
@@ -1494,14 +1489,14 @@ function saveRooms() {
       players: room.players.map((p) => ({ ...p, socketId: null, connected: false })),
       game: room.game,
     }));
-    fs.writeFileSync(SAVE_FILE, JSON.stringify(data));
+    storage.save("rooms", data, SAVE_FILE).catch((e) => console.error("Sauvegarde des salons impossible:", e.message));
   } catch (e) { console.error("Sauvegarde des salons impossible:", e.message); }
 }
 
-function loadRooms() {
+async function loadRooms() {
   try {
-    if (!fs.existsSync(SAVE_FILE)) return;
-    const data = JSON.parse(fs.readFileSync(SAVE_FILE, "utf8"));
+    const data = await storage.load("rooms", SAVE_FILE);
+    if (!Array.isArray(data)) return;
     let n = 0;
     data.forEach((r) => {
       if (!r || !r.code || rooms.has(r.code)) return;
@@ -1536,13 +1531,27 @@ function loadRooms() {
   } catch (e) { console.error("Restauration des salons impossible:", e.message); }
 }
 
-loadRooms();
-setInterval(saveRooms, 15000);
+// Sauvegarde immédiate à l'arrêt (déploiement Render : SIGTERM avant extinction)
 function flushComptes() {
   clearTimeout(comptesTimer);
-  try { fsComptes.writeFileSync(ACCOUNTS_FILE, JSON.stringify([...comptes.values()])); } catch (e) {}
+  return storage.save("comptes", [...comptes.values()], ACCOUNTS_FILE).catch(() => {});
 }
-process.on("SIGTERM", () => { saveRooms(); flushComptes(); process.exit(0); });
-process.on("SIGINT", () => { saveRooms(); flushComptes(); process.exit(0); });
+process.on("SIGTERM", () => { saveRooms(); Promise.resolve(flushComptes()).finally(() => setTimeout(() => process.exit(0), 800)); });
+process.on("SIGINT", () => { saveRooms(); Promise.resolve(flushComptes()).finally(() => setTimeout(() => process.exit(0), 300)); });
 
-server.listen(PORT, () => console.log("Serveur Ramy Gasy sur le port " + PORT));
+// ---------- Démarrage : stockage d'abord, puis restauration, puis écoute ----------
+(async () => {
+  try {
+    const mode = await storage.init();
+    if (mode === "postgres") console.log("Stockage : Postgres (les comptes survivent aux déploiements)");
+    else console.log("Stockage : fichiers locaux (définir DATABASE_URL pour Postgres)");
+    const data = await storage.load("comptes", ACCOUNTS_FILE);
+    if (Array.isArray(data)) data.forEach((c) => c && c.code && comptes.set(c.code, c));
+    if (comptes.size) console.log(comptes.size + " compte(s) chargé(s)");
+    await loadRooms();
+  } catch (e) {
+    console.error("ATTENTION — stockage indisponible, démarrage en mémoire seule :", e.message);
+  }
+  setInterval(saveRooms, 15000);
+  server.listen(PORT, () => console.log("Serveur Ramy Gasy sur le port " + PORT));
+})();
