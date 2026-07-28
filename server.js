@@ -495,9 +495,40 @@ function broadcast(room) {
   });
 }
 
+// Manche insolvable : la pioche a été recyclée 3 fois sans vainqueur (les cartes restantes
+// ne complètent plus rien — tous posés, mains bloquées). Règle « pioche épuisée » :
+// la main la plus légère gagne la manche. Sans cela, la manche serait mathématiquement infinie.
+function endStalemate(room) {
+  const g = room.game;
+  if (!g || g.roundOver) return;
+  clearTimers(room);
+  let winnerIdx = 0, bestPts = Infinity;
+  room.players.forEach((q, i) => {
+    const pts = E.handPoints(q.hand);
+    if (pts < bestPts) { bestPts = pts; winnerIdx = i; }
+  });
+  const summary = room.players.map((q, i) => {
+    const pts = i === winnerIdx ? 0 : E.handPoints(q.hand);
+    q.total += pts;
+    return { name: q.name, pts, bonus: 0, total: q.total };
+  });
+  g.history.push({ mancheIdx: g.mancheIdx, label: contratCourant(g).label, summary });
+  g.roundOver = { winnerIdx, bonusType: null, epuise: true, summary };
+  const manches = g.manches || E.MANCHES;
+  room.state = g.mancheIdx + 1 >= manches.length ? "over" : "roundEnd";
+  log(room, "🔚 Pioche épuisée 3 fois : fin de manche — la main la plus légère (" + room.players[winnerIdx].name + ") l'emporte");
+  if (room.state === "over") {
+    const champ = room.players.reduce((a, b) => (b.total < a.total ? b : a));
+    champ.wins = (champ.wins || 0) + 1;
+    log(room, "👑 " + champ.name + " remporte la partie !");
+  }
+  broadcast(room);
+}
+
 // ---------- Gestion des tours et du minuteur ----------
 function startTurn(room) {
   const g = room.game;
+  if ((g.recycles || 0) >= 3) { endStalemate(room); return; }
   g.phase = "draw";
   g.turnDeadline = Date.now() + room.options.turnSeconds * 1000;
   clearTimeout(room.turnTimer);
@@ -544,6 +575,7 @@ function drawFromStock(room, idx) {
     const top = g.discard.pop();
     g.stock = shuffleInPlace(g.discard);
     g.discard = top ? [top] : [];
+    g.recycles = (g.recycles || 0) + 1; // compteur anti-manche-infinie
   }
   const card = g.stock.pop();
   if (card) room.players[idx].hand.push(card); // pioche ET défausse épuisées : on joue sans piocher plutôt que planter
@@ -766,6 +798,7 @@ function doBuy(room, idx) {
     const t2 = g.discard.pop();
     g.stock = shuffleInPlace(g.discard);
     g.discard = t2 ? [t2] : [];
+    g.recycles = (g.recycles || 0) + 1; // compteur anti-manche-infinie
   }
   const penalty = g.stock.pop();
   p.hand.push(bought);

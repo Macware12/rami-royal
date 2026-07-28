@@ -329,10 +329,13 @@ function sortEscalier(cards) {
 
 function normMeld(type, cards) { return type === "esc" ? sortEscalier(cards) : cards; }
 
-module.exports = {
+// Export UMD : Node (serveur, tests) ET navigateur (hôte local hors-ligne)
+const __engineExports = {
   sortEscalier, normMeld, isOrderedEscalier,
   SUITS, MANCHES, MAX_ACHATS,
   buildDeck, rankLabel, cardName, cardPoints, handPoints,
   isTri, isEscalier, validGroup,
   findRuns, findJokerRuns, aiPlanContract, aiPlanFullHand, aiDiscardChoice,
 };
+if (typeof module !== "undefined" && module.exports) module.exports = __engineExports;
+if (typeof window !== "undefined") window.RamyEngine = __engineExports;

@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2227-U">
+<meta name="version" content="v2228-U">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -1375,6 +1375,7 @@ function RamiRoyal() {
 
   function takeCard(stock, discard, source) {
     stock = [...stock]; discard = [...discard];
+    let recycled = false;
     if (source === "stock" && stock.length === 0) {
       const top = discard.pop();
       // Mélange de Fisher-Yates (équitable), contrairement à sort(random)
@@ -1384,9 +1385,10 @@ function RamiRoyal() {
       }
       stock = discard;
       discard = top ? [top] : [];
+      recycled = true; // la défausse a été rebattue : compteur anti-manche-infinie
     }
     const card = (source === "stock" ? stock.pop() : discard.pop()) || null; // null si tout est épuisé (jamais undefined)
-    return { stock, discard, card };
+    return { stock, discard, card, recycled };
   }
 
   // ----- Actions du joueur -----
@@ -1414,6 +1416,7 @@ function RamiRoyal() {
     });
     let ns = {
       ...state, stock: penalty.stock, discard: penalty.discard, players, takenCards,
+      recycles: (state.recycles || 0) + (penalty.recycled ? 1 : 0),
       discardLocked: true, // après un achat, la carte du dessous ne peut pas être prise
       animEvents: [
         { source: "discard", target: "p" + idx, card: bought.card, faceDown: false, emphasis: true },
@@ -1433,6 +1436,17 @@ function RamiRoyal() {
 
   function afterDiscard(state, discarderIdx) {
     if (state.roundOver) return state;
+    // Manche insolvable : pioche recyclée 3 fois sans vainqueur (les cartes restantes ne
+    // complètent plus rien). Règle « pioche épuisée » : la main la plus légère gagne la manche.
+    if ((state.recycles || 0) >= 3) {
+      let winnerIdx = 0, bestPts = Infinity;
+      state.players.forEach((p, i) => {
+        const pts = handPoints(p.hand) + (i === 0 ? handPoints(state.staged.flatMap((m) => m.cards)) : 0);
+        if (pts < bestPts) { bestPts = pts; winnerIdx = i; }
+      });
+      return addLog(finishRound(state, winnerIdx, null),
+        "🔚 Pioche épuisée 3 fois : fin de manche — la main la plus légère (" + state.players[winnerIdx].name + ") l'emporte");
+    }
     const n = state.players.length;
     const nextIdx = (discarderIdx + 1) % n;
     // Tutoriel : l'achat n'est introduit qu'après la mission escalier — on apprend d'abord
@@ -1536,6 +1550,7 @@ function RamiRoyal() {
       let ns = {
         ...s, stock: res.stock, discard: res.discard, players, phase: "play",
         justPosed: false, lastDrawn: [res.card.id],
+        recycles: (s.recycles || 0) + (res.recycled ? 1 : 0),
         animEvents: [{ source: "stock", target: "p0", card: res.card, faceDown: false }],
         animSeq: ++ANIM_SEQ,
       };
@@ -2217,6 +2232,7 @@ function tapCard(id) {
       const res = takeCard(stock, discard, "stock");
       stock = res.stock; discard = res.discard;
       if (res.card) hand.push(res.card); // pioche ET défausse épuisées : l'IA joue sans piocher
+      if (res.recycled) ns = { ...ns, recycles: (ns.recycles || 0) + 1 };
       animEvents.push({ source: "stock", target: pKey, card: null, faceDown: true });
       ns = addLog(ns, ai.name + " pioche une carte");
     }
