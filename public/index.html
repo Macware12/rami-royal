@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2254-U">
+<meta name="version" content="v2255-U">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2254-U">
+<link rel="stylesheet" href="/lib/tailwind.css?v2255-U">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -63,7 +63,8 @@ const { useState, useEffect, useRef } = React;
 // ---------- Constantes ----------
 const SUITS = ["♠", "♥", "♦", "♣"];
 const AVATARS = ["🙂", "🦎", "🐒", "🦉", "🦜", "🐢"];
-const AVATARS_POOL = ["🦁", "🐯", "🦊", "🐼", "🐸", "🦉", "🐙", "🦜", "🐢", "🦎"];
+const AVATARS_POOL = ["🦁", "🐯", "🦊", "🐼", "🐸", "🦉", "🐙", "🦜", "🐢", "🦎"]; // table de jeu (uniques par salon)
+const AVATARS_PROFIL = ["😎", "🤠", "🥷", "🧙", "🤖", "👽", "🧞", "🦹", "👑", "🃏"]; // profil du compte (partagés)
 const AVATAR_COLORS = ["#fbbf24", "#f59e0b", "#38bdf8", "#f472b6", "#a3e635", "#c084fc"];
 const MANCHE_LABELS = ["2 tri", "1 tri + 1 escalier", "2 escaliers", "3 tri", "2 tri + 1 escalier", "2 escaliers + 1 tri", "3 escaliers", "Pose-tout"];
 
@@ -832,7 +833,6 @@ function App() {
     store.set("rami-succes", JSON.stringify(d.succes || {}));
     store.set("rami-name", d.pseudo);
     store.set("ramimp-name", d.pseudo);
-    if (d.avatar) { store.set("ramimp-avatar", d.avatar); setAvatar(d.avatar); } // l'avatar du compte devient celui de la table
     setName(d.pseudo);
     setCptBusy(false); setCptErr(""); setCptCode("");
     cptMaj((x) => x + 1);
@@ -1753,7 +1753,7 @@ function App() {
                   <h3 className="text-amber-300 font-bold text-center">🎨 Avatar et photo</h3>
                   <p className="text-[11px] text-emerald-300 text-center">Choisis un avatar du jeu…</p>
                   <div className="flex flex-wrap gap-1.5 justify-center">
-                    {AVATARS_POOL.map((a) => (
+                    {AVATARS_PROFIL.map((a) => (
                       <button key={a} onClick={() => cptProfil({ avatar: a })} disabled={cptBusy}
                         className={`text-xl rounded-xl p-1.5 transition-all ${compteActif.avatar === a ? "btn-gold scale-110" : "btn-dark"}`}>{a}</button>
                     ))}
@@ -2113,7 +2113,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400 flex-wrap justify-center">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2254-U</span>
+          <span className="opacity-60">v2255-U</span>
         </div>
       </div>
     );

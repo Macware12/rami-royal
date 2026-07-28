@@ -302,7 +302,7 @@ app.post("/compte/profil", (req, res) => {
   if (!c) return res.status(404).json({ erreur: "Code inexistant." });
   const { avatar, photo } = req.body || {};
   if (avatar !== undefined) {
-    if (avatar !== null && !AVATARS_POOL.includes(avatar)) return res.status(400).json({ erreur: "Avatar inconnu." });
+    if (avatar !== null && !AVATARS_PROFIL.includes(avatar)) return res.status(400).json({ erreur: "Avatar inconnu." });
     c.avatar = avatar;
   }
   if (photo !== undefined) {
@@ -1526,7 +1526,8 @@ io.on("connection", (socket) => {
 
 const PORT = process.env.PORT || 3000;
 let EMOTE_SEQ = 0;
-const AVATARS_POOL = ["🦁", "🐯", "🦊", "🐼", "🐸", "🦉", "🐙", "🦜", "🐢", "🦎"];
+const AVATARS_POOL = ["🦁", "🐯", "🦊", "🐼", "🐸", "🦉", "🐙", "🦜", "🐢", "🦎"]; // avatars de table (uniques par salon)
+const AVATARS_PROFIL = ["😎", "🤠", "🥷", "🧙", "🤖", "👽", "🧞", "🦹", "👑", "🃏"]; // avatars de profil (partagés, différents de la table)
 const EMOTES_AUTORISEES = ["😂", "👏", "😤", "🔥", "😱", "🤔", "Bien joué !", "Tu me l'as volée !", "Aïe aïe aïe…", "Trop lent !", "Chance de débutant !", "On se calme 😄"];
 
 // Robustesse : une erreur imprévue ne doit jamais faire tomber toutes les tables
