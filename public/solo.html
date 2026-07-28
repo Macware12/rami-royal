@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2253-U">
+<meta name="version" content="v2254-U">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2253-U">
+<link rel="stylesheet" href="/lib/tailwind.css?v2254-U">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -1138,7 +1138,7 @@ function RamiRoyal() {
     tutoDraws.current = 0;
     tourPrev.current = { aide: false, scores: false, regles: false };
     setTutoFlags({ drew: false, esc: false, tri: false, posed: false, complete: false, aide: false, scores: false, regles: false });
-    const name = playerName.trim() || store.get("rami-name") || "Joueur 1";
+    const name = (account.code && account.pseudo) || playerName.trim() || store.get("rami-name") || "Joueur 1";
     const players = [
       { name, isAI: false, avatar: myAvatar, color: "#fbbf24" },
       { name: "Joueur 2", isAI: true, avatar: AVATARS_POOL.filter((a) => a !== myAvatar)[0], color: AVATAR_COLORS[0] },
@@ -1155,7 +1155,7 @@ function RamiRoyal() {
 
   function startGame() {
     setTuto(false);
-    const name = playerName.trim() || "Joueur 1";
+    const name = (account.code && account.pseudo) || playerName.trim() || "Joueur 1"; // compte connecté : pseudo imposé
     const players = [
       { name, isAI: false, avatar: myAvatar, color: "#fbbf24" },
       ...Array.from({ length: nbAI }, (_, i) => ({
@@ -2614,6 +2614,15 @@ function tapCard(id) {
           <p className="text-emerald-200 text-xs mt-0.5">Le rami à contrats de Madagascar</p>
         </div>
         <div className="panel rounded-2xl p-4 w-full max-w-md flex flex-col gap-2.5 text-emerald-100">
+          {account.code ? (
+            <div className="flex items-center gap-2 bg-emerald-950/50 border border-amber-500/40 rounded-xl px-3 py-2">
+              <span className="text-lg">👤</span>
+              <div className="flex-1">
+                <div className="text-sm font-bold text-amber-300">{account.pseudo}</div>
+                <div className="text-[10px] text-emerald-400">Connecté — tu joues sous ton pseudo de compte</div>
+              </div>
+            </div>
+          ) : (
           <div className="flex gap-2 items-end">
             <label className="flex flex-col gap-1 text-xs flex-1">
               Ton nom
@@ -2622,6 +2631,7 @@ function tapCard(id) {
                 className="bg-emerald-950/70 border border-emerald-600 rounded-xl p-2 text-sm text-emerald-100 placeholder-emerald-500 w-full" />
             </label>
           </div>
+          )}
           <div className="flex flex-col gap-1">
             <span className="text-xs text-emerald-300">Ton emoji</span>
             <div className="flex flex-wrap gap-1 justify-center">
