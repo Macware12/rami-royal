@@ -246,6 +246,24 @@ app.post("/compte/connexion", (req, res) => {
   res.json({ code: c.code, pseudo: c.pseudo, stats: c.stats || {}, succes: c.succes || {} });
 });
 
+// Changer de pseudo sans perdre sa progression (le compte reste identifié par son code)
+app.post("/compte/renommer", (req, res) => {
+  if (tropDEssais(req, res)) return;
+  const code = String((req.body && req.body.code) || "").trim();
+  const c = /^[0-9]{6}$/.test(code) ? comptes.get(code) : null;
+  if (!c) return res.status(404).json({ erreur: "Code inexistant." });
+  if (!pseudoValide(req.body && req.body.pseudo)) return res.status(400).json({ erreur: "Pseudo invalide (2 à 20 caractères)." });
+  const voulu = req.body.pseudo.trim();
+  for (const a of comptes.values()) {
+    if (a !== c && a.pseudo.toLowerCase() === voulu.toLowerCase())
+      return res.status(409).json({ erreur: "Ce pseudo est déjà pris — choisis-en un autre." });
+  }
+  c.pseudo = voulu;
+  c.lastSeen = Date.now();
+  saveComptes();
+  res.json({ code: c.code, pseudo: c.pseudo, stats: c.stats || {}, succes: c.succes || {} });
+});
+
 // Lookup par code seul (pour reconnexion multi-appareil) : retourne le compte complet si code valide
 app.post("/compte/info", (req, res) => {
   if (tropDEssais(req, res)) return;

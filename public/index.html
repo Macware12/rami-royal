@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2247-U">
+<meta name="version" content="v2249-U">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -850,6 +850,14 @@ function App() {
       .then((d) => { cptActiver(d); setCptOpen(false); setCptMode("choix"); })
       .catch((e) => { setCptBusy(false); setCptErr(e.message || "Code inconnu — vérifie tes 6 chiffres."); });
   }
+  function cptRenommer() {
+    const p = cptPseudo.trim();
+    if (p.length < 2) { setCptErr("2 caractères minimum."); return; }
+    setCptBusy(true); setCptErr("");
+    compteApi("renommer", { code: compteActif.code, pseudo: p })
+      .then((d) => { cptActiver(d); setCptMode("choix"); })
+      .catch((e) => { setCptBusy(false); setCptErr(e.message || "Serveur injoignable — réessaie."); });
+  }
   function cptDeconnecter() {
     // Les données restent sur le serveur ; en local on repart en mode invité
     store.del("rami-account"); store.del("rami-stats"); store.del("rami-succes");
@@ -1663,24 +1671,18 @@ function App() {
           </button>
         )}
 
-        {/* Compte joueur — accessible dès la première page */}
+        {/* Compte joueur — pastille discrète en haut à droite, séparée des menus de jeu */}
         {!showMp && !showLocal && (
           <button onClick={() => { setCptErr(""); setCptNouveau(null); setCptMode("choix"); setCptPseudo(name.trim()); setCptOpen(true); }}
-            className="panel rounded-2xl px-4 py-2.5 w-full max-w-xs flex items-center gap-3 text-emerald-100 text-left"
-            style={nomVerrouille ? { borderColor: "#f59e0b88" } : {}}>
-            <span className="text-xl">👤</span>
+            className="fixed top-3 right-3 z-40 panel rounded-full px-3 py-1.5 flex items-center gap-1.5 text-emerald-100"
+            style={nomVerrouille ? { borderColor: "#f59e0b88" } : {}}
+            title={nomVerrouille ? "Gérer mon compte" : "Se connecter / Créer un compte"}>
+            <span className="text-base leading-none">👤</span>
             {nomVerrouille ? (
-              <span className="flex-1">
-                <span className="block font-bold text-sm text-amber-300">{nomVerrouille}</span>
-                <span className="block text-[10px] text-emerald-400">Connecté — toucher pour gérer le compte</span>
-              </span>
+              <span className="text-xs font-bold text-amber-300 max-w-[110px] truncate">{nomVerrouille}</span>
             ) : (
-              <span className="flex-1">
-                <span className="block font-bold text-sm">Se connecter / Créer un compte</span>
-                <span className="block text-[10px] text-emerald-400">Retrouve tes stats sur tous tes appareils</span>
-              </span>
+              <span className="text-xs font-bold">Se connecter</span>
             )}
-            <span className="text-amber-300 font-bold">→</span>
           </button>
         )}
 
@@ -1699,6 +1701,18 @@ function App() {
                     className="btn-dark font-bold py-2 rounded-xl text-xs">📋 Copier le code</button>
                   <button onClick={() => { setCptOpen(false); setCptNouveau(null); setCptMode("choix"); }} className="btn-gold font-bold py-2.5 rounded-xl text-sm">C'est noté !</button>
                 </React.Fragment>
+              ) : nomVerrouille && cptMode === "renommer" ? (
+                <React.Fragment>
+                  <h3 className="text-amber-300 font-bold text-center">✏️ Changer de pseudo</h3>
+                  <p className="text-[11px] text-emerald-300 text-center">Ta progression est liée à ton code secret — elle est conservée à l'identique.</p>
+                  <label className="flex flex-col gap-1 text-xs text-emerald-200">Nouveau pseudo
+                    <input value={cptPseudo} onChange={(e) => setCptPseudo(e.target.value.slice(0, 20))} maxLength={20}
+                      className="bg-emerald-950/70 border border-emerald-600 rounded-xl p-2.5 text-sm text-emerald-100" placeholder={compteActif.pseudo} autoFocus />
+                  </label>
+                  <button onClick={cptRenommer} disabled={cptBusy} className="btn-gold font-bold py-2.5 rounded-xl text-sm">{cptBusy ? "…" : "Valider"}</button>
+                  <button onClick={() => { setCptMode("choix"); setCptErr(""); }} disabled={cptBusy} className="text-[11px] text-emerald-400 underline">← Retour</button>
+                  {cptErr && <div className="text-red-300 text-xs text-center">{cptErr}</div>}
+                </React.Fragment>
               ) : nomVerrouille ? (
                 <React.Fragment>
                   <h3 className="text-amber-300 font-bold text-center">👤 {compteActif.pseudo}</h3>
@@ -1706,6 +1720,8 @@ function App() {
                   <div className="text-3xl font-bold text-amber-300 tracking-[.3em] text-center" style={{ fontFamily: "Georgia, serif" }}>{compteActif.code}</div>
                   <button onClick={() => { if (navigator.clipboard) navigator.clipboard.writeText(compteActif.code).catch(() => {}); }}
                     className="btn-dark font-bold py-2 rounded-xl text-xs">📋 Copier le code</button>
+                  <button onClick={() => { setCptPseudo(compteActif.pseudo); setCptErr(""); setCptMode("renommer"); }}
+                    className="btn-dark font-bold py-2 rounded-xl text-xs">✏️ Changer de pseudo</button>
                   <button onClick={cptDeconnecter} className="btn-red font-bold py-2 rounded-xl text-xs">🔓 Se déconnecter de cet appareil</button>
                   <p className="text-[10px] text-emerald-500 text-center">Tes stats restent liées au compte — reconnecte-toi avec le code pour les retrouver.</p>
                 </React.Fragment>
@@ -1953,7 +1969,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400 flex-wrap justify-center">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2247-U</span>
+          <span className="opacity-60">v2249-U</span>
         </div>
       </div>
     );
