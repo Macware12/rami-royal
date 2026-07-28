@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2232-U">
+<meta name="version" content="v2233-U">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -50,6 +50,8 @@ input, textarea { -webkit-user-select: text; user-select: text; }
   html.native-app body { overflow-y: auto; -webkit-overflow-scrolling: auto; }
   /* Safe areas : l'app s'étend sous l'encoche/la barre d'état — on décale le contenu juste ce qu'il faut */
   html.native-app body { box-sizing: border-box; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+  /* Bandeau opaque sous la barre d'état : le contenu qui défile ne passe plus sous l'heure */
+  html.native-app body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: env(safe-area-inset-top); background: #052e16; z-index: 90; }
   /* Les écrans prennent la hauteur du cadre (déjà réduit des safe areas), pas celle de l'écran entier */
   html.native-app #root { height: 100%; }
   html.native-app .fit-screen { height: 100%; }
@@ -2604,86 +2606,94 @@ function tapCard(id) {
 
   if (screen === "setup") {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-6 p-6" style={bgStyle}>
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 p-4" style={bgStyle}>
         {STYLE}
         <a href="/" className="fixed top-3 left-3 z-40 btn-dark rounded-xl px-3 py-1.5 text-xs font-bold no-underline">← Accueil</a>
         <div className="text-center" style={{ textShadow: "0 3px 10px rgba(0,0,0,.6)" }}>
-          <h1 className="text-5xl text-amber-300" style={{ fontFamily: "Georgia, serif" }}>Ramy Gasy</h1>
-          <p className="text-emerald-200 text-sm mt-1">Le rami à contrats de Madagascar</p>
+          <h1 className="text-4xl text-amber-300" style={{ fontFamily: "Georgia, serif" }}>Ramy Gasy</h1>
+          <p className="text-emerald-200 text-xs mt-0.5">Le rami à contrats de Madagascar</p>
         </div>
-        <div className="panel rounded-2xl p-5 w-full max-w-xs flex flex-col gap-4 text-emerald-100">
-          <label className="flex flex-col gap-2 text-sm">
-            Ton nom
-            <input value={playerName} onChange={(e) => setPlayerName(e.target.value)}
-              placeholder="Joueur 1" maxLength={14}
-              className="bg-emerald-950/70 border border-emerald-600 rounded-xl p-2.5 text-emerald-100 placeholder-emerald-500" />
-          </label>
-          <div className="flex flex-col gap-1.5">
+        <div className="panel rounded-2xl p-4 w-full max-w-md flex flex-col gap-2.5 text-emerald-100">
+          <div className="flex gap-2 items-end">
+            <label className="flex flex-col gap-1 text-xs flex-1">
+              Ton nom
+              <input value={playerName} onChange={(e) => setPlayerName(e.target.value)}
+                placeholder="Joueur 1" maxLength={14}
+                className="bg-emerald-950/70 border border-emerald-600 rounded-xl p-2 text-sm text-emerald-100 placeholder-emerald-500 w-full" />
+            </label>
+          </div>
+          <div className="flex flex-col gap-1">
             <span className="text-xs text-emerald-300">Ton emoji</span>
-            <div className="flex flex-wrap gap-1.5 justify-center">
+            <div className="flex flex-wrap gap-1 justify-center">
               {AVATARS_POOL.map((a) => (
                 <button key={a} onClick={() => { setMyAvatar(a); store.set("rami-avatar", a); }}
-                  className={`text-xl rounded-xl p-1.5 transition-all ${myAvatar === a ? "btn-gold scale-110" : "btn-dark"}`}>{a}</button>
+                  className={`text-lg rounded-lg p-1 transition-all ${myAvatar === a ? "btn-gold scale-110" : "btn-dark"}`}>{a}</button>
               ))}
             </div>
           </div>
-          <label className="flex flex-col gap-2 text-sm">
-            Adversaires (IA)
-            <div className="flex gap-2">
-              {[2, 3, 4, 5].map((n) => (
-                <button key={n} onClick={() => setNbAI(n)}
-                  className={`flex-1 py-2 rounded-xl font-bold ${nbAI === n ? "btn-gold" : "btn-dark"}`}>
-                  {n}
-                </button>
-              ))}
-            </div>
-          </label>
-          <label className="flex flex-col gap-2 text-sm">
-            Niveau des adversaires
-            <div className="flex gap-2">
-              {LEVELS.map((l) => (
-                <button key={l.id} onClick={() => setLevel(l.id)}
-                  className={`flex-1 py-2 rounded-xl text-xs font-bold ${level === l.id ? "btn-gold" : "btn-dark"}`}>
-                  {l.label}
-                </button>
-              ))}
-            </div>
-          </label>
-          <label className="flex flex-col gap-2 text-sm">
+          <div className="grid grid-cols-2 gap-2">
+            <label className="flex flex-col gap-1 text-xs">
+              Adversaires (IA)
+              <div className="flex gap-1">
+                {[2, 3, 4, 5].map((n) => (
+                  <button key={n} onClick={() => setNbAI(n)}
+                    className={`flex-1 py-1.5 rounded-lg font-bold text-sm ${nbAI === n ? "btn-gold" : "btn-dark"}`}>
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </label>
+            <label className="flex flex-col gap-1 text-xs">
+              Niveau
+              <div className="flex gap-1">
+                {LEVELS.map((l) => (
+                  <button key={l.id} onClick={() => setLevel(l.id)}
+                    className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold ${level === l.id ? "btn-gold" : "btn-dark"}`}>
+                    {l.label}
+                  </button>
+                ))}
+              </div>
+            </label>
+          </div>
+          <label className="flex flex-col gap-1 text-xs">
             Mode
             <div className="flex gap-2">
               <button onClick={() => setShortMode(false)}
-                className={`flex-1 py-2 rounded-xl text-xs font-bold flex flex-col items-center gap-0.5 ${!shortMode ? "btn-gold" : "btn-dark"}`}>
+                className={`flex-1 py-1.5 rounded-xl text-xs font-bold flex flex-col items-center ${!shortMode ? "btn-gold" : "btn-dark"}`}>
                 <span>Normal (8 manches)</span>
                 <span className="text-[10px] opacity-75">~30 min</span>
               </button>
               <button onClick={() => setShortMode(true)}
-                className={`flex-1 py-2 rounded-xl text-xs font-bold flex flex-col items-center gap-0.5 ${shortMode ? "btn-gold" : "btn-dark"}`}>
+                className={`flex-1 py-1.5 rounded-xl text-xs font-bold flex flex-col items-center ${shortMode ? "btn-gold" : "btn-dark"}`}>
                 <span>⚡ Court (3 aléatoires)</span>
                 <span className="text-[10px] opacity-75">~10 min</span>
               </button>
             </div>
           </label>
-          <button onClick={startGame} className="btn-gold font-bold py-3 rounded-xl text-base">
+          <button onClick={startGame} className="btn-gold font-bold py-2.5 rounded-xl text-base">
             Distribuer les cartes 🎴
           </button>
-          <a href="/regles.html" className="btn-dark font-bold py-2 rounded-xl text-xs text-center block">📖 Règles complètes</a>
-          <a href="/confidentialite.html" className="text-[10px] text-emerald-500 text-center underline">Politique de confidentialité</a>
-          <button onClick={() => setShowStats(true)} className="btn-dark font-bold py-2 rounded-xl text-xs">
-            📊 Mes statistiques
-          </button>
-          {account.code ? (
-            <div className="text-[11px] text-emerald-300 text-center">
-              👤 <b className="text-amber-300">{account.pseudo}</b> · compte n° {account.code}
-              {" · "}<button onClick={deconnecterCompte} className="underline text-emerald-400">déconnexion</button>
-            </div>
-          ) : (
-            <button onClick={() => { setLoginErr(""); setNewCode(null); setShowLogin(true); }}
-              className="btn-dark font-bold py-2 rounded-xl text-xs">
-              👤 Se connecter / Créer un compte
-              <span className="block font-normal text-[10px] text-emerald-400 mt-0.5">Mode invité : rien n'est conservé d'une visite à l'autre</span>
+          <div className="grid grid-cols-2 gap-2">
+            <a href="/regles.html" className="btn-dark font-bold py-2 rounded-xl text-xs text-center block">📖 Règles</a>
+            <button onClick={() => setShowStats(true)} className="btn-dark font-bold py-2 rounded-xl text-xs">
+              📊 Statistiques
             </button>
-          )}
+            <button onClick={() => setShowSucces(true)} className="btn-dark font-bold py-2 rounded-xl text-xs">
+              🏆 Succès ({Object.keys(readJSON("rami-succes")).length}/{SUCCES_LIST.length})
+            </button>
+            {account.code ? (
+              <div className="text-[10px] text-emerald-300 text-center self-center leading-tight">
+                👤 <b className="text-amber-300">{account.pseudo}</b> · n° {account.code}
+                <br /><button onClick={deconnecterCompte} className="underline text-emerald-400">déconnexion</button>
+              </div>
+            ) : (
+              <button onClick={() => { setLoginErr(""); setNewCode(null); setShowLogin(true); }}
+                className="btn-dark font-bold py-2 rounded-xl text-xs" title="Mode invité : rien n'est conservé d'une visite à l'autre">
+                👤 Mon compte
+              </button>
+            )}
+          </div>
+          <a href="/confidentialite.html" className="text-[10px] text-emerald-500 text-center underline">Politique de confidentialité</a>
           {showLogin && (
             <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 flex items-center justify-center p-4" onClick={() => !loginBusy && setShowLogin(false)}>
               <div className="panel rounded-2xl p-5 w-full max-w-sm flex flex-col gap-3 relative" onClick={(e) => e.stopPropagation()}>
@@ -2735,9 +2745,6 @@ function tapCard(id) {
               </div>
             </div>
           )}
-          <button onClick={() => setShowSucces(true)} className="btn-dark font-bold py-2 rounded-xl text-xs">
-            🏆 Mes succès ({Object.keys(readJSON("rami-succes")).length}/{SUCCES_LIST.length})
-          </button>
           {showStats && (() => {
             const Stat = ({ v, lbl, cls }) => (
               <div className="panel rounded-xl py-2 flex flex-col items-center">
