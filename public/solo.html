@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2244-U">
+<meta name="version" content="v2245-U">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -2631,30 +2631,28 @@ function tapCard(id) {
               ))}
             </div>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            <label className="flex flex-col gap-1 text-xs">
-              Adversaires (IA)
-              <div className="flex gap-1">
-                {[2, 3, 4, 5].map((n) => (
-                  <button key={n} onClick={() => setNbAI(n)}
-                    className={`flex-1 py-1.5 rounded-lg font-bold text-sm ${nbAI === n ? "btn-gold" : "btn-dark"}`}>
-                    {n}
-                  </button>
-                ))}
-              </div>
-            </label>
-            <label className="flex flex-col gap-1 text-xs">
-              Niveau
-              <div className="flex gap-1">
-                {LEVELS.map((l) => (
-                  <button key={l.id} onClick={() => setLevel(l.id)}
-                    className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold ${level === l.id ? "btn-gold" : "btn-dark"}`}>
-                    {l.label}
-                  </button>
-                ))}
-              </div>
-            </label>
-          </div>
+          <label className="flex flex-col gap-1 text-xs">
+            Adversaires (IA)
+            <div className="flex gap-2">
+              {[2, 3, 4, 5].map((n) => (
+                <button key={n} onClick={() => setNbAI(n)}
+                  className={`flex-1 py-2 rounded-xl font-bold ${nbAI === n ? "btn-gold" : "btn-dark"}`}>
+                  {n}
+                </button>
+              ))}
+            </div>
+          </label>
+          <label className="flex flex-col gap-1 text-xs">
+            Niveau des adversaires
+            <div className="flex gap-2">
+              {LEVELS.map((l) => (
+                <button key={l.id} onClick={() => setLevel(l.id)}
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold ${level === l.id ? "btn-gold" : "btn-dark"}`}>
+                  {l.label}
+                </button>
+              ))}
+            </div>
+          </label>
           <label className="flex flex-col gap-1 text-xs">
             Mode
             <div className="flex gap-2">
