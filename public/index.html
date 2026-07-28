@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2246-U">
+<meta name="version" content="v2247-U">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -810,6 +810,52 @@ function App() {
   const nomVerrouille = compteActif ? compteActif.pseudo : null;
   const [name, setName] = useState(nomVerrouille || store.get("ramimp-name") || comptePseudo);
   const nomJoueur = () => (nomVerrouille || name).trim() || "Joueur";
+
+  // ---------- Compte joueur depuis la page d'accueil ----------
+  const [cptOpen, setCptOpen] = useState(false);
+  const [cptMode, setCptMode] = useState("choix"); // choix | creer | reconnecter
+  const [cptPseudo, setCptPseudo] = useState("");
+  const [cptCode, setCptCode] = useState("");
+  const [cptErr, setCptErr] = useState("");
+  const [cptBusy, setCptBusy] = useState(false);
+  const [cptNouveau, setCptNouveau] = useState(null); // code affiché après création
+  const [, cptMaj] = useState(0); // forcer le re-rendu après connexion/déconnexion
+  function compteApi(chemin, body) {
+    return fetch(API_BASE + "/compte/" + chemin, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    }).then((r) => r.json().then((d) => { if (!r.ok) throw new Error(d.erreur || "Erreur serveur"); return d; }));
+  }
+  function cptActiver(d) {
+    store.set("rami-account", JSON.stringify({ pseudo: d.pseudo, code: d.code }));
+    store.set("rami-stats", JSON.stringify(d.stats || {}));
+    store.set("rami-succes", JSON.stringify(d.succes || {}));
+    store.set("rami-name", d.pseudo);
+    store.set("ramimp-name", d.pseudo);
+    setName(d.pseudo);
+    setCptBusy(false); setCptErr(""); setCptCode("");
+    cptMaj((x) => x + 1);
+  }
+  function cptCreer() {
+    const p = cptPseudo.trim();
+    if (p.length < 2) { setCptErr("Choisis d'abord un pseudo (2 caractères minimum)."); return; }
+    setCptBusy(true); setCptErr("");
+    compteApi("creer", { pseudo: p, stats: readJSONls("rami-stats"), succes: readJSONls("rami-succes") })
+      .then((d) => { cptActiver(d); setCptNouveau(d.code); })
+      .catch((e) => { setCptBusy(false); setCptErr(e.message || "Serveur injoignable — réessaie."); });
+  }
+  function cptReconnecter() {
+    if (cptCode.trim().length !== 6) { setCptErr("Le code doit faire 6 chiffres."); return; }
+    setCptBusy(true); setCptErr("");
+    compteApi("info", { code: cptCode.trim() })
+      .then((d) => { cptActiver(d); setCptOpen(false); setCptMode("choix"); })
+      .catch((e) => { setCptBusy(false); setCptErr(e.message || "Code inconnu — vérifie tes 6 chiffres."); });
+  }
+  function cptDeconnecter() {
+    // Les données restent sur le serveur ; en local on repart en mode invité
+    store.del("rami-account"); store.del("rami-stats"); store.del("rami-succes");
+    setCptOpen(false); setCptNouveau(null); setCptMode("choix");
+    cptMaj((x) => x + 1);
+  }
   const [inviteInfo, setInviteInfo] = useState(null);
   const [avatar, setAvatar] = useState(store.get("ramimp-avatar") || AVATARS_POOL[0]);
   const [joinCode, setJoinCode] = useState("");
@@ -1617,6 +1663,89 @@ function App() {
           </button>
         )}
 
+        {/* Compte joueur — accessible dès la première page */}
+        {!showMp && !showLocal && (
+          <button onClick={() => { setCptErr(""); setCptNouveau(null); setCptMode("choix"); setCptPseudo(name.trim()); setCptOpen(true); }}
+            className="panel rounded-2xl px-4 py-2.5 w-full max-w-xs flex items-center gap-3 text-emerald-100 text-left"
+            style={nomVerrouille ? { borderColor: "#f59e0b88" } : {}}>
+            <span className="text-xl">👤</span>
+            {nomVerrouille ? (
+              <span className="flex-1">
+                <span className="block font-bold text-sm text-amber-300">{nomVerrouille}</span>
+                <span className="block text-[10px] text-emerald-400">Connecté — toucher pour gérer le compte</span>
+              </span>
+            ) : (
+              <span className="flex-1">
+                <span className="block font-bold text-sm">Se connecter / Créer un compte</span>
+                <span className="block text-[10px] text-emerald-400">Retrouve tes stats sur tous tes appareils</span>
+              </span>
+            )}
+            <span className="text-amber-300 font-bold">→</span>
+          </button>
+        )}
+
+        {/* Fenêtre compte */}
+        {cptOpen && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 flex items-center justify-center p-4" onClick={() => !cptBusy && setCptOpen(false)}>
+            <div className="panel rounded-2xl p-5 w-full max-w-sm flex flex-col gap-3 relative" onClick={(e) => e.stopPropagation()}>
+              <button onClick={() => { if (!cptBusy) { setCptOpen(false); setCptMode("choix"); setCptErr(""); setCptNouveau(null); } }}
+                className="absolute top-3 right-3 text-emerald-500 text-xl">✕</button>
+              {cptNouveau ? (
+                <React.Fragment>
+                  <h3 className="text-amber-300 font-bold text-center">✨ Compte créé !</h3>
+                  <p className="text-xs text-emerald-200 text-center leading-relaxed">Ton code secret — <b className="text-amber-300">note-le précieusement</b>, c'est lui qui te permet de retrouver ton compte partout :</p>
+                  <div className="text-4xl font-bold text-amber-300 tracking-[.3em] text-center" style={{ fontFamily: "Georgia, serif" }}>{cptNouveau}</div>
+                  <button onClick={() => { if (navigator.clipboard) navigator.clipboard.writeText(cptNouveau).catch(() => {}); }}
+                    className="btn-dark font-bold py-2 rounded-xl text-xs">📋 Copier le code</button>
+                  <button onClick={() => { setCptOpen(false); setCptNouveau(null); setCptMode("choix"); }} className="btn-gold font-bold py-2.5 rounded-xl text-sm">C'est noté !</button>
+                </React.Fragment>
+              ) : nomVerrouille ? (
+                <React.Fragment>
+                  <h3 className="text-amber-300 font-bold text-center">👤 {compteActif.pseudo}</h3>
+                  <p className="text-[11px] text-emerald-300 text-center">Ton code secret — c'est lui qui permet de retrouver ton compte sur n'importe quel appareil :</p>
+                  <div className="text-3xl font-bold text-amber-300 tracking-[.3em] text-center" style={{ fontFamily: "Georgia, serif" }}>{compteActif.code}</div>
+                  <button onClick={() => { if (navigator.clipboard) navigator.clipboard.writeText(compteActif.code).catch(() => {}); }}
+                    className="btn-dark font-bold py-2 rounded-xl text-xs">📋 Copier le code</button>
+                  <button onClick={cptDeconnecter} className="btn-red font-bold py-2 rounded-xl text-xs">🔓 Se déconnecter de cet appareil</button>
+                  <p className="text-[10px] text-emerald-500 text-center">Tes stats restent liées au compte — reconnecte-toi avec le code pour les retrouver.</p>
+                </React.Fragment>
+              ) : cptMode === "choix" ? (
+                <React.Fragment>
+                  <h3 className="text-amber-300 font-bold text-center">👤 Mon compte</h3>
+                  <p className="text-[11px] text-emerald-300 leading-relaxed">Un compte = ton pseudo + un code secret à 6 chiffres. Tes stats te suivent partout (téléphone, ordinateur…).</p>
+                  <button onClick={() => setCptMode("creer")} className="btn-gold font-bold py-2.5 rounded-xl text-sm">✨ Créer un compte</button>
+                  <div className="text-center text-[10px] text-emerald-500">— ou —</div>
+                  <button onClick={() => { setCptMode("reconnecter"); setCptCode(""); setCptErr(""); }} className="btn-dark font-bold py-2.5 rounded-xl text-sm">🔑 Me reconnecter</button>
+                </React.Fragment>
+              ) : cptMode === "creer" ? (
+                <React.Fragment>
+                  <h3 className="text-amber-300 font-bold text-center">✨ Créer mon compte</h3>
+                  <label className="flex flex-col gap-1 text-xs text-emerald-200">Pseudo
+                    <input value={cptPseudo} onChange={(e) => setCptPseudo(e.target.value.slice(0, 20))} maxLength={20}
+                      className="bg-emerald-950/70 border border-emerald-600 rounded-xl p-2.5 text-sm text-emerald-100" placeholder="Ton pseudo" />
+                  </label>
+                  <button onClick={cptCreer} disabled={cptBusy} className="btn-gold font-bold py-2.5 rounded-xl text-sm">{cptBusy ? "…" : "Créer"}</button>
+                  <button onClick={() => setCptMode("choix")} disabled={cptBusy} className="text-[11px] text-emerald-400 underline">← Retour</button>
+                  {cptErr && <div className="text-red-300 text-xs text-center">{cptErr}</div>}
+                </React.Fragment>
+              ) : (
+                <React.Fragment>
+                  <h3 className="text-amber-300 font-bold text-center">🔑 Reconnecter mon compte</h3>
+                  <p className="text-[11px] text-emerald-300 leading-relaxed">Entre ton code secret à 6 chiffres. C'est tout ce qu'il faut pour retrouver ton compte.</p>
+                  <label className="flex flex-col gap-1 text-xs text-emerald-200">Code secret
+                    <input inputMode="numeric" value={cptCode} onChange={(e) => { const v = e.target.value.replace(/\D/g, "").slice(0, 6); setCptCode(v); setCptErr(""); }}
+                      className="bg-emerald-950/70 border border-emerald-600 rounded-xl p-2.5 text-sm text-emerald-100 tracking-[.3em] text-center text-lg" placeholder="000000" autoFocus />
+                  </label>
+                  <button onClick={cptReconnecter} disabled={cptBusy || cptCode.length !== 6}
+                    className="btn-dark font-bold py-2.5 rounded-xl text-sm disabled:opacity-40">{cptBusy ? "…" : "Me connecter"}</button>
+                  <button onClick={() => setCptMode("choix")} disabled={cptBusy} className="text-[11px] text-emerald-400 underline">← Retour</button>
+                  {cptErr && <div className="text-red-300 text-xs text-center">{cptErr}</div>}
+                </React.Fragment>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Multijoueur local — uniquement dans l'app (Bluetooth/WiFi direct, sans internet) */}
         {!showMp && !showLocal && window.RamyLocalNet && window.RamyLocalNet.available() && (
           <button onClick={openLocal}
@@ -1824,7 +1953,7 @@ function App() {
         <div className="flex gap-4 text-[11px] text-emerald-400 flex-wrap justify-center">
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
-          <span className="opacity-60">v2246-U</span>
+          <span className="opacity-60">v2247-U</span>
         </div>
       </div>
     );
