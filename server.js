@@ -24,6 +24,20 @@ app.use((req, res, next) => {
   next();
 });
 
+// CORS : autorise l'app native (capacitor://localhost…) à appeler les routes compte/stats.
+// La liste ALLOWED_ORIGINS est la même que celle du multijoueur socket.io (définie plus bas).
+app.use((req, res, next) => {
+  const origin = req.headers.origin || "";
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  }
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
+
 // Limite de débit HTTP : 300 requêtes / minute / IP (anti-flood, sans dépendance externe)
 const httpHits = new Map();
 setInterval(() => httpHits.clear(), 60 * 1000);
