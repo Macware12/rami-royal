@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Test partie locale — Ramy Gasy</title>
+<meta name="theme-color" content="#052e16">
+<script>if (window.Capacitor) document.documentElement.classList.add("native-app");</script>
+<style>
+html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+input { -webkit-user-select: text; user-select: text; }
+html.native-app body { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+body { margin: 0; font-family: -apple-system, "Segoe UI", Roboto, sans-serif; color: #d1fae5;
+  background: radial-gradient(ellipse at 50% -10%, #1a6b42 0%, #14532d 45%, #052e16 100%); min-height: 100vh; }
+.wrap { max-width: 480px; margin: 0 auto; padding: 16px 14px 40px; display: flex; flex-direction: column; gap: 12px; }
+h1 { font-family: Georgia, serif; color: #fcd34d; text-align: center; margin: 4px 0; font-size: 26px; }
+.card { background: linear-gradient(180deg, rgba(6,58,42,.92), rgba(4,40,28,.95)); border: 1px solid #14705266;
+  border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+button { font: inherit; font-weight: bold; border: 0; border-radius: 12px; padding: 12px; cursor: pointer; }
+.gold { background: linear-gradient(180deg,#fcd34d,#f59e0b); color: #052e16; box-shadow: 0 3px 0 #b45309; }
+.dark { background: #064e36; color: #d1fae5; border: 1px solid #147052; }
+input { font: inherit; background: #02241866; border: 1px solid #147052; border-radius: 12px; padding: 10px; color: #d1fae5; }
+.log { font-size: 12px; background: #02181060; border-radius: 10px; padding: 10px; min-height: 120px; max-height: 300px; overflow-y: auto; white-space: pre-wrap; line-height: 1.5; }
+.peer { display: flex; justify-content: space-between; align-items: center; gap: 8px; background: #064e3644; border-radius: 10px; padding: 8px 10px; }
+.tag { font-size: 11px; color: #86efac; }
+.back { align-self: flex-start; color: #052e16; background: linear-gradient(180deg,#fcd34d,#f59e0b);
+  text-decoration: none; font-weight: bold; padding: 8px 14px; border-radius: 12px; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/">← Accueil</a>
+  <h1>🔧 Test partie locale</h1>
+  <p style="font-size:13px; text-align:center; margin:0;">Sans internet — Bluetooth/WiFi direct entre iPhones proches.<br>Active le Bluetooth et le WiFi (même en mode avion).</p>
+
+  <div class="card" id="setup">
+    <label style="font-size:13px;">Ton nom
+      <input id="name" placeholder="Joueur" maxlength="14" style="width:100%; box-sizing:border-box; margin-top:6px;">
+    </label>
+    <button class="gold" id="btnHost">📡 Créer une table (hôte)</button>
+    <button class="dark" id="btnBrowse">🔍 Chercher une table</button>
+  </div>
+
+  <div class="card" id="peersCard" style="display:none;">
+    <b style="font-size:14px;">Tables trouvées à proximité</b>
+    <div id="found" class="tag">Recherche en cours…</div>
+  </div>
+
+  <div class="card">
+    <b style="font-size:14px;">Connectés <span id="count" class="tag">(0)</span></b>
+    <div id="peers" class="tag">Personne pour l'instant.</div>
+    <button class="gold" id="btnPing" disabled>👋 Envoyer un coucou</button>
+  </div>
+
+  <div class="card">
+    <b style="font-size:14px;">Journal</b>
+    <div class="log" id="log"></div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const logEl = $("log");
+function log(t) {
+  logEl.textContent += new Date().toLocaleTimeString() + "  " + t + "\n";
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+const MP = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Multipeer;
+if (!MP) {
+  log("⚠️ Plugin Multipeer indisponible — cette page ne fonctionne que dans l'app iPhone (pas sur le web).");
+} else {
+  log("Plugin Multipeer prêt ✔");
+}
+
+let connected = {}; // id -> name
+
+function refreshPeers() {
+  const ids = Object.keys(connected);
+  $("count").textContent = "(" + ids.length + ")";
+  $("peers").textContent = ids.length ? ids.map((i) => "🟢 " + connected[i]).join("   ") : "Personne pour l'instant.";
+  $("btnPing").disabled = ids.length === 0;
+}
+
+if (MP) {
+  MP.addListener("peerFound", (p) => {
+    log("👀 Table repérée : " + p.name);
+    const d = document.createElement("div");
+    d.className = "peer";
+    d.id = "f-" + p.id;
+    d.innerHTML = "<span>🃏 " + p.name + "</span>";
+    const b = document.createElement("button");
+    b.className = "gold"; b.style.padding = "8px 12px"; b.textContent = "Rejoindre";
+    b.onclick = () => { log("→ On rejoint " + p.name + "…"); MP.joinHost({ id: p.id }); };
+    d.appendChild(b);
+    if ($("found").dataset.empty !== "no") { $("found").textContent = ""; $("found").dataset.empty = "no"; }
+    $("found").appendChild(d);
+  });
+  MP.addListener("peerLost", (p) => {
+    const el = $("f-" + p.id);
+    if (el) el.remove();
+    log("💨 Une table a disparu");
+  });
+  MP.addListener("peerConnected", (p) => {
+    connected[p.id] = p.name;
+    log("🤝 Connecté à " + p.name + " !");
+    refreshPeers();
+  });
+  MP.addListener("peerDisconnected", (p) => {
+    delete connected[p.id];
+    log("🔌 " + p.name + " déconnecté");
+    refreshPeers();
+  });
+  MP.addListener("message", (m) => {
+    log("📩 " + (connected[m.from] || "?") + " : " + m.data);
+    if (navigator.vibrate) navigator.vibrate(60);
+  });
+
+  $("btnHost").onclick = async () => {
+    const name = $("name").value.trim() || "Hôte";
+    await MP.startHosting({ name });
+    log("📡 Table « " + name + " » visible par les téléphones proches. Attends qu'on te rejoigne…");
+  };
+  $("btnBrowse").onclick = async () => {
+    const name = $("name").value.trim() || "Joueur";
+    $("peersCard").style.display = "";
+    await MP.startBrowsing({ name });
+    log("🔍 Recherche des tables à proximité…");
+  };
+  $("btnPing").onclick = () => {
+    MP.send({ data: "Coucou depuis " + ($("name").value.trim() || "un iPhone") + " ! 🎴" });
+    log("📤 Coucou envoyé");
+  };
+}
+</script>
+</body>
+</html>

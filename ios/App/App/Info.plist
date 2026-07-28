@@ -45,5 +45,12 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Ramy Gasy relie les téléphones proches pour jouer ensemble sans internet (mode avion).</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_ramygasy._tcp</string>
+		<string>_ramygasy._udp</string>
+	</array>
 </dict>
 </plist>
