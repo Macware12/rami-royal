@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2240-U">
+<meta name="version" content="v2241-U">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -2631,7 +2631,7 @@ function tapCard(id) {
               ))}
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             <label className="flex flex-col gap-1 text-xs">
               Adversaires (IA)
               <div className="flex gap-1">
@@ -2679,7 +2679,7 @@ function tapCard(id) {
             const ico = { filter: "drop-shadow(0 2px 3px rgba(0,0,0,.5))" };
             const nbSucces = Object.keys(readJSON("rami-succes")).length;
             return (
-              <div className="grid grid-cols-2 gap-2 pt-0.5">
+              <div className="pt-0.5" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                 <a href="/regles.html" className={tuile}>
                   <span className="text-xl leading-none" style={ico}>📖</span>
                   <span className={lbl}>Règles</span>
@@ -2792,7 +2792,7 @@ function tapCard(id) {
                           <div className="flex justify-between text-[10px] mt-0.5"><span className="text-amber-300">🏆 {wins}</span><span className="text-emerald-300">{games} parties</span><span className="text-red-300">{losses} perdues</span></div>
                         </div>
                       </div>
-                      <div className="grid grid-cols-3 gap-1.5">
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
                         <Stat v={b.bestScore != null ? b.bestScore : "—"} lbl="Record (pts)" />
                         <Stat v={avg != null ? avg : "—"} lbl="Score moyen" cls="text-emerald-200" />
                         <Stat v={b.bestManche != null ? b.bestManche : "—"} lbl="Meill. manche" cls="text-emerald-200" />
