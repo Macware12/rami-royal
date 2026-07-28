@@ -5,15 +5,23 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node tests/engine.test.js && node tests/gamehost.test.js"
+    "test": "node tests/engine.test.js && node tests/gamehost.test.js",
+    "cap:build": "node scripts/build-native.js",
+    "cap:sync": "node scripts/build-native.js && npx cap sync"
   },
   "engines": {
     "node": ">=18"
   },
   "dependencies": {
     "@babel/standalone": "^7.24.0",
+    "@capacitor/android": "6.2.1",
+    "@capacitor/core": "6.2.1",
+    "@capacitor/ios": "6.2.1",
     "express": "^4.19.2",
     "socket.io": "^4.7.5",
     "socket.io-client": "^4.8.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "6.2.1"
   }
 }

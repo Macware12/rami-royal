@@ -1,0 +1,15 @@
+{
+  "appId": "com.ramygasy.app",
+  "appName": "Ramy Gasy",
+  "webDir": "www-native",
+  "server": {
+    "androidScheme": "https"
+  },
+  "ios": {
+    "contentInset": "automatic",
+    "backgroundColor": "#052e16"
+  },
+  "android": {
+    "backgroundColor": "#052e16"
+  }
+}
