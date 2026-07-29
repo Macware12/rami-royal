@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2283-M">
+<meta name="version" content="v2284-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2283-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2284-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -957,6 +957,7 @@ function App() {
   const [cptStats, setCptStats] = useState(false); // modale statistiques depuis le profil
   const [cptMenu, setCptMenu] = useState(false); // hub réglages ouvert par la pastille
   const [defiClassement, setDefiClassement] = useState(null); // null | "chargement" | { données du classement }
+  const [salonEnCours, setSalonEnCours] = useState(null); // salon multijoueur mémorisé sur le compte
   const [defiAmi, setDefiAmi] = useState(null); // null | "menu" | { id } — modale défi entre amis
   const [defiAmiData, setDefiAmiData] = useState(null); // "chargement" | données | { erreur }
   const [defiAmiCode, setDefiAmiCode] = useState("");
@@ -1285,6 +1286,13 @@ function App() {
     const raw = store.get("ramimp-save");
     if (raw) { try { setSaved(JSON.parse(raw)); } catch (_) {} }
     flushParties(); // parties jouées hors ligne : on les envoie maintenant
+    const accSalon = readJSONls("rami-account");
+    if (accSalon.code) {
+      fetch(API_BASE + "/compte/salon", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: accSalon.code }) })
+        .then((r) => r.json())
+        .then((d) => { if (d && d.salon) setSalonEnCours(d); })
+        .catch(() => {});
+    }
     const accBoot = readJSONls("rami-account");
     if (accBoot.code) {
       fetch(API_BASE + "/compte/info", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: accBoot.code }) })
@@ -1545,6 +1553,14 @@ function App() {
       setSaved(null);
     });
   }
+  function reprendreSalonCompte() {
+    if (!salonEnCours || !compteActif) return;
+    ensureAudio();
+    socket.emit("joinRoom", { code: salonEnCours.salon, name: nomJoueur(), avatar, compte: compteActif.code }, (res) => {
+      if (!res.ok) { setMsg(res.error || "Reprise impossible — le salon a peut-être fermé."); setSalonEnCours(null); }
+    });
+  }
+
   // ---------- Multijoueur local (app, sans internet) ----------
   function openLocal() {
     try {
@@ -1947,6 +1963,19 @@ function App() {
             </a>
           );
           return (<>
+            {salonEnCours && compteActif && (
+              <button onClick={reprendreSalonCompte}
+                className="panel rounded-2xl p-4 w-full max-w-xs flex items-center gap-3 text-emerald-100 text-left" style={{ borderColor: "#34d39988" }}>
+                <span className="text-3xl">🌐</span>
+                <span className="flex-1">
+                  <span className="block font-bold text-base text-emerald-200">Reprendre ta partie multijoueur</span>
+                  <span className="block text-xs text-emerald-300">
+                    Salon {salonEnCours.salon} · {salonEnCours.joueurs} joueur{salonEnCours.joueurs > 1 ? "s" : ""}{salonEnCours.enPartie ? " · en cours" : " · en attente"}
+                  </span>
+                </span>
+                <span className="text-amber-300 text-xl font-bold">→</span>
+              </button>
+            )}
             {dejaJoue ? carteSolo : carteTuto}
             {dejaJoue ? carteTuto : carteSolo}
             <button onClick={() => { setDefiAmi("menu"); setDefiAmiData(null); setDefiAmiCode(""); }}
@@ -2047,7 +2076,7 @@ function App() {
               <p className="text-[10px] text-emerald-400 text-center -mt-1">« 4 couleurs » : ♦ en bleu et ♣ en vert — pensé pour le daltonisme.</p>
               <a href="/signaler.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🚩 Signaler un joueur</a>
               <a href="/confidentialite.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🔒 Confidentialité</a>
-              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2283-M</div>
+              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2284-M</div>
             </div>
           </div>
         )}
@@ -2581,7 +2610,7 @@ function App() {
           </div>
         )}
         <div className="flex gap-2 text-[11px] text-emerald-400 flex-wrap justify-center items-center pb-4">
-          <span className="opacity-60 self-center">v2283-M</span>
+          <span className="opacity-60 self-center">v2284-M</span>
         </div>
       </div>
     );

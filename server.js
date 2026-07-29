@@ -632,6 +632,56 @@ app.post("/moderation/action", (req, res) => {
   res.status(400).json({ erreur: "Action inconnue." });
 });
 
+// ---------- Partie solo en cours liée au compte (reprise sur n'importe quel appareil) ----------
+app.post("/compte/sauvegarde", (req, res) => {
+  if (tropDEssais(req, res)) return;
+  const { code, g } = req.body || {};
+  const c = typeof code === "string" && /^[0-9]{6}$/.test(code.trim()) ? comptes.get(code.trim()) : null;
+  if (!c) return res.status(404).json({ erreur: "Code inexistant." });
+  if (g === null || g === undefined) {
+    delete c.partieSolo; // partie terminée ou abandonnée
+  } else {
+    const taille = JSON.stringify(g).length;
+    if (taille > 100000) return res.status(400).json({ erreur: "Sauvegarde trop lourde." });
+    c.partieSolo = { g, maj: Date.now() };
+  }
+  c.lastSeen = Date.now();
+  saveComptes();
+  res.json({ ok: true });
+});
+
+app.post("/compte/reprendre", (req, res) => {
+  if (tropDEssais(req, res)) return;
+  const { code } = req.body || {};
+  const c = typeof code === "string" && /^[0-9]{6}$/.test(code.trim()) ? comptes.get(code.trim()) : null;
+  if (!c) return res.status(404).json({ erreur: "Code inexistant." });
+  if (!c.partieSolo || Date.now() - c.partieSolo.maj > 7 * 86400000) return res.json({ g: null }); // 7 jours max
+  res.json({ g: c.partieSolo.g, maj: c.partieSolo.maj });
+});
+
+// Salon multijoueur en cours du compte (repris automatiquement sur tout appareil)
+app.post("/compte/salon", (req, res) => {
+  if (tropDEssais(req, res)) return;
+  const { code } = req.body || {};
+  const c = typeof code === "string" && /^[0-9]{6}$/.test(code.trim()) ? comptes.get(code.trim()) : null;
+  if (!c) return res.status(404).json({ erreur: "Code inexistant." });
+  if (c.salonEnCours) {
+    const room = rooms.get(c.salonEnCours);
+    const siege = room && room.players.find((p) => p.compte === c.code);
+    if (room && siege) {
+      return res.json({
+        salon: room.code,
+        hote: room.players[0] ? room.players[0].name : "?",
+        joueurs: room.players.filter((p) => !p.isBot).length,
+        enPartie: room.state === "playing",
+      });
+    }
+    delete c.salonEnCours; // salon disparu : on oublie
+    saveComptes();
+  }
+  res.json({ salon: null });
+});
+
 // ---------- Enregistrement d'une partie terminée (comptage par deltas) ----------
 // Chaque partie est envoyée individuellement : le comptage reste juste même si le joueur
 // est connecté sur deux appareils en même temps (l'ancienne synchro par cumuls prenait le max).
@@ -1795,7 +1845,7 @@ io.on("connection", (socket) => {
     detachFromRoom();
     const room = createRoom(name, options);
     const player = addPlayer(room, name, false, avatar);
-    if (cptC) player.compte = cptC.code; // jamais diffusé (publicPlayer ne l'expose pas)
+    if (cptC) { player.compte = cptC.code; cptC.salonEnCours = room.code; saveComptes(); } // jamais diffusé (publicPlayer ne l'expose pas)
     player.socketId = socket.id;
     player.connected = true;
     myRoom = room; myToken = player.token;
@@ -1819,6 +1869,7 @@ io.on("connection", (socket) => {
         return cb({ ok: false, error: "Ce compte est déjà à la table sur un autre appareil." });
       if (siege) {
         // Reprise du siège depuis un autre appareil (même en cours de partie)
+        cptJ.salonEnCours = room.code; saveComptes();
         siege.socketId = socket.id;
         siege.connected = true;
         siege.absent = false;
@@ -1835,7 +1886,7 @@ io.on("connection", (socket) => {
     if (room.state !== "lobby") return cb({ ok: false, error: "La partie a déjà commencé (utilise « Reprendre » si tu en faisais partie)." });
     if (room.players.length >= 6) return cb({ ok: false, error: "Salon complet (6 joueurs max)." });
     const player = addPlayer(room, name, false, avatar);
-    if (cptJ) player.compte = cptJ.code;
+    if (cptJ) { player.compte = cptJ.code; cptJ.salonEnCours = room.code; saveComptes(); }
     player.socketId = socket.id;
     player.connected = true;
     myRoom = room; myToken = player.token;
@@ -2057,6 +2108,7 @@ io.on("connection", (socket) => {
     if (!myRoom) return;
     const me = findMe();
     if (!me) return;
+    if (me.p.compte) { const cptL = comptes.get(me.p.compte); if (cptL && cptL.salonEnCours === myRoom.code) { delete cptL.salonEnCours; saveComptes(); } }
     me.p.connected = false;
     me.p.absent = true;
     me.p.socketId = null;

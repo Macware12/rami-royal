@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2283-M">
+<meta name="version" content="v2284-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2283-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2284-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -1356,7 +1356,11 @@ function RamiRoyal() {
   function quitToHome() {
     clearTimeout(aiTimer.current);
     clearTimeout(introTimer.current);
-    if (!tuto) { store.del("rami-save"); setHasSave(false); } // quitter le tutoriel ne doit pas détruire la sauvegarde d'une vraie partie
+    if (!tuto) {
+      store.del("rami-save"); store.del("rami-save-maj"); setHasSave(false);
+      const accQ = readJSON("rami-account");
+      if (accQ.code) fetch(API_BASE + "/compte/sauvegarde", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: accQ.code, g: null }) }).catch(() => {});
+    } // quitter le tutoriel ne doit pas détruire la sauvegarde d'une vraie partie
     else setHasSave(Boolean(store.get("rami-save")));
     setTuto(false);
     setIntro(null);
@@ -1502,8 +1506,21 @@ function RamiRoyal() {
     return () => { document.removeEventListener("visibilitychange", onVis); try { lock && lock.release(); } catch (_) {} };
   }, [screen]);
 
+  const derniereSauvServeur = useRef(0);
   useEffect(() => {
-    if (screen === "game" && g && !tuto) store.set("rami-save", JSON.stringify({ g }));
+    if (screen === "game" && g && !tuto) {
+      store.set("rami-save", JSON.stringify({ g }));
+      store.set("rami-save-maj", String(Date.now()));
+      // Compte connecté : la partie suit le joueur sur tous ses appareils (envoi au plus toutes les 10 s)
+      const accS = readJSON("rami-account");
+      if (accS.code && Date.now() - derniereSauvServeur.current > 10000) {
+        derniereSauvServeur.current = Date.now();
+        fetch(API_BASE + "/compte/sauvegarde", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: accS.code, g }),
+        }).catch(() => {});
+      }
+    }
   }, [g, screen]);
 
   useEffect(() => {
@@ -1535,6 +1552,21 @@ function RamiRoyal() {
     const savedName = store.get("rami-name"); if (savedName) setPlayerName(savedName);
     // Compte connecté : on rafraîchit les stats depuis le serveur (silencieux si hors ligne)
     flushParties(); // parties jouées hors ligne : on les envoie maintenant
+    const accR = readJSON("rami-account");
+    if (accR.code) {
+      fetch(API_BASE + "/compte/reprendre", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: accR.code }) })
+        .then((r) => r.json())
+        .then((d) => {
+          if (!d || !d.g) return;
+          const majLocale = parseInt(store.get("rami-save-maj") || "0", 10) || 0;
+          if (d.maj > majLocale) { // la partie d'un autre appareil est plus récente : elle gagne
+            store.set("rami-save", JSON.stringify({ g: d.g }));
+            store.set("rami-save-maj", String(d.maj));
+            setHasSave(true);
+          }
+        })
+        .catch(() => {});
+    }
     const acc = readJSON("rami-account");
     if (acc.code) {
       fetch(API_BASE + "/compte/info", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: acc.code }) })
@@ -2732,6 +2764,9 @@ function tapCard(id) {
     const manches = g.manches || MANCHES;
     if (g.mancheIdx + 1 >= manches.length) {
       store.del("rami-save");
+      store.del("rami-save-maj");
+      const accFin = readJSON("rami-account");
+      if (accFin.code) fetch(API_BASE + "/compte/sauvegarde", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: accFin.code, g: null }) }).catch(() => {});
       const ranking = [...g.players].sort((a, b) => a.total - b.total);
       const won = ranking[0] === g.players[0];
       if (g.defiAmi) {
