@@ -470,9 +470,10 @@ function envoyerEmail(sujet, corps) {
   // se désynchronise (les serveurs répondent en plusieurs lignes à EHLO).
   function brancher(s) {
     sock = s;
-    s.setTimeout(20000, () => { console.error("Email de signalement : délai dépassé"); s.destroy(); });
-    s.on("error", (e) => console.error("Email de signalement non envoyé:", e.message));
+    s.setTimeout(20000, () => { console.error("Email de signalement : délai dépassé (le serveur SMTP ne répond pas — port bloqué ?)"); s.destroy(); });
+    s.on("error", (e) => console.error("Email de signalement non envoyé:", (e && e.code) || "?", (e && e.message) || "(sans message)", e));
     s.on("data", (buf) => {
+      if (process.env.SMTP_DEBUG) console.log("SMTP <", buf.toString().trim().slice(0, 200)); // dialogue visible avec SMTP_DEBUG=1
       tampon += buf.toString();
       const lignes = tampon.split(/\r?\n/);
       tampon = lignes.pop() || "";
@@ -490,7 +491,8 @@ function envoyerEmail(sujet, corps) {
           brancher(sur);
           return;
         }
-        if (i >= etapes.length) { s.end(); return; }
+        if (i >= etapes.length) { if (process.env.SMTP_DEBUG) console.log("SMTP : dialogue terminé, email transmis"); s.end(); return; }
+        if (process.env.SMTP_DEBUG) console.log("SMTP >", i === 3 ? "(mot de passe)" : etapes[i].slice(0, 60));
         s.write(etapes[i++] + "\r\n");
       }
     });
