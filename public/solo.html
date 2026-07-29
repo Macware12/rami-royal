@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2292-M">
+<meta name="version" content="v2293-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2292-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2293-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -100,6 +100,29 @@ const store = {
   set(k, v) { try { window.localStorage.setItem(k, v); } catch (_) {} },
   del(k) { try { window.localStorage.removeItem(k); } catch (_) {} },
 };
+
+// Remise à zéro ponctuelle (v2293) : les visiteurs SANS compte repartent comme à
+// une première visite (page d'accueil, ordre des cartes, stats locales). Ne se
+// produit qu'une seule fois — le marqueur empêche toute récidive. Les joueurs
+// connectés ne sont pas touchés : leur progression vit dans leur compte.
+(function () {
+  try {
+    const MARQUE = "rami-raz-2293";
+    if (window.localStorage.getItem(MARQUE)) return;
+    let compte = null;
+    try { compte = JSON.parse(window.localStorage.getItem("rami-account") || "null"); } catch (_) {}
+    if (!(compte && compte.code)) {
+      const garder = { "rami-jeton": 1, "rami-admin-cle": 1 };
+      const cles = [];
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const k = window.localStorage.key(i);
+        if (k && (k.indexOf("rami") === 0 || k.indexOf("ramimp") === 0) && !garder[k]) cles.push(k);
+      }
+      cles.forEach((k) => { try { window.localStorage.removeItem(k); } catch (_) {} });
+    }
+    window.localStorage.setItem(MARQUE, "1");
+  } catch (_) {}
+})();
 
 // Préférences d'affichage (accessibilité)
 const UI_PREFS = {
