@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2282-M">
+<meta name="version" content="v2283-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2282-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2283-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -1303,50 +1303,6 @@ function RamiRoyal() {
     }
   }, [tutoFlags, tuto]);
 
-  // Mode aperçu (?rendu=1 ou ?rendu=2) : table remplie de combinaisons factices pour juger
-  // la mise en page sans jouer — vrais composants, vrai CSS.
-  function montrerRenduTest(variante) {
-    let uid = 900000;
-    const mk = (rank, suit) => ({ id: ++uid, rank, suit, joker: false });
-    const jk = () => ({ id: ++uid, rank: 0, suit: "★", joker: true });
-    const tri = (owner, rank, n) => ({ id: ++uid, type: "tri", owner,
-      cards: Array.from({ length: n }, (_, i) => mk(rank, SUITS[i % 4])) });
-    const esc = (owner, suit, debut, n, avecJoker) => ({ id: ++uid, type: "esc", owner,
-      cards: Array.from({ length: n }, (_, i) => (avecJoker && i === 2 ? jk() : mk(debut + i, suit))) });
-    const noms = ["Toi", "Joueur 2", "Joueur 3", "Joueur 4", "Joueur 5", "Joueur 6"];
-    const nbJoueurs = variante === 2 ? 6 : 5;
-    const players = Array.from({ length: nbJoueurs }, (_, i) => ({
-      name: noms[i], isAI: i > 0, avatar: AVATARS_POOL[i], color: AVATAR_COLORS[i % AVATAR_COLORS.length],
-      hand: i === 0 ? [mk(4, "♥"), mk(4, "♠"), jk(), mk(9, "♦"), mk(10, "♦"), mk(11, "♦"), mk(1, "♣"), mk(7, "♣")] : Array.from({ length: 3 + i }, () => mk(5, "♠")),
-      posed: true, buysLeft: 2 - (i % 3), lastTaken: i > 0 ? mk(8 + i, "♣") : null, total: 40 * i + 15,
-    }));
-    const melds = variante === 2 ? [
-      tri(0, 4, 3), esc(0, "♥", 3, 7, true),
-      tri(1, 7, 5), tri(1, 9, 3), tri(1, 12, 4), tri(1, 2, 3),
-      esc(2, "♠", 1, 13), esc(2, "♦", 5, 4),
-      tri(3, 10, 6), esc(3, "♣", 7, 5, true), tri(3, 1, 3),
-      esc(4, "♥", 8, 6), tri(4, 13, 4), tri(4, 3, 3), tri(4, 6, 3),
-      tri(5, 11, 3), esc(5, "♦", 1, 5),
-    ] : [
-      tri(0, 4, 3), esc(0, "♥", 3, 5, true),
-      tri(1, 1, 6), tri(1, 2, 3), tri(1, 4, 5),
-      tri(2, 2, 4), tri(2, 3, 6), tri(2, 8, 5), tri(2, 12, 3),
-      esc(3, "♠", 5, 8, true),
-      esc(4, "♦", 9, 4), esc(4, "♣", 1, 6),
-    ];
-    ensureAudio();
-    setTuto(false);
-    setG({
-      rendu: true, players, melds, staged: [], animEvents: [], animSeq: 0, takenCards: [], lastDrawn: [], justPosed: false, roundOver: null, discardLocked: false,
-      stock: Array.from({ length: 30 }, () => mk(6, "♦")), discard: [mk(11, "♦")],
-      mancheIdx: 3, manches: MANCHES, turn: 0, phase: "play", buyWindow: null,
-      history: [], log: ["Mode aperçu — mise en page de la table"], startedAt: Date.now(),
-      level: "difficile", shortMode: false,
-    });
-    setSelected([]); setMsg("Mode aperçu : juge la mise en page, rien n'est jouable. Recharge la page pour sortir.");
-    setScreen("game");
-  }
-
   function startTuto() {
     tutoDraws.current = 0;
     tourPrev.current = { aide: false, scores: false, regles: false };
@@ -1547,7 +1503,7 @@ function RamiRoyal() {
   }, [screen]);
 
   useEffect(() => {
-    if (screen === "game" && g && !tuto && !g.rendu) store.set("rami-save", JSON.stringify({ g }));
+    if (screen === "game" && g && !tuto) store.set("rami-save", JSON.stringify({ g }));
   }, [g, screen]);
 
   useEffect(() => {
@@ -1563,11 +1519,6 @@ function RamiRoyal() {
     if (window.location.search.indexOf("defi=1") !== -1) {
       window.history.replaceState(null, "", window.location.pathname);
       setTimeout(() => startGame({ defi: true, level: "difficile", shortMode: true }), 0);
-    }
-    const mRendu = window.location.search.match(/rendu=([12])/);
-    if (mRendu) {
-      window.history.replaceState(null, "", window.location.pathname);
-      setTimeout(() => montrerRenduTest(parseInt(mRendu[1], 10)), 0);
     }
     const mAmi = window.location.search.match(/defiami=([A-Za-z0-9]{5})/);
     if (mAmi) {
