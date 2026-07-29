@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2276-M">
+<meta name="version" content="v2277-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2276-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2277-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -100,9 +100,11 @@ const STYLE = (
       /* La zone des combinaisons prend l'allure d'un feutre de table */
       .table-zone { border: 2px solid rgba(252, 211, 77, .10); border-radius: 22px; margin: 6px 12px;
         box-shadow: inset 0 0 70px rgba(0, 0, 0, .28);
-        justify-content: safe center; } /* peu de rangées : centrées verticalement */
-      /* Chaque rangée centre ses combinaisons (« safe » : revient à gauche si ça déborde) */
-      .table-zone > div { justify-content: safe center; }
+        align-content: safe center; } /* peu de lignes : centrées verticalement dans le feutre */
+    }
+    /* Très grand écran : combinaisons légèrement agrandies pour profiter de la largeur */
+    @media (min-width: 1000px) {
+      .table-zone { zoom: 1.12; }
     }
     @media (min-width: 900px) {
       .fit-screen { max-width: 860px; margin: 0 auto; border-left: 1px solid #14705244; border-right: 1px solid #14705244; box-shadow: 0 0 60px rgba(0,0,0,.5); }
@@ -2019,7 +2021,7 @@ function App() {
               <p className="text-[10px] text-emerald-400 text-center -mt-1">« 4 couleurs » : ♦ en bleu et ♣ en vert — pensé pour le daltonisme.</p>
               <a href="/signaler.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🚩 Signaler un joueur</a>
               <a href="/confidentialite.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🔒 Confidentialité</a>
-              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2276-M</div>
+              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2277-M</div>
             </div>
           </div>
         )}
@@ -2541,7 +2543,7 @@ function App() {
           </div>
         )}
         <div className="flex gap-2 text-[11px] text-emerald-400 flex-wrap justify-center items-center pb-4">
-          <span className="opacity-60 self-center">v2276-M</span>
+          <span className="opacity-60 self-center">v2277-M</span>
         </div>
       </div>
     );
@@ -2804,7 +2806,7 @@ function App() {
 
       {/* Table regroupée par joueur */}
       <div className="flex-1 relative" style={{ minHeight: 120 }}>
-        <div ref={tableScrollRef} className="table-zone absolute inset-0 overflow-y-auto px-2 py-1 flex flex-col gap-1.5 content-start">
+        <div ref={tableScrollRef} className="table-zone absolute inset-0 overflow-y-auto px-2 py-1 flex flex-wrap gap-1.5 content-start items-center" style={{ paddingRight: 84 }}>
           {g.melds.length === 0 && (
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center px-6">
               <div className="text-6xl" style={{ opacity: 0.16, filter: "drop-shadow(0 4px 8px rgba(0,0,0,.4))" }}>🎴</div>
@@ -2813,19 +2815,18 @@ function App() {
             </div>
           )}
           {[...new Set(g.melds.map((m) => m.owner))].map((o) => (
-            <div key={o} className="flex items-center gap-1.5 overflow-x-auto" style={{ paddingRight: 84 }}>
-              <span className="shrink-0 text-base" style={{ width: 22 }} title={(srv.players[o] || {}).name}>
+            <React.Fragment key={o}>
+              <span className="text-base" style={{ width: 22 }} title={(srv.players[o] || {}).name}>
                 {(srv.players[o] || {}).avatar || "🙂"}
               </span>
-              {/* Réduction seulement si CETTE rangée est chargée (la rangée défile déjà horizontalement) */}
-              {g.melds.filter((m) => m.owner === o).map((m, _i, arr) => (
+              {g.melds.filter((m) => m.owner === o).map((m) => (
                 <MeldChip key={m.id} mid={m.id} meld={m}
                   small={true}
                   highlight={(me.posed && selected.length === 1 && myTurn) || (Boolean(drag) && !drag.fromDiscard && me.posed && myTurn && g.phase === "play")}
                   onClick={() => { if (myTurn && selected.length === 1) { completeWith(m.id, selected[0]); setSelected([]); } }}
                   onLongPress={setZoomMeld} />
               ))}
-            </div>
+            </React.Fragment>
           ))}
         </div>
         {g.melds.length > 0 && (
