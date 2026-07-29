@@ -537,6 +537,14 @@ function adminOk(req, res) {
   return true;
 }
 
+// Test de la configuration email (admin) : /moderation/test-email?cle=CLE
+app.get("/moderation/test-email", (req, res) => {
+  if (!adminOk(req, res)) return;
+  if (!SMTP.pass) return res.json({ ok: false, info: "SMTP_PASS n'est pas défini sur le serveur — aucun envoi possible." });
+  envoyerEmail("Test Ramy Gasy ✔", "Si tu lis ceci, l'envoi d'emails de signalement fonctionne.\nEnvoyé le " + new Date().toISOString());
+  res.json({ ok: true, info: "Tentative d'envoi lancée vers " + SMTP.dest + " (expéditeur " + SMTP.user + "). Vérifie ta boîte (et les spams) ainsi que les logs Render en cas d'échec." });
+});
+
 app.get("/moderation/liste", (req, res) => {
   if (!adminOk(req, res)) return;
   res.json({
