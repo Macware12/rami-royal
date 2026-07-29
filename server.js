@@ -260,6 +260,8 @@ function noteEchecCode(req) {
   if (codeEchecs.size > 20000) codeEchecs.clear(); // borne mémoire
 }
 
+const MOD = require("./moderation"); // filtre des pseudos (grossièretés, insultes)
+const MESSAGE_BANNI = "Ce compte a été suspendu pour non-respect des règles de la communauté.";
 // Un pseudo doit rester lisible : ni chevrons (anti-HTML), ni caractères de contrôle invisibles
 const CARACTERES_INTERDITS = /[<>\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\ufeff]/;
 const pseudoValide = (p) => typeof p === "string" && p.trim().length >= 2 && p.trim().length <= 20
@@ -298,6 +300,8 @@ app.post("/compte/creer", (req, res) => {
   if (tropDEssais(req, res)) return;
   if (tropDeComptes(req, res)) return;
   if (!pseudoValide(req.body && req.body.pseudo)) return res.status(400).json({ erreur: "Pseudo invalide (2 à 20 caractères)." });
+  const refus = MOD.verifierPseudo(req.body.pseudo);
+  if (refus) return res.status(400).json({ erreur: refus });
   if (comptes.size >= MAX_COMPTES) return res.status(503).json({ erreur: "Plus de place pour de nouveaux comptes." });
   // Un pseudo = un seul compte (comparaison sans tenir compte des majuscules)
   const voulu = req.body.pseudo.trim().toLowerCase();
@@ -332,6 +336,7 @@ app.post("/compte/connexion", (req, res) => {
   if (tropDEssais(req, res) || bloquePourEchecs(req, res)) return;
   const c = trouveCompte(req);
   if (!c) { noteEchecCode(req); return res.status(404).json({ erreur: "Pseudo ou code incorrect." }); }
+  if (c.banni) return res.status(403).json({ erreur: MESSAGE_BANNI });
   c.lastSeen = Date.now(); saveComptes();
   res.json(compteJson(c));
 });
@@ -353,6 +358,8 @@ app.post("/compte/renommer", (req, res) => {
     return res.status(429).json({ erreur: "Pseudo modifiable une fois par semaine — réessaie dans " + jours + " jour" + (jours > 1 ? "s" : "") + "." });
   }
   if (!pseudoValide(req.body && req.body.pseudo)) return res.status(400).json({ erreur: "Pseudo invalide (2 à 20 caractères)." });
+  const refusRenom = MOD.verifierPseudo(req.body.pseudo);
+  if (refusRenom) return res.status(400).json({ erreur: refusRenom });
   const voulu = req.body.pseudo.trim();
   for (const a of comptes.values()) {
     if (a !== c && a.pseudo.toLowerCase() === voulu.toLowerCase())
@@ -399,6 +406,150 @@ app.post("/compte/profil", (req, res) => {
   c.lastSeen = Date.now();
   saveComptes();
   res.json(compteJson(c));
+});
+
+// ---------- Signalements et modération ----------
+// L'App Store (règle 1.2) impose, pour tout contenu écrit par les utilisateurs :
+// un filtre, un moyen de signaler, et la possibilité d'écarter un joueur abusif.
+// Les signalements sont toujours stockés (rien ne se perd), et un email est envoyé
+// en plus si GMAIL_USER / GMAIL_PASS sont configurés sur Render.
+const SIGNALEMENTS_FILE = process.env.SIGNALEMENTS_FILE || path.join(__dirname, "signalements-save.json");
+const signalements = []; // { id, cible, pseudoCible, motif, details, par, at, traite }
+let signalementsTimer = null;
+function saveSignalements() {
+  clearTimeout(signalementsTimer);
+  signalementsTimer = setTimeout(() => {
+    while (signalements.length > 2000) signalements.shift(); // garde les plus récents
+    storage.save("signalements", signalements, SIGNALEMENTS_FILE)
+      .catch((e) => console.error("Sauvegarde des signalements impossible:", e.message));
+  }, 1000);
+}
+
+const MOTIFS = ["pseudo", "photo", "triche", "harcelement", "autre"];
+const MOTIFS_LISIBLES = {
+  pseudo: "Pseudo offensant", photo: "Photo inappropriée", triche: "Triche présumée",
+  harcelement: "Harcèlement", autre: "Autre",
+};
+
+// Envoi d'email (facultatif) — via Gmail, en SMTP direct pour éviter une dépendance de plus.
+// Prérequis côté Google : la validation en deux étapes, puis un « mot de passe d'application »
+// (myaccount.google.com/apppasswords) — le mot de passe habituel est refusé par Gmail.
+// Variables à définir sur Render : GMAIL_USER, GMAIL_PASS, et MODERATION_EMAIL si l'on veut
+// recevoir les alertes sur une autre adresse.
+function envoyerEmail(sujet, corps) {
+  const user = process.env.GMAIL_USER, pass = process.env.GMAIL_PASS;
+  const dest = process.env.MODERATION_EMAIL || user;
+  if (!user || !pass) return; // non configuré : les signalements restent consultables sur /moderation.html
+  const tls = require("tls");
+  const enc = (s) => Buffer.from(s, "utf8").toString("base64");
+  // Une ligne de réponse SMTP se termine par « 250 texte » ; « 250-texte » annonce une suite.
+  // Il faut donc attendre la ligne FINALE avant d'envoyer la commande suivante, sinon le
+  // dialogue se désynchronise (Gmail répond sur plusieurs lignes à EHLO).
+  const etapes = [
+    "EHLO ramygasy", "AUTH LOGIN", enc(user), enc(pass),
+    "MAIL FROM:<" + user + ">", "RCPT TO:<" + dest + ">", "DATA",
+    "From: Ramy Gasy <" + user + ">\r\nTo: " + dest + "\r\nSubject: =?UTF-8?B?" + enc(sujet) +
+      "?=\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n" +
+      String(corps).replace(/\r?\n\./g, "\n..") + "\r\n.",
+    "QUIT",
+  ];
+  let i = 0, tampon = "";
+  const sock = tls.connect(465, "smtp.gmail.com", () => {});
+  sock.setTimeout(20000, () => { console.error("Email de signalement : délai dépassé"); sock.destroy(); });
+  sock.on("data", (buf) => {
+    tampon += buf.toString();
+    const lignes = tampon.split(/\r?\n/);
+    tampon = lignes.pop() || "";
+    for (const ligne of lignes) {
+      if (!/^\d{3} /.test(ligne)) continue;           // ligne intermédiaire (« 250-… ») : on attend la suite
+      const code = parseInt(ligne.slice(0, 3), 10);
+      if (code >= 400) { console.error("Email de signalement refusé par Gmail :", ligne); sock.destroy(); return; }
+      if (i >= etapes.length) { sock.end(); return; }
+      sock.write(etapes[i++] + "\r\n");
+    }
+  });
+  sock.on("error", (e) => console.error("Email de signalement non envoyé:", e.message));
+}
+
+app.use("/signaler", express.json({ limit: "4kb" }));
+app.post("/signaler", (req, res) => {
+  if (tropDEssais(req, res)) return;
+  const { cible, motif, details, par } = req.body || {};
+  const cibleP = String(cible || "").trim().slice(0, 20);
+  if (!cibleP) return res.status(400).json({ erreur: "Indique le pseudo du joueur concerné." });
+  if (!MOTIFS.includes(String(motif))) return res.status(400).json({ erreur: "Motif invalide." });
+  if (signalements.length >= 2000) signalements.shift();
+  // Le compte visé est retrouvé par son pseudo (c'est ce que voit le joueur qui signale)
+  const vise = [...comptes.values()].find((c) => c.pseudo.toLowerCase() === cibleP.toLowerCase());
+  const s = {
+    id: crypto.randomBytes(6).toString("hex"),
+    cible: vise ? vise.code : null, pseudoCible: cibleP,
+    motif: String(motif), details: String(details || "").slice(0, 500),
+    par: String(par || "").slice(0, 20) || "anonyme",
+    at: Date.now(), traite: false,
+  };
+  signalements.push(s);
+  saveSignalements();
+  envoyerEmail(
+    "Ramy Gasy — signalement : " + MOTIFS_LISIBLES[s.motif],
+    "Joueur signalé : " + s.pseudoCible + (vise ? " (compte " + vise.code + ")" : " (compte introuvable)") +
+    "\nMotif : " + MOTIFS_LISIBLES[s.motif] +
+    "\nSignalé par : " + s.par +
+    "\nDate : " + new Date(s.at).toLocaleString("fr-FR") +
+    "\n\nDétails :\n" + (s.details || "(aucun)") +
+    "\n\nPage de modération : " + (process.env.RENDER_EXTERNAL_URL || "") + "/moderation.html"
+  );
+  res.json({ ok: true });
+});
+
+// --- Routes d'administration (protégées par STATS_KEY) ---
+function adminOk(req, res) {
+  const cle = String(req.query.cle || (req.body && req.body.cle) || "");
+  if (!STATS_KEY || cle !== STATS_KEY) { res.status(403).json({ erreur: "Accès refusé." }); return false; }
+  return true;
+}
+
+app.get("/moderation/liste", (req, res) => {
+  if (!adminOk(req, res)) return;
+  res.json({
+    signalements: [...signalements].reverse().slice(0, 200).map((s) => {
+      const c = s.cible ? comptes.get(s.cible) : null;
+      return { ...s, motifLisible: MOTIFS_LISIBLES[s.motif] || s.motif,
+        existe: Boolean(c), banni: Boolean(c && c.banni), aPhoto: Boolean(c && c.photo) };
+    }),
+  });
+});
+
+app.use("/moderation", express.json({ limit: "4kb" }));
+app.post("/moderation/action", (req, res) => {
+  if (!adminOk(req, res)) return;
+  const { action, code, id } = req.body || {};
+  if (action === "traiter") {
+    const s = signalements.find((x) => x.id === id);
+    if (!s) return res.status(404).json({ erreur: "Signalement introuvable." });
+    s.traite = true; saveSignalements();
+    return res.json({ ok: true });
+  }
+  const c = comptes.get(String(code || "").trim());
+  if (!c) return res.status(404).json({ erreur: "Compte introuvable." });
+  if (action === "bannir") {
+    c.banni = true;
+    for (const jour of defiScores.values()) jour.delete(c.code);   // retire ses scores des classements
+    for (const d of defisPrives.values()) delete d.scores[c.code];
+    saveComptes(); saveDefi(); saveDefisPrives();
+    return res.json({ ok: true, message: "Compte banni et retiré des classements." });
+  }
+  if (action === "debannir") { c.banni = false; saveComptes(); return res.json({ ok: true, message: "Compte réactivé." }); }
+  if (action === "renommer") {
+    c.pseudo = "Joueur" + crypto.randomInt(1000, 10000);
+    c.renamedAt = null; // le joueur pourra choisir un nouveau pseudo correct sans attendre
+    for (const jour of defiScores.values()) { const e = jour.get(c.code); if (e) e.pseudo = c.pseudo; }
+    for (const d of defisPrives.values()) if (d.scores[c.code]) d.scores[c.code].pseudo = c.pseudo;
+    saveComptes(); saveDefi(); saveDefisPrives();
+    return res.json({ ok: true, message: "Pseudo remplacé par « " + c.pseudo + " »." });
+  }
+  if (action === "photo") { c.photo = null; saveComptes(); return res.json({ ok: true, message: "Photo supprimée." }); }
+  res.status(400).json({ erreur: "Action inconnue." });
 });
 
 // ---------- Défi du jour : classement mondial ----------
@@ -574,6 +725,7 @@ app.post("/compte/info", (req, res) => {
   if (!/^[0-9]{6}$/.test(String(code).trim())) return res.status(400).json({ erreur: "Code invalide." });
   const c = comptes.get(String(code).trim());
   if (!c) { noteEchecCode(req); return res.status(404).json({ erreur: "Code inexistant." }); }
+  if (c.banni) return res.status(403).json({ erreur: MESSAGE_BANNI });
   c.lastSeen = Date.now(); saveComptes();
   res.json(compteJson(c));
 });
@@ -709,7 +861,13 @@ function addPlayer(room, name, isBot, wantedAvatar) {
   return player;
 }
 
+// Nom saisi dans un salon multijoueur (mode invité) : visible de toute la table.
+// Pas de canal d'erreur ici, donc un nom refusé est simplement remplacé.
 function sanitizeName(n) {
+  const propre = sanitizeNameBrut(n);
+  return MOD.verifierPseudo(propre) ? "Joueur" : propre;
+}
+function sanitizeNameBrut(n) {
   // Retire les chevrons (anti-HTML) et les caractères de contrôle invisibles, puis borne la longueur
   return String(n || "").replace(/[<>\u0000-\u001f\u007f]/g, "").trim().slice(0, 14) || "Joueur";
 }
@@ -1870,6 +2028,7 @@ function flushComptes() {
     storage.save("comptes", [...comptes.values()], ACCOUNTS_FILE),
     storage.save("defi", outDefi, DEFI_FILE),
     storage.save("defis-prives", Object.fromEntries(defisPrives), DEFIS_PRIVES_FILE),
+    storage.save("signalements", signalements, SIGNALEMENTS_FILE),
   ]).catch(() => {});
 }
 process.on("SIGTERM", () => { saveRooms(); Promise.resolve(flushComptes()).finally(() => setTimeout(() => process.exit(0), 800)); });
@@ -1907,6 +2066,10 @@ process.on("SIGINT", () => { saveRooms(); Promise.resolve(flushComptes()).finall
     if (dataPrives && typeof dataPrives === "object")
       Object.keys(dataPrives).forEach((id) => defisPrives.set(id, dataPrives[id]));
     if (defisPrives.size) console.log(defisPrives.size + " défi(s) privé(s) chargé(s)");
+    const dataSignal = await storage.load("signalements", SIGNALEMENTS_FILE);
+    if (Array.isArray(dataSignal)) dataSignal.forEach((s) => s && s.id && signalements.push(s));
+    const enAttente = signalements.filter((s) => !s.traite).length;
+    if (signalements.length) console.log(signalements.length + " signalement(s) chargé(s)" + (enAttente ? " — " + enAttente + " à traiter" : ""));
     await loadRooms();
   } catch (e) {
     console.error("ATTENTION — stockage indisponible, démarrage en mémoire seule :", e.message);

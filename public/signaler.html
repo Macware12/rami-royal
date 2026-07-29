@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Signaler un joueur — Ramy Gasy</title>
+<link rel="icon" href="/favicon.png" />
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #052e16; color: #d1fae5; padding: 20px 16px 40px;
+         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         max-width: 480px; margin: 0 auto; }
+  h1 { color: #fcd34d; font-size: 20px; margin: 4px 0 6px; }
+  p.intro { font-size: 13px; line-height: 1.6; opacity: .85; margin-bottom: 20px; }
+  label { display: block; font-size: 13px; margin: 14px 0 5px; color: #a7f3d0; font-weight: 600; }
+  input, select, textarea {
+    background: #022310; border: 1px solid #10b98166; border-radius: 12px; padding: 11px;
+    color: #d1fae5; font-size: 15px; width: 100%; box-sizing: border-box; font-family: inherit;
+  }
+  textarea { min-height: 90px; resize: vertical; }
+  button { background: linear-gradient(#f59e0b, #d97706); color: #451a03; border: none; border-radius: 12px;
+           padding: 13px; font-size: 15px; font-weight: bold; width: 100%; margin-top: 20px; cursor: pointer; }
+  button:disabled { opacity: .5; }
+  .retour { display: inline-block; margin-top: 20px; font-size: 13px; color: #6ee7b7; }
+  .ok { background: #065f46; border-radius: 14px; padding: 20px; text-align: center; line-height: 1.6; font-size: 14px; }
+  .err { color: #fca5a5; font-size: 13px; margin-top: 10px; }
+  .note { font-size: 11px; opacity: .6; margin-top: 6px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div id="form">
+  <h1>🚩 Signaler un joueur</h1>
+  <p class="intro">
+    Un pseudo choquant, une photo déplacée, un comportement déplaisant ?
+    Dis-le-nous. Chaque signalement est lu, et nous agissons rapidement en cas d'abus avéré.
+  </p>
+
+  <label for="cible">Pseudo du joueur concerné</label>
+  <input id="cible" maxlength="20" placeholder="Tel qu'il apparaît dans le jeu" />
+
+  <label for="motif">Que se passe-t-il ?</label>
+  <select id="motif">
+    <option value="pseudo">Pseudo offensant ou vulgaire</option>
+    <option value="photo">Photo de profil inappropriée</option>
+    <option value="harcelement">Harcèlement ou comportement agressif</option>
+    <option value="triche">Triche présumée</option>
+    <option value="autre">Autre</option>
+  </select>
+
+  <label for="details">Précisions (facultatif)</label>
+  <textarea id="details" maxlength="500" placeholder="Ce qui s'est passé, quand, dans quelle partie…"></textarea>
+
+  <button id="envoyer" onclick="envoyer()">Envoyer le signalement</button>
+  <div id="err" class="err"></div>
+  <p class="note">
+    Ton pseudo est joint au signalement pour nous permettre de te recontacter si besoin.
+    Les signalements manifestement abusifs peuvent eux-mêmes faire l'objet de sanctions.
+  </p>
+  <a href="/" class="retour">← Retour au jeu</a>
+</div>
+
+<div id="merci" style="display:none">
+  <h1>✅ Signalement envoyé</h1>
+  <div class="ok">
+    Merci — c'est noté.<br />
+    Nous examinons chaque signalement et intervenons sous 24 à 48 heures en cas d'abus avéré.
+  </div>
+  <a href="/" class="retour">← Retour au jeu</a>
+</div>
+
+<script src="/config.js"></script>
+<script>
+var API = (window.RAMI_CONFIG && window.RAMI_CONFIG.server) || "";
+// Pré-remplit le pseudo visé si on arrive depuis le jeu (?joueur=Untel)
+var vise = new URLSearchParams(location.search).get("joueur");
+if (vise) document.getElementById("cible").value = vise.slice(0, 20);
+
+function monPseudo() {
+  try { return (JSON.parse(localStorage.getItem("rami-account") || "{}").pseudo)
+    || localStorage.getItem("rami-name") || ""; } catch (e) { return ""; }
+}
+function envoyer() {
+  var cible = document.getElementById("cible").value.trim();
+  var err = document.getElementById("err");
+  if (!cible) { err.textContent = "Indique le pseudo du joueur concerné."; return; }
+  var btn = document.getElementById("envoyer");
+  btn.disabled = true; btn.textContent = "Envoi…"; err.textContent = "";
+  fetch(API + "/signaler", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      cible: cible,
+      motif: document.getElementById("motif").value,
+      details: document.getElementById("details").value.trim(),
+      par: monPseudo(),
+    }),
+  }).then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.erreur || "Erreur"); return d; }); })
+    .then(function () {
+      document.getElementById("form").style.display = "none";
+      document.getElementById("merci").style.display = "block";
+    })
+    .catch(function (e) {
+      btn.disabled = false; btn.textContent = "Envoyer le signalement";
+      err.textContent = e.message || "Serveur injoignable — réessaie.";
+    });
+}
+</script>
+</body>
+</html>
