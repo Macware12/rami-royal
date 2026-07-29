@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2286-M">
+<meta name="version" content="v2287-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2286-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2287-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -2239,7 +2239,7 @@ function tapCard(id) {
       return advise(topDiscard) ? "⭐ Cette carte t'aide : touche « Je la prends » (c'est gratuit)." : "⭐ Cette carte ne t'aide pas : touche « Laisser ».";
     }
     if (g.buyWindow) {
-      return advise(topDiscard) ? "💰 Tu peux ACHETER cette carte : touche « Acheter »." : "💰 Cette carte ne t'aide pas : touche « Passer ».";
+      return advise(topDiscard) ? "💰 Tu peux ACHETER cette carte : touche « Acheter ». Tes 3 jetons d'achat (🛒) sont dans le badge « Toi », à droite de la défausse." : "💰 Cette carte ne t'aide pas : touche « Passer ».";
     }
     if (!myTurn) return "👀 C'est au tour de " + g.players[g.turn].name + ". Patiente un instant…";
 
@@ -2871,7 +2871,7 @@ function tapCard(id) {
       },
       {
         emoji: "🎯", titre: "Le CONTRAT",
-        texte: "À chaque manche, un CONTRAT t'indique ce que tu dois former (par exemple : 1 tri + 1 escalier). Tu le réalises dans ta main, puis tu le POSES sur la table.",
+        texte: "À chaque manche, un CONTRAT t'indique ce que tu dois former (par exemple : 1 tri + 1 escalier). Tu le réalises dans ta main, puis tu le POSES sur la table. En jeu, ton badge « Toi » (à droite de la défausse) affiche tes points et tes achats restants 🛒.",
         cartes: null,
       },
       {
@@ -3481,7 +3481,7 @@ function tapCard(id) {
 
       {/* Pioche et défausse */}
       <div className="shrink-0 flex items-center justify-center gap-8 py-2 relative">
-        {!tuto && me && (
+        {me && (
           <div className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col items-center gap-1 bg-emerald-950/60 border border-amber-500/40 rounded-xl px-2.5 py-1.5"
             title={"Toi : " + me.total + " points au total" + (!me.posed ? " · tes achats restants cette manche" : "")}>
             <span className="text-[10px] font-bold text-amber-300">{me.avatar || "🙂"} Toi · {me.total} pts</span>
