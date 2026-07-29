@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2268-M">
+<meta name="version" content="v2269-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2268-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2269-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -1821,7 +1821,7 @@ function App() {
     const dejaJoue = Boolean(store.get("rami-played")); // premier lancement : « Apprendre » passe en tête
     const soloSave = Boolean(store.get("rami-save"));   // une partie solo attend d'être reprise
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6" style={bgStyle}>
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 pt-16" style={bgStyle}>
         {STYLE}
         {(showMp || showLocal) && (
           <button onClick={() => { setShowMp(false); if (showLocal) closeLocal(); }} className="fixed top-3 left-3 z-40 btn-gold rounded-xl px-3 py-1.5 text-xs font-bold">← Accueil</button>
@@ -1835,11 +1835,17 @@ function App() {
         {/* Cartes de jeu — la reprise d'abord, puis un ordre adapté au profil du visiteur */}
         {!showMp && !showLocal && (() => {
           const carteSolo = (
-            <a href="/solo.html" className="panel rounded-2xl p-4 w-full max-w-xs flex items-center gap-3 text-emerald-100 no-underline">
+            <a href={soloSave ? "/solo.html?reprendre=1" : "/solo.html"}
+              className="panel rounded-2xl p-4 w-full max-w-xs flex items-center gap-3 text-emerald-100 no-underline"
+              style={soloSave ? { borderColor: "#34d39988" } : {}}>
               <span className="text-3xl">🎮</span>
               <span className="flex-1">
                 <span className="block font-bold text-base">Jouer en solo</span>
-                <span className="block text-xs text-emerald-300">Contre l'ordinateur, tout de suite, sans compte</span>
+                {soloSave ? (
+                  <span className="block text-xs font-bold text-emerald-300">▶ Ta partie en cours t'attend — reprendre</span>
+                ) : (
+                  <span className="block text-xs text-emerald-300">Contre l'ordinateur, tout de suite, sans compte</span>
+                )}
               </span>
               <span className="text-amber-300 text-xl font-bold">→</span>
             </a>
@@ -1856,16 +1862,6 @@ function App() {
             </a>
           );
           return (<>
-            {soloSave && (
-              <a href="/solo.html?reprendre=1" className="panel rounded-2xl p-4 w-full max-w-xs flex items-center gap-3 text-emerald-100 no-underline" style={{ borderColor: "#34d39988" }}>
-                <span className="text-3xl">▶️</span>
-                <span className="flex-1">
-                  <span className="block font-bold text-base text-emerald-200">Reprendre ta partie</span>
-                  <span className="block text-xs text-emerald-300">Ta partie solo t'attend</span>
-                </span>
-                <span className="text-amber-300 text-xl font-bold">→</span>
-              </a>
-            )}
             {dejaJoue ? carteSolo : carteTuto}
             {dejaJoue ? carteTuto : carteSolo}
             <button onClick={() => { setDefiAmi("menu"); setDefiAmiData(null); setDefiAmiCode(""); }}
@@ -2461,7 +2457,7 @@ function App() {
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
           <a href="/signaler.html" className="underline">Signaler un joueur</a>
-          <span className="opacity-60">v2268-M</span>
+          <span className="opacity-60">v2269-M</span>
         </div>
       </div>
     );
