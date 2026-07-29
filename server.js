@@ -429,6 +429,8 @@ const MOTIFS = ["pseudo", "photo", "triche", "harcelement", "autre"];
 const MOTIFS_LISIBLES = {
   pseudo: "Pseudo offensant", photo: "Photo inappropriée", triche: "Triche présumée",
   harcelement: "Harcèlement", autre: "Autre",
+  // Messages envoyés via la page « Nous contacter » (même circuit que les signalements)
+  suggestion: "💡 Suggestion", probleme: "🐞 Problème / bug", question: "❓ Question", message: "💬 Message",
 };
 
 // ---------- Envoi d'email des signalements (facultatif) ----------
@@ -548,6 +550,36 @@ app.post("/signaler", (req, res) => {
     "\nSignalé par : " + s.par +
     "\nDate : " + new Date(s.at).toLocaleString("fr-FR") +
     "\n\nDétails :\n" + (s.details || "(aucun)") +
+    "\n\nPage de modération : " + (process.env.RENDER_EXTERNAL_URL || "") + "/moderation.html"
+  );
+  res.json({ ok: true });
+});
+
+// ---------- « Nous contacter » : suggestions, bugs, questions ----------
+// Les messages empruntent le circuit des signalements : stockés au même endroit,
+// visibles sur /moderation.html et comptés dans l'alerte du tableau de bord.
+app.use("/contact", express.json({ limit: "4kb" }));
+app.post("/contact", (req, res) => {
+  if (tropDEssais(req, res)) return;
+  const { motif, message, par } = req.body || {};
+  const m = ["suggestion", "probleme", "question"].includes(String(motif)) ? String(motif) : "message";
+  const texte = String(message || "").trim().slice(0, 1000);
+  if (!texte) return res.status(400).json({ erreur: "Écris ton message avant d'envoyer." });
+  if (signalements.length >= 2000) signalements.shift();
+  const s = {
+    id: crypto.randomBytes(6).toString("hex"),
+    cible: null, pseudoCible: "✉️ Nous contacter",
+    motif: m, details: texte,
+    par: String(par || "").slice(0, 20) || "anonyme",
+    at: Date.now(), traite: false,
+  };
+  signalements.push(s);
+  saveSignalements();
+  envoyerEmail(
+    "Ramy Gasy — " + MOTIFS_LISIBLES[m],
+    "De : " + s.par +
+    "\nDate : " + new Date(s.at).toLocaleString("fr-FR") +
+    "\n\nMessage :\n" + texte +
     "\n\nPage de modération : " + (process.env.RENDER_EXTERNAL_URL || "") + "/moderation.html"
   );
   res.json({ ok: true });

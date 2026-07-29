@@ -93,7 +93,7 @@ function afficher(list) {
     return '<div class="carte' + (s.traite ? " traite" : "") + '">' +
       '<div class="ligne"><span class="pseudo">' + esc(s.pseudoCible) + "</span>" +
         (s.banni ? ' <span class="badge">banni</span>' : "") +
-        (s.existe ? "" : ' <span class="meta">(compte supprimé)</span>') +
+        (s.existe || !s.cible ? "" : ' <span class="meta">(compte supprimé)</span>') +
         '<span class="motif">' + esc(s.motifLisible) + "</span></div>" +
       '<div class="meta">signalé par ' + esc(s.par) + " · " + esc(date) + "</div>" +
       (s.details ? '<div class="details">' + esc(s.details) + "</div>" : "") +
