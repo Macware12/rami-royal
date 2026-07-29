@@ -958,6 +958,8 @@ function App() {
   const [cptMenu, setCptMenu] = useState(false); // hub réglages ouvert par la pastille
   const [defiClassement, setDefiClassement] = useState(null); // null | "chargement" | { données du classement }
   const [salonEnCours, setSalonEnCours] = useState(null); // salon multijoueur mémorisé sur le compte
+  const [accueilChoisi, setAccueilChoisi] = useState(Boolean(store.get("rami-accueil-vu"))); // page d'entrée déjà vue
+  const [arriveeParLien] = useState(() => /salon=|defiami=|voirdefi=|classement=|reprendre=/.test(window.location.search));
   const [defiAmi, setDefiAmi] = useState(null); // null | "menu" | { id } — modale défi entre amis
   const [defiAmiData, setDefiAmiData] = useState(null); // "chargement" | données | { erreur }
   const [defiAmiCode, setDefiAmiCode] = useState("");
@@ -1915,6 +1917,32 @@ function App() {
   // ---------- Écrans ----------
   if (!srv) {
     const joinReady = joinCode.trim().length >= 5;
+
+    // Première visite (et pas d'arrivée par lien d'invitation) : on présente le compte UNE fois
+    if (!compteActif && !accueilChoisi && !arriveeParLien) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center gap-5 p-6" style={bgStyle}>
+          {STYLE}
+          <div className="text-center" style={{ textShadow: "0 3px 10px rgba(0,0,0,.6)" }}>
+            <h1 className="text-5xl text-amber-300" style={{ fontFamily: "Georgia, serif" }}>Ramy Gasy</h1>
+            <p className="text-emerald-200 text-sm mt-1">Le rami à contrats de Madagascar</p>
+          </div>
+          <div className="panel rounded-2xl p-5 w-full max-w-xs flex flex-col gap-3 text-emerald-100" style={{ borderColor: "#f59e0b66" }}>
+            <p className="text-sm text-center leading-relaxed">Bienvenue ! 🎴</p>
+            <p className="text-[12px] text-emerald-300 text-center leading-relaxed">
+              Avec un <b className="text-amber-300">compte gratuit</b> (pseudo + code à 6 chiffres, sans email) :
+              tes stats et succès te suivent partout, tu reprends tes parties sur n'importe quel appareil,
+              et tu entres aux classements des défis.
+            </p>
+            <button onClick={() => { store.set("rami-accueil-vu", "1"); setAccueilChoisi(true); setCptErr(""); setCptNouveau(null); setCptMode("choix"); setCptOpen(true); }}
+              className="btn-gold font-bold py-3 rounded-xl text-base">👤 Créer mon compte / me connecter</button>
+            <button onClick={() => { store.set("rami-accueil-vu", "1"); setAccueilChoisi(true); }}
+              className="btn-dark font-bold py-2.5 rounded-xl text-sm">🎮 Jouer en invité</button>
+            <p className="text-[10px] text-emerald-400 text-center">Tu pourras créer un compte à tout moment depuis la pastille 👤 en haut à droite.</p>
+          </div>
+        </div>
+      );
+    }
     // Premier lancement : « Apprendre » passe en tête. Un joueur est considéré « ancien » dès
     // qu'un indice le montre (partie lancée, compte, pseudo mémorisé, sauvegarde) — ainsi
     // l'ordre reste cohérent entre le web et l'app, même sur un appareil pas resservi depuis longtemps.
