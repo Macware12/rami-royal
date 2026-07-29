@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2294-M">
+<meta name="version" content="v2295-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2294-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2295-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -2205,7 +2205,7 @@ function App() {
               <a href="/contact.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">💬 Nous contacter</a>
               <a href="/signaler.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🚩 Signaler un joueur</a>
               <a href="/confidentialite.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🔒 Confidentialité</a>
-              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2294-M</div>
+              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2295-M</div>
             </div>
           </div>
         )}
@@ -2291,6 +2291,16 @@ function App() {
                     <h3 className="text-amber-300 font-bold text-center">{compteActif.pseudo}</h3>
                     <div className="text-xs font-bold text-yellow-300">🪙 {compteActif.pieces || 0} pièces{compteActif.serie > 1 ? " · 🔥 série " + compteActif.serie + " jours" : ""}</div>
                   </div>
+                  <details className="text-[10px] text-emerald-300 bg-emerald-950/40 border border-emerald-800/40 rounded-xl px-3 py-2">
+                      <summary className="font-bold text-amber-300 cursor-pointer">🪙 Comment gagner des pièces ?</summary>
+                      <div className="mt-1 leading-relaxed text-left">
+                        Partie terminée <b className="text-yellow-300">+10</b> · victoire <b className="text-yellow-300">+25</b><br/>
+                        Succès débloqué <b className="text-yellow-300">+25</b><br/>
+                        Défi du jour <b className="text-yellow-300">+15</b> <span className="opacity-80">(+10 si gagné)</span><br/>
+                        Joue chaque jour : série de <b className="text-yellow-300">+10</b> (jour 1) à <b className="text-yellow-300">+50</b> (jour 7 et plus)<br/>
+                        <span className="opacity-70">Au-delà de 15 parties par jour, les parties ne rapportent plus rien (les succès, si).</span>
+                      </div>
+                    </details>
                   <p className="text-[11px] text-emerald-300 text-center">Ton code secret — c'est lui qui permet de retrouver ton compte sur n'importe quel appareil :</p>
                   <div className="text-3xl font-bold text-amber-300 tracking-[.3em] text-center" style={{ fontFamily: "Georgia, serif" }}>{compteActif.code}</div>
                   <button onClick={() => { if (navigator.clipboard) navigator.clipboard.writeText(compteActif.code).catch(() => {}); }}
@@ -2740,7 +2750,7 @@ function App() {
           </div>
         )}
         <div className="flex gap-2 text-[11px] text-emerald-400 flex-wrap justify-center items-center pb-4">
-          <span className="opacity-60 self-center">v2294-M</span>
+          <span className="opacity-60 self-center">v2295-M</span>
         </div>
       </div>
     );
