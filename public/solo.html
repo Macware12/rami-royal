@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2269-M">
+<meta name="version" content="v2270-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2269-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2270-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -1472,9 +1472,14 @@ function RamiRoyal() {
             setMsg(d && d.erreur && status === 403 ? d.erreur : "Ce compte a été supprimé — te voilà en mode invité.");
             return;
           }
-          if (d && d.stats) {
+          if (d && d.code) {
+            // Profil à jour partout : photo, avatar, pseudo, stats
+            store.set("rami-account", JSON.stringify({ pseudo: d.pseudo, code: d.code, avatar: d.avatar || null, photo: d.photo || null, renamedAt: d.renamedAt || null }));
+            store.set("rami-name", d.pseudo);
             store.set("rami-stats", JSON.stringify(d.stats || {}));
             store.set("rami-succes", JSON.stringify(d.succes || {}));
+            setAccount({ pseudo: d.pseudo, code: d.code });
+            setPlayerName(d.pseudo);
             setStats(d.stats || {});
           }
         })
