@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2275-M">
+<meta name="version" content="v2276-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2275-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2276-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -1871,7 +1871,11 @@ function App() {
   // ---------- Écrans ----------
   if (!srv) {
     const joinReady = joinCode.trim().length >= 5;
-    const dejaJoue = Boolean(store.get("rami-played")); // premier lancement : « Apprendre » passe en tête
+    // Premier lancement : « Apprendre » passe en tête. Un joueur est considéré « ancien » dès
+    // qu'un indice le montre (partie lancée, compte, pseudo mémorisé, sauvegarde) — ainsi
+    // l'ordre reste cohérent entre le web et l'app, même sur un appareil pas resservi depuis longtemps.
+    const dejaJoue = Boolean(store.get("rami-played") || compteActif || store.get("rami-name") ||
+      store.get("ramimp-name") || store.get("rami-save") || store.get("rami-level"));
     const soloSave = Boolean(store.get("rami-save"));   // une partie solo attend d'être reprise
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 pt-16" style={bgStyle}>
@@ -2015,7 +2019,7 @@ function App() {
               <p className="text-[10px] text-emerald-400 text-center -mt-1">« 4 couleurs » : ♦ en bleu et ♣ en vert — pensé pour le daltonisme.</p>
               <a href="/signaler.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🚩 Signaler un joueur</a>
               <a href="/confidentialite.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🔒 Confidentialité</a>
-              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2275-M</div>
+              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2276-M</div>
             </div>
           </div>
         )}
@@ -2537,7 +2541,7 @@ function App() {
           </div>
         )}
         <div className="flex gap-2 text-[11px] text-emerald-400 flex-wrap justify-center items-center pb-4">
-          <span className="opacity-60 self-center">v2275-M</span>
+          <span className="opacity-60 self-center">v2276-M</span>
         </div>
       </div>
     );
