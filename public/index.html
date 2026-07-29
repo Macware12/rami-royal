@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2274-M">
+<meta name="version" content="v2275-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2274-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2275-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -853,6 +853,43 @@ function partagerScore(ranking, defi) {
     }
   }, "image/png");
 }
+
+// ---------- File d'attente des parties terminées (comptage par deltas) ----------
+function flushParties() {
+  const acc = readJSONls("rami-account");
+  if (!acc.code) return;
+  let file = [];
+  try { file = JSON.parse(store.get("rami-parties") || "[]"); } catch (_) { file = []; }
+  if (!file.length) return;
+  fetch(API_BASE + "/compte/partie", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(Object.assign({ code: acc.code, succes: readJSONls("rami-succes") }, file[0])),
+  })
+    .then((r) => r.json().then((d) => ({ ok: r.ok, status: r.status, d })))
+    .then(({ ok, status, d }) => {
+      if (!ok) {
+        if (status === 404 || status === 403) store.del("rami-parties");
+        return;
+      }
+      file.shift();
+      store.set("rami-parties", JSON.stringify(file));
+      if (d && d.stats) { store.set("rami-stats", JSON.stringify(d.stats)); store.set("rami-succes", JSON.stringify(d.succes || {})); }
+      if (file.length) flushParties();
+    })
+    .catch(() => {});
+}
+function pousserPartie(delta) {
+  let file = [];
+  try { file = JSON.parse(store.get("rami-parties") || "[]"); } catch (_) {}
+  file.push(delta);
+  if (file.length > 50) file = file.slice(-50);
+  store.set("rami-parties", JSON.stringify(file));
+  flushParties();
+}
+function partiesEnAttente() {
+  try { return (JSON.parse(store.get("rami-parties") || "[]") || []).length > 0; } catch (_) { return false; }
+}
+
 function readJSONls(k) { try { return JSON.parse(store.get(k)) || {}; } catch (_) { return {}; } }
 // Synchronise les stats du compte (partagé avec le solo via localStorage)
 function compteStats(body) {
@@ -930,8 +967,10 @@ function App() {
   }
   function cptActiver(d) {
     store.set("rami-account", JSON.stringify({ pseudo: d.pseudo, code: d.code, avatar: d.avatar || null, photo: d.photo || null, renamedAt: d.renamedAt || null }));
-    store.set("rami-stats", JSON.stringify(d.stats || {}));
-    store.set("rami-succes", JSON.stringify(d.succes || {}));
+    if (!partiesEnAttente()) { // des parties hors-ligne attendent : on ne les écrase pas
+      store.set("rami-stats", JSON.stringify(d.stats || {}));
+      store.set("rami-succes", JSON.stringify(d.succes || {}));
+    }
     store.set("rami-name", d.pseudo);
     store.set("ramimp-name", d.pseudo);
     setName(d.pseudo);
@@ -1037,7 +1076,7 @@ function App() {
     store.set("ramimp-name", n);
     store.set("ramimp-avatar", avatar);
     setMsg("Connexion au salon " + code + "…");
-    socket.emit("joinRoom", { code, name: n, avatar }, (res) => {
+    socket.emit("joinRoom", { code, name: n, avatar, compte: (compteActif && compteActif.code) || undefined }, (res) => {
       if (!res.ok) return setMsg(res.error || "Salon introuvable — il a peut-être expiré.");
       store.set("rami-played", "1");
       store.set("ramimp-save", JSON.stringify({ code: res.code, token: res.token, name: n }));
@@ -1162,8 +1201,15 @@ function App() {
       st.contracts[label] = c;
     });
     all.mp = st;
-    store.set("rami-stats", JSON.stringify(all));
-    compteStats({ pseudo: acc.pseudo, code: acc.code, stats: all, succes: readJSONls("rami-succes") });
+    store.set("rami-stats", JSON.stringify(all)); // affichage immédiat ; le serveur reste la référence
+    pousserPartie({
+      mode: "mp", win: won, score: myTotal,
+      dureeMs: g.startedAt ? srvNow() - g.startedAt : null,
+      manches: (g.history || []).slice(0, 10).map((hm) => {
+        const mine = hm.summary && hm.summary[youIdx];
+        return { label: hm.label || MANCHE_LABELS[hm.mancheIdx] || "?", pts: mine ? (mine.pts || 0) + (mine.bonus || 0) : 0 };
+      }),
+    });
   }, [srv && srv.state, srv && srv.code, g && g.startedAt, youIdx]);
 
   useEffect(() => {
@@ -1210,6 +1256,7 @@ function App() {
     });
     const raw = store.get("ramimp-save");
     if (raw) { try { setSaved(JSON.parse(raw)); } catch (_) {} }
+    flushParties(); // parties jouées hors ligne : on les envoie maintenant
     const accBoot = readJSONls("rami-account");
     if (accBoot.code) {
       fetch(API_BASE + "/compte/info", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: accBoot.code }) })
@@ -1463,7 +1510,7 @@ function App() {
     const n = nomJoueur();
     store.set("ramimp-name", n);
     store.set("ramimp-avatar", avatar);
-    socket.emit("createRoom", { name: n, options: { turnSeconds, level, shortMode }, avatar }, (res) => {
+    socket.emit("createRoom", { name: n, options: { turnSeconds, level, shortMode }, avatar, compte: (compteActif && compteActif.code) || undefined }, (res) => {
       if (!res.ok) return setMsg(res.error || "Erreur.");
       store.set("rami-played", "1");
       if (res.code !== "LOCAL") store.set("ramimp-save", JSON.stringify({ code: res.code, token: res.token, name: n })); // pas de reprise en partie locale
@@ -1500,7 +1547,7 @@ function App() {
     const n = nomJoueur();
     store.set("ramimp-name", n);
     store.set("ramimp-avatar", avatar);
-    socket.emit("joinRoom", { code: joinCode.trim().toUpperCase(), name: n, avatar }, (res) => {
+    socket.emit("joinRoom", { code: joinCode.trim().toUpperCase(), name: n, avatar, compte: (compteActif && compteActif.code) || undefined }, (res) => {
       if (!res.ok) return setMsg(res.error || "Erreur.");
       store.set("rami-played", "1");
       store.set("ramimp-save", JSON.stringify({ code: res.code, token: res.token, name: n }));
@@ -1968,7 +2015,7 @@ function App() {
               <p className="text-[10px] text-emerald-400 text-center -mt-1">« 4 couleurs » : ♦ en bleu et ♣ en vert — pensé pour le daltonisme.</p>
               <a href="/signaler.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🚩 Signaler un joueur</a>
               <a href="/confidentialite.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🔒 Confidentialité</a>
-              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2274-M</div>
+              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2275-M</div>
             </div>
           </div>
         )}
@@ -2490,7 +2537,7 @@ function App() {
           </div>
         )}
         <div className="flex gap-2 text-[11px] text-emerald-400 flex-wrap justify-center items-center pb-4">
-          <span className="opacity-60 self-center">v2274-M</span>
+          <span className="opacity-60 self-center">v2275-M</span>
         </div>
       </div>
     );

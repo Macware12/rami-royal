@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2274-M">
+<meta name="version" content="v2275-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2274-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2275-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -207,6 +207,48 @@ function lireJeton(cible) {
 }
 
 // Compte joueur (pseudo + code à 6 chiffres) — en mode invité, rien n'est conservé
+
+// ---------- File d'attente des parties terminées (comptage par deltas) ----------
+// Chaque partie part individuellement au serveur : comptage juste même sur 2 appareils,
+// et rien n'est perdu hors ligne (la file se vide au prochain lancement connecté).
+function flushParties() {
+  let acc = {};
+  try { acc = JSON.parse(store.get("rami-account")) || {}; } catch (_) {}
+  if (!acc.code) return;
+  let file = [];
+  try { file = JSON.parse(store.get("rami-parties") || "[]"); } catch (_) { file = []; }
+  if (!file.length) return;
+  let succes = {};
+  try { succes = JSON.parse(store.get("rami-succes") || "{}"); } catch (_) {}
+  fetch(API_BASE + "/compte/partie", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(Object.assign({ code: acc.code, succes }, file[0])),
+  })
+    .then((r) => r.json().then((d) => ({ ok: r.ok, status: r.status, d })))
+    .then(({ ok, status, d }) => {
+      if (!ok) {
+        if (status === 404 || status === 403) store.del("rami-parties"); // compte disparu : on abandonne la file
+        return;
+      }
+      file.shift();
+      store.set("rami-parties", JSON.stringify(file));
+      if (d && d.stats) { store.set("rami-stats", JSON.stringify(d.stats)); store.set("rami-succes", JSON.stringify(d.succes || {})); }
+      if (file.length) flushParties();
+    })
+    .catch(() => {}); // hors ligne : la file attend son heure
+}
+function pousserPartie(delta) {
+  let file = [];
+  try { file = JSON.parse(store.get("rami-parties") || "[]"); } catch (_) {}
+  file.push(delta);
+  if (file.length > 50) file = file.slice(-50);
+  store.set("rami-parties", JSON.stringify(file));
+  flushParties();
+}
+function partiesEnAttente() {
+  try { return (JSON.parse(store.get("rami-parties") || "[]") || []).length > 0; } catch (_) { return false; }
+}
+
 function compteApi(chemin, body) {
   return fetch(API_BASE + "/compte/" + chemin, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
@@ -1464,6 +1506,7 @@ function RamiRoyal() {
     setHasSave(Boolean(store.get("rami-save")));
     const savedName = store.get("rami-name"); if (savedName) setPlayerName(savedName);
     // Compte connecté : on rafraîchit les stats depuis le serveur (silencieux si hors ligne)
+    flushParties(); // parties jouées hors ligne : on les envoie maintenant
     const acc = readJSON("rami-account");
     if (acc.code) {
       fetch(API_BASE + "/compte/info", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: acc.code }) })
@@ -1479,11 +1522,13 @@ function RamiRoyal() {
             // Profil à jour partout : photo, avatar, pseudo, stats
             store.set("rami-account", JSON.stringify({ pseudo: d.pseudo, code: d.code, avatar: d.avatar || null, photo: d.photo || null, renamedAt: d.renamedAt || null }));
             store.set("rami-name", d.pseudo);
-            store.set("rami-stats", JSON.stringify(d.stats || {}));
-            store.set("rami-succes", JSON.stringify(d.succes || {}));
+            if (!partiesEnAttente()) { // des parties hors-ligne attendent : on ne les écrase pas
+              store.set("rami-stats", JSON.stringify(d.stats || {}));
+              store.set("rami-succes", JSON.stringify(d.succes || {}));
+              setStats(d.stats || {});
+            }
             setAccount({ pseudo: d.pseudo, code: d.code });
             setPlayerName(d.pseudo);
-            setStats(d.stats || {});
           }
         })
         .catch(() => {}); // hors ligne : on garde la session locale telle quelle
@@ -2707,9 +2752,15 @@ function tapCard(id) {
         st.contracts[label] = c;
       });
       if (acc.code) {
-        store.set("rami-stats", JSON.stringify(st));
-        // Synchronisation serveur silencieuse : le compte est retrouvable sur tous les appareils
-        compteApi("stats", { pseudo: acc.pseudo, code: acc.code, stats: st, succes: readJSON("rami-succes") }).catch(() => {});
+        store.set("rami-stats", JSON.stringify(st)); // affichage immédiat ; le serveur reste la référence
+        pousserPartie({
+          mode: "solo", win: won, score: g.players[0].total,
+          dureeMs: g.startedAt ? Date.now() - g.startedAt : null,
+          manches: (g.history || []).slice(0, 10).map((hm) => ({
+            label: (manchesList[hm.mancheIdx] || {}).label || "?",
+            pts: (hm.summary[0].pts || 0) + (hm.summary[0].bonus || 0),
+          })),
+        });
       }
       setStats(st);
       if (won) award("premiere_victoire");

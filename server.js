@@ -580,6 +580,49 @@ app.post("/moderation/action", (req, res) => {
   res.status(400).json({ erreur: "Action inconnue." });
 });
 
+// ---------- Enregistrement d'une partie terminée (comptage par deltas) ----------
+// Chaque partie est envoyée individuellement : le comptage reste juste même si le joueur
+// est connecté sur deux appareils en même temps (l'ancienne synchro par cumuls prenait le max).
+app.post("/compte/partie", (req, res) => {
+  if (tropDEssais(req, res)) return;
+  const { code, mode, win, score, dureeMs, manches, succes } = req.body || {};
+  const c = typeof code === "string" && /^[0-9]{6}$/.test(code.trim()) ? comptes.get(code.trim()) : null;
+  if (!c) return res.status(404).json({ erreur: "Code inexistant." });
+  if (c.banni) return res.status(403).json({ erreur: MESSAGE_BANNI });
+  if (mode !== "solo" && mode !== "mp") return res.status(400).json({ erreur: "Mode invalide." });
+  c.stats = c.stats || {};
+  const b = mode === "mp" ? (c.stats.mp = c.stats.mp || {}) : c.stats;
+  const w = Boolean(win);
+  b.games = (b.games || 0) + 1;
+  if (w) b.wins = (b.wins || 0) + 1;
+  b.streak = w ? (b.streak || 0) + 1 : 0;
+  b.bestStreak = Math.max(b.bestStreak || 0, b.streak);
+  const sc = Math.max(0, Math.min(5000, parseInt(score, 10) || 0));
+  b.sumScore = (b.sumScore || 0) + sc;
+  if (w) b.bestScore = b.bestScore == null ? sc : Math.min(b.bestScore, sc);
+  const dur = parseInt(dureeMs, 10);
+  if (w && isFinite(dur) && dur > 30000 && dur < 24 * 3600000)
+    b.fastestWinMs = b.fastestWinMs == null ? dur : Math.min(b.fastestWinMs, dur);
+  if (Array.isArray(manches)) {
+    manches.slice(0, 10).forEach((m) => {
+      const pts = parseInt(m && m.pts, 10);
+      if (!isFinite(pts) || pts < -1000 || pts > 1000) return;
+      b.bestManche = b.bestManche == null ? pts : Math.min(b.bestManche, pts);
+      b.contracts = b.contracts || {};
+      const label = String((m && m.label) || "?").slice(0, 30);
+      if (!b.contracts[label] && Object.keys(b.contracts).length >= 20) return; // borne mémoire
+      const cc = b.contracts[label] || { n: 0, sum: 0 };
+      cc.n += 1; cc.sum += pts;
+      b.contracts[label] = cc;
+    });
+  }
+  c.stats = cleanStats(c.stats);
+  if (succes) c.succes = mergeSucces(c.succes, cleanSucces(succes));
+  c.lastSeen = Date.now();
+  saveComptes();
+  res.json({ stats: c.stats, succes: c.succes || {} });
+});
+
 // ---------- Défi du jour : classement mondial ----------
 // Un score par compte et par jour (le PREMIER essai seul compte — même donne pour tous,
 // rejouer pour améliorer serait tricher). Classement : victoires d'abord, puis petit total.
@@ -1640,6 +1683,13 @@ function aiPlayTurn(room) {
   broadcast(room);
 }
 
+// Compte joueur transmis à l'entrée d'un salon : pseudo authentique, anti-usurpation
+function compteJoueur(code) {
+  if (typeof code !== "string" || !/^[0-9]{6}$/.test(code.trim())) return null;
+  const c = comptes.get(code.trim());
+  return c && !c.banni ? c : null;
+}
+
 // ---------- Socket.io ----------
 io.on("connection", (socket) => {
   // Limite de débit par connexion : 40 événements / 5 s. Un humain n'atteint jamais ça,
@@ -1681,8 +1731,11 @@ io.on("connection", (socket) => {
   };
 
   let lastCreateAt = 0;
-  socket.on("createRoom", ({ name, options, avatar } = {}, cb) => {
+  socket.on("createRoom", ({ name, options, avatar, compte } = {}, cb) => {
     if (typeof cb !== "function") cb = () => {};
+    const cptC = compteJoueur(compte);
+    if (compte && !cptC) return cb({ ok: false, error: "Compte invalide ou suspendu — déconnecte-toi et réessaie." });
+    if (cptC) name = cptC.pseudo; // pseudo authentique : impossible d'usurper
     // Anti-flood : borne dure sur le nombre total de salons + délai entre deux créations
     if (rooms.size >= MAX_ROOMS) return cb({ ok: false, error: "Serveur très demandé — réessaie dans quelques minutes." });
     if (Date.now() - lastCreateAt < 5000) return cb({ ok: false, error: "Doucement — attends quelques secondes avant de créer un autre salon." });
@@ -1690,6 +1743,7 @@ io.on("connection", (socket) => {
     detachFromRoom();
     const room = createRoom(name, options);
     const player = addPlayer(room, name, false, avatar);
+    if (cptC) player.compte = cptC.code; // jamais diffusé (publicPlayer ne l'expose pas)
     player.socketId = socket.id;
     player.connected = true;
     myRoom = room; myToken = player.token;
@@ -1699,14 +1753,37 @@ io.on("connection", (socket) => {
     broadcast(room);
   });
 
-  socket.on("joinRoom", ({ code, name, avatar } = {}, cb) => {
+  socket.on("joinRoom", ({ code, name, avatar, compte } = {}, cb) => {
     if (typeof cb !== "function") cb = () => {};
     const room = rooms.get(String(code || "").toUpperCase());
     if (!room) return cb({ ok: false, error: "Salon introuvable. Vérifie le code." });
     if (room !== myRoom) detachFromRoom();
+    const cptJ = compteJoueur(compte);
+    if (compte && !cptJ) return cb({ ok: false, error: "Compte invalide ou suspendu — déconnecte-toi et réessaie." });
+    if (cptJ) {
+      name = cptJ.pseudo; // pseudo authentique
+      const siege = room.players.find((p) => p.compte === cptJ.code);
+      if (siege && siege.connected)
+        return cb({ ok: false, error: "Ce compte est déjà à la table sur un autre appareil." });
+      if (siege) {
+        // Reprise du siège depuis un autre appareil (même en cours de partie)
+        siege.socketId = socket.id;
+        siege.connected = true;
+        siege.absent = false;
+        siege.timeouts = 0;
+        myRoom = room; myToken = siege.token;
+        socket.join(room.code);
+        touch(room);
+        log(room, siege.name + " reprend sa place depuis un autre appareil");
+        cb({ ok: true, code: room.code, token: siege.token });
+        broadcast(room);
+        return;
+      }
+    }
     if (room.state !== "lobby") return cb({ ok: false, error: "La partie a déjà commencé (utilise « Reprendre » si tu en faisais partie)." });
     if (room.players.length >= 6) return cb({ ok: false, error: "Salon complet (6 joueurs max)." });
     const player = addPlayer(room, name, false, avatar);
+    if (cptJ) player.compte = cptJ.code;
     player.socketId = socket.id;
     player.connected = true;
     myRoom = room; myToken = player.token;
