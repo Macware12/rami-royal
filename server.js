@@ -447,6 +447,27 @@ const SMTP = {
 };
 
 function envoyerEmail(sujet, corps) {
+  // Render bloque les ports SMTP (25/465/587) : on passe par une API HTTPS (Brevo, port 443).
+  // Le SMTP brut reste disponible en secours pour un hébergeur qui ne bloque pas.
+  const cleApi = process.env.BREVO_API_KEY || "";
+  if (cleApi) {
+    fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: { "api-key": cleApi, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sender: { name: "Ramy Gasy", email: process.env.EMAIL_FROM || SMTP.dest },
+        to: [{ email: SMTP.dest }],
+        subject: sujet,
+        textContent: String(corps),
+      }),
+    })
+      .then((r) => {
+        if (!r.ok) r.text().then((t) => console.error("Email (API Brevo) refusé:", r.status, t.slice(0, 300)));
+        else console.log("Email de signalement envoyé ✔ (API)");
+      })
+      .catch((e) => console.error("Email (API Brevo) non envoyé:", e.message));
+    return;
+  }
   if (!SMTP.pass) return; // non configuré : les signalements restent consultables sur /moderation.html
   const net = require("net"), tls = require("tls");
   const enc = (s) => Buffer.from(s, "utf8").toString("base64");
@@ -542,7 +563,7 @@ function adminOk(req, res) {
 // Test de la configuration email (admin) : /moderation/test-email?cle=CLE
 app.get("/moderation/test-email", (req, res) => {
   if (!adminOk(req, res)) return;
-  if (!SMTP.pass) return res.json({ ok: false, info: "SMTP_PASS n'est pas défini sur le serveur — aucun envoi possible." });
+  if (!process.env.BREVO_API_KEY && !SMTP.pass) return res.json({ ok: false, info: "Ni BREVO_API_KEY ni SMTP_PASS ne sont définis — aucun envoi possible." });
   envoyerEmail("Test Ramy Gasy ✔", "Si tu lis ceci, l'envoi d'emails de signalement fonctionne.\nEnvoyé le " + new Date().toISOString());
   res.json({ ok: true, info: "Tentative d'envoi lancée vers " + SMTP.dest + " (expéditeur " + SMTP.user + "). Vérifie ta boîte (et les spams) ainsi que les logs Render en cas d'échec." });
 });
