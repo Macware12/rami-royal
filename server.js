@@ -802,6 +802,22 @@ app.post("/compte/partie", (req, res) => {
   res.json({ stats: c.stats, succes: c.succes || {}, pieces: c.pieces || 0, gains });
 });
 
+// ---------- Dépense de pièces (aide payante, boutique à venir) ----------
+app.post("/compte/depenser", (req, res) => {
+  if (tropDEssais(req, res)) return;
+  const { code, montant } = req.body || {};
+  const c = typeof code === "string" && /^[0-9]{6}$/.test(code.trim()) ? comptes.get(code.trim()) : null;
+  if (!c) return res.status(404).json({ erreur: "Code inexistant." });
+  if (c.banni) return res.status(403).json({ erreur: MESSAGE_BANNI });
+  const m = parseInt(montant, 10);
+  if (!isFinite(m) || m < 1 || m > 500) return res.status(400).json({ erreur: "Montant invalide." });
+  if ((c.pieces || 0) < m) return res.status(400).json({ erreur: "Pas assez de pièces." });
+  c.pieces -= m;
+  c.lastSeen = Date.now();
+  saveComptes();
+  res.json({ pieces: c.pieces });
+});
+
 // ---------- Défi du jour : classement mondial ----------
 // Un score par compte et par jour (le PREMIER essai seul compte — même donne pour tous,
 // rejouer pour améliorer serait tricher). Classement : victoires d'abord, puis petit total.

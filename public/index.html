@@ -986,6 +986,33 @@ function flushParties() {
     })
     .catch(() => {});
 }
+// L'Aide est offerte 3 fois par partie, puis coûte des pièces
+const AIDES_GRATUITES = 3;
+const COUT_AIDE = 5;
+// Débite des pièces (optimiste : l'interface bouge tout de suite, le serveur confirme)
+function depenserPieces(montant, motif) {
+  let acc = {};
+  try { acc = JSON.parse(store.get("rami-account")) || {}; } catch (_) {}
+  if (!acc.code) return;
+  acc.pieces = Math.max(0, (acc.pieces || 0) - montant);
+  store.set("rami-account", JSON.stringify(acc));
+  try { window.dispatchEvent(new CustomEvent("rami-gains", { detail: { pieces: acc.pieces } })); } catch (_) {}
+  fetch(API_BASE + "/compte/depenser", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code: acc.code, montant, motif }),
+  }).then((r) => (r.ok ? r.json() : null))
+    .then((d) => {
+      if (!d || typeof d.pieces !== "number") return;
+      try {
+        const a2 = JSON.parse(store.get("rami-account")) || {};
+        a2.pieces = d.pieces;
+        store.set("rami-account", JSON.stringify(a2));
+        window.dispatchEvent(new CustomEvent("rami-gains", { detail: { pieces: d.pieces } }));
+      } catch (_) {}
+    })
+    .catch(() => {}); // hors ligne : le débit optimiste local suffit
+}
+
 // Solde mis à jour + toast : appelé quand le serveur confirme des pièces gagnées
 function signalerGains(d) {
   try {
@@ -1286,6 +1313,12 @@ function App() {
   const prevMancheRef = useRef(-1);
   const introTimer = useRef(null);
   const helpCount = useRef(0);
+  const aidesRef = useRef({ cle: null, n: 0 }); // aides utilisées dans la partie en cours
+  function aidesInfo() {
+    const cle = ((srv && srv.code) || "?") + ":" + ((g && g.startedAt) || "");
+    if (aidesRef.current.cle !== cle) aidesRef.current = { cle, n: 0 };
+    return aidesRef.current;
+  }
   const lastEmoteSent = useRef(0);
   const handleDropRef = useRef(null);
   const discardDropRef = useRef(null);
@@ -1758,6 +1791,15 @@ function App() {
   }
 
   function helpSort() {
+    const ai = aidesInfo();
+    if (ai.n >= AIDES_GRATUITES) {
+      let acc = {};
+      try { acc = JSON.parse(store.get("rami-account")) || {}; } catch (_) {}
+      if (!acc.code) { setMsg("💡 Tes " + AIDES_GRATUITES + " aides gratuites de la partie sont utilisées — crée un compte (pastille en haut à droite) pour continuer (" + COUT_AIDE + " 🪙 par aide)."); return; }
+      if ((acc.pieces || 0) < COUT_AIDE) { setMsg("💡 Aides gratuites épuisées — il te faut " + COUT_AIDE + " pièces (solde : 🪙 " + (acc.pieces || 0) + "). Termine des parties pour en gagner !"); return; }
+      depenserPieces(COUT_AIDE, "aide");
+    }
+    ai.n += 1;
     // Le contrat restant tient compte des groupes déjà préparés dans « Prêt »
     const remaining = contract && !contract.poseTout
       ? { ...contract, tri: Math.max(0, (contract.tri || 0) - stagedTri), esc: Math.max(0, (contract.esc || 0) - stagedEsc) }
@@ -3204,7 +3246,10 @@ function App() {
           )}
           {!me.posed && selected.length < 3 && (
             <>
-              <button onClick={helpSort} className="btn-dark px-4 py-2 rounded-xl text-sm font-bold">💡 Aide</button>
+              <button onClick={helpSort} className="btn-dark px-4 py-2 rounded-xl text-sm font-bold">💡 Aide{(() => {
+                const rest = Math.max(0, AIDES_GRATUITES - aidesInfo().n);
+                return <span className="text-[10px] font-normal"> {rest > 0 ? "●".repeat(rest) + "○".repeat(AIDES_GRATUITES - rest) : COUT_AIDE + " 🪙"}</span>;
+              })()}</button>
               {!contract.poseTout && <button onClick={autoStage} className="btn-dark px-4 py-2 rounded-xl text-sm font-bold">✨ Classer mes cartes</button>}
             </>
           )}
@@ -3326,7 +3371,7 @@ function App() {
             </div>
             <ol className="list-decimal ml-4 space-y-2 text-emerald-100 text-xs">
               <li><b>Pioche</b> une carte (ou prends celle de la défausse, gratuite à ton tour).</li>
-              <li><b>Prépare le contrat</b> : touche 3+ cartes de même valeur (tri) ou qui se suivent (escalier), puis valide. Le bouton 💡 Aide classe ta main selon le contrat (appuie plusieurs fois pour d'autres propositions), et 🪄 prépare la pose quand elle est possible !</li>
+              <li><b>Prépare le contrat</b> : touche 3+ cartes de même valeur (tri) ou qui se suivent (escalier), puis valide. Le bouton 💡 Aide classe ta main selon le contrat — 3 aides offertes par partie (les points ● du bouton), ensuite 5 🪙 pièces chacune. 🪄 prépare la pose quand elle est possible !</li>
               <li><b>Pose</b> quand le contrat est complet (bouton doré), en une seule fois.</li>
               <li><b>Jette</b> une carte pour finir ton tour : glisse-la sur la défausse, puis <b>touche la défausse pour confirmer</b> 🔒 (touche une carte de ta main pour annuler). Premier à vider sa main = gagnant !</li>
             </ol>
