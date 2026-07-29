@@ -82,6 +82,12 @@
           <tbody id="j-corps"><tr><td colspan="10">Chargement…</td></tr></tbody>
         </table>
       </div>
+      <div style="display:flex; gap:6px; margin-top:10px; flex-wrap:wrap; align-items:center;">
+        <input id="don-joueur" placeholder="Pseudo ou code" style="flex:1; min-width:130px;">
+        <input id="don-montant" type="number" placeholder="Pièces (ex. 500)" style="flex:1; min-width:130px;">
+        <a class="btn" href="#" id="don-ok" style="margin:0;">🎁 Offrir</a>
+      </div>
+      <div class="err" id="don-msg"></div>
       <div class="maj" style="text-align:left; margin-top:6px;">V/P = victoires / parties. « Contrat fort » : le contrat où sa moyenne de points est la plus basse. ⏱ : temps de jeu cumulé (comptabilisé depuis juillet 2026). Triés du plus récent au plus ancien (500 max).</div>
     </div>
 
@@ -185,6 +191,27 @@ function rafraichir() {
     document.getElementById("tableau").style.display = "none";
   });
 }
+
+document.getElementById("don-ok").addEventListener("click", function (e) {
+  e.preventDefault();
+  var j = document.getElementById("don-joueur").value.trim();
+  var m = document.getElementById("don-montant").value.trim();
+  var msg = document.getElementById("don-msg");
+  if (!j || !m) { msg.textContent = "Indique un joueur et un montant."; return; }
+  if (!confirm("Créditer " + m + " pièces à « " + j + " » ?")) return;
+  msg.textContent = "Envoi…";
+  fetch("/admin/pieces?cle=" + encodeURIComponent(CLE), {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ joueur: j, montant: parseInt(m, 10) }),
+  }).then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.erreur || "Erreur"); return d; }); })
+    .then(function (d) {
+      msg.style.color = "#6ee7b7";
+      msg.textContent = "✅ " + d.pseudo + " a maintenant " + d.pieces + " pièces.";
+      document.getElementById("don-montant").value = "";
+      rafraichir();
+    })
+    .catch(function (err) { msg.style.color = "#fca5a5"; msg.textContent = err.message; });
+});
 
 document.getElementById("entrer").addEventListener("click", function (e) {
   e.preventDefault();

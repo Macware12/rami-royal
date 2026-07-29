@@ -658,6 +658,22 @@ function mancheLaPlusRapide(solo, multi) {
   return best;
 }
 
+// Cadeau de pièces (ou correction) — réservé à l'administrateur
+app.use("/admin", express.json({ limit: "4kb" }));
+app.post("/admin/pieces", (req, res) => {
+  if (!adminOk(req, res)) return;
+  const cible = String((req.body && req.body.joueur) || "").trim();
+  const montant = parseInt(req.body && req.body.montant, 10);
+  if (!cible) return res.status(400).json({ erreur: "Indique un pseudo ou un code." });
+  if (!isFinite(montant) || Math.abs(montant) > 1e9) return res.status(400).json({ erreur: "Montant invalide." });
+  const c = comptes.get(cible) || [...comptes.values()].find((x) => x.pseudo.toLowerCase() === cible.toLowerCase());
+  if (!c) return res.status(404).json({ erreur: "Joueur introuvable." });
+  c.pieces = Math.max(0, (c.pieces || 0) + montant);
+  saveComptes();
+  console.log("Admin : " + (montant >= 0 ? "+" : "") + montant + " pièces à " + c.pseudo + " (solde " + c.pieces + ")");
+  res.json({ pseudo: c.pseudo, pieces: c.pieces });
+});
+
 // Vue détaillée par joueur : pièces, série, parties, victoires, temps de jeu…
 app.get("/admin/joueurs", (req, res) => {
   if (!adminOk(req, res)) return;
