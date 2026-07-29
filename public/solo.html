@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2284-M">
+<meta name="version" content="v2286-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2284-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2286-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -3344,19 +3344,6 @@ function tapCard(id) {
 
       {/* Rappel du contrat — une seule ligne compacte */}
       <div className="shrink-0 flex justify-center px-3 pt-1.5 relative">
-        {!tuto && me && (
-          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5 bg-emerald-950/60 border border-amber-500/40 rounded-lg px-2 py-1"
-            title={"Toi : " + me.total + " points au total" + (!me.posed ? " · tes achats restants cette manche" : "")}>
-            <span className="text-[10px]">{me.avatar || "🙂"}</span>
-            <span className="text-[10px] font-bold text-amber-300">Toi · {me.total} pts</span>
-            {!me.posed && (
-              <span className="flex items-center gap-1 border-l border-emerald-700 pl-1.5">
-                <span className="text-[10px]">🛒</span>
-                {[0, 1, 2].map((k) => <span key={k} style={{ width: 5, height: 5, borderRadius: 99, background: k < me.buysLeft ? "#a3e635" : "#3f3f46" }} />)}
-              </span>
-            )}
-          </div>
-        )}
         <div className="panel rounded-full px-4 py-1 flex items-center gap-2" style={{ borderColor: "#f59e0b88" }}>
           <span className="text-[10px]">🎯</span>
           <span className="text-sm font-bold text-amber-300 leading-none whitespace-nowrap"
@@ -3493,7 +3480,19 @@ function tapCard(id) {
       )}
 
       {/* Pioche et défausse */}
-      <div className="shrink-0 flex items-center justify-center gap-8 py-2">
+      <div className="shrink-0 flex items-center justify-center gap-8 py-2 relative">
+        {!tuto && me && (
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col items-center gap-1 bg-emerald-950/60 border border-amber-500/40 rounded-xl px-2.5 py-1.5"
+            title={"Toi : " + me.total + " points au total" + (!me.posed ? " · tes achats restants cette manche" : "")}>
+            <span className="text-[10px] font-bold text-amber-300">{me.avatar || "🙂"} Toi · {me.total} pts</span>
+            {!me.posed && (
+              <span className="flex items-center gap-1">
+                <span className="text-[10px]">🛒</span>
+                {[0, 1, 2].map((k) => <span key={k} style={{ width: 5, height: 5, borderRadius: 99, background: k < me.buysLeft ? "#a3e635" : "#3f3f46" }} />)}
+              </span>
+            )}
+          </div>
+        )}
         <button ref={stockRef} onClick={() => myTurn && g.phase === "draw" && playerDraw("stock")}
           className="flex flex-col items-center gap-1 active:scale-95 transition-transform rounded-xl"
           style={tuto && tutoHi.stock ? { boxShadow: "0 0 18px 6px #22d3ee", animation: "pulse 1s infinite" } : undefined}>
