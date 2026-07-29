@@ -1,3 +1,11 @@
 node_modules/
-rooms-save.json
 www-native/
+
+# Données des joueurs : ne doivent JAMAIS partir sur GitHub.
+# En production elles vivent dans Postgres ; ces fichiers sont le repli local de
+# développement et contiennent les codes secrets des comptes.
+*-save.json
+
+# Doublons créés par macOS lors des copies (« fichier 2.html »)
+* 2.html
+* 2.js

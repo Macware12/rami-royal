@@ -412,7 +412,7 @@ app.post("/compte/profil", (req, res) => {
 // L'App Store (règle 1.2) impose, pour tout contenu écrit par les utilisateurs :
 // un filtre, un moyen de signaler, et la possibilité d'écarter un joueur abusif.
 // Les signalements sont toujours stockés (rien ne se perd), et un email est envoyé
-// en plus si GMAIL_USER / GMAIL_PASS sont configurés sur Render.
+// en plus si SMTP_PASS est configuré sur Render (voir la section « Envoi d'email » plus bas).
 const SIGNALEMENTS_FILE = process.env.SIGNALEMENTS_FILE || path.join(__dirname, "signalements-save.json");
 const signalements = []; // { id, cible, pseudoCible, motif, details, par, at, traite }
 let signalementsTimer = null;
@@ -431,44 +431,72 @@ const MOTIFS_LISIBLES = {
   harcelement: "Harcèlement", autre: "Autre",
 };
 
-// Envoi d'email (facultatif) — via Gmail, en SMTP direct pour éviter une dépendance de plus.
-// Prérequis côté Google : la validation en deux étapes, puis un « mot de passe d'application »
-// (myaccount.google.com/apppasswords) — le mot de passe habituel est refusé par Gmail.
-// Variables à définir sur Render : GMAIL_USER, GMAIL_PASS, et MODERATION_EMAIL si l'on veut
-// recevoir les alertes sur une autre adresse.
+// ---------- Envoi d'email des signalements (facultatif) ----------
+// SMTP direct, sans dépendance. Expéditeur : la boîte Gmail dédiée aux envois.
+// Destinataire : la boîte de contact. Seul SMTP_PASS doit être défini sur Render.
+//
+// Côté Google : le mot de passe habituel du compte est REFUSÉ. Il faut activer la validation
+// en deux étapes sur signalement.ramygasy@gmail.com, puis créer un « mot de passe
+// d'application » (myaccount.google.com/apppasswords) et le mettre dans SMTP_PASS.
+const SMTP = {
+  host: process.env.SMTP_HOST || "smtp.gmail.com",
+  port: parseInt(process.env.SMTP_PORT, 10) || 465, // 465 = TLS direct ; 587 = STARTTLS
+  user: process.env.SMTP_USER || "signalement.ramygasy@gmail.com",
+  pass: process.env.SMTP_PASS || "",
+  dest: process.env.MODERATION_EMAIL || "contact.ramygasy@gmail.com",
+};
+
 function envoyerEmail(sujet, corps) {
-  const user = process.env.GMAIL_USER, pass = process.env.GMAIL_PASS;
-  const dest = process.env.MODERATION_EMAIL || user;
-  if (!user || !pass) return; // non configuré : les signalements restent consultables sur /moderation.html
-  const tls = require("tls");
+  if (!SMTP.pass) return; // non configuré : les signalements restent consultables sur /moderation.html
+  const net = require("net"), tls = require("tls");
   const enc = (s) => Buffer.from(s, "utf8").toString("base64");
-  // Une ligne de réponse SMTP se termine par « 250 texte » ; « 250-texte » annonce une suite.
-  // Il faut donc attendre la ligne FINALE avant d'envoyer la commande suivante, sinon le
-  // dialogue se désynchronise (Gmail répond sur plusieurs lignes à EHLO).
-  const etapes = [
-    "EHLO ramygasy", "AUTH LOGIN", enc(user), enc(pass),
-    "MAIL FROM:<" + user + ">", "RCPT TO:<" + dest + ">", "DATA",
-    "From: Ramy Gasy <" + user + ">\r\nTo: " + dest + "\r\nSubject: =?UTF-8?B?" + enc(sujet) +
-      "?=\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n" +
-      String(corps).replace(/\r?\n\./g, "\n..") + "\r\n.",
-    "QUIT",
+  const message =
+    "From: Ramy Gasy <" + SMTP.user + ">\r\nTo: " + SMTP.dest +
+    "\r\nSubject: =?UTF-8?B?" + enc(sujet) + "?=" +
+    "\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n" +
+    String(corps).replace(/\r?\n\./g, "\n..") + "\r\n."; // un point seul en début de ligne fermerait le message
+  const dialogue = [
+    "EHLO ramygasy", "AUTH LOGIN", enc(SMTP.user), enc(SMTP.pass),
+    "MAIL FROM:<" + SMTP.user + ">", "RCPT TO:<" + SMTP.dest + ">", "DATA", message, "QUIT",
   ];
-  let i = 0, tampon = "";
-  const sock = tls.connect(465, "smtp.gmail.com", () => {});
-  sock.setTimeout(20000, () => { console.error("Email de signalement : délai dépassé"); sock.destroy(); });
-  sock.on("data", (buf) => {
-    tampon += buf.toString();
-    const lignes = tampon.split(/\r?\n/);
-    tampon = lignes.pop() || "";
-    for (const ligne of lignes) {
-      if (!/^\d{3} /.test(ligne)) continue;           // ligne intermédiaire (« 250-… ») : on attend la suite
-      const code = parseInt(ligne.slice(0, 3), 10);
-      if (code >= 400) { console.error("Email de signalement refusé par Gmail :", ligne); sock.destroy(); return; }
-      if (i >= etapes.length) { sock.end(); return; }
-      sock.write(etapes[i++] + "\r\n");
-    }
-  });
-  sock.on("error", (e) => console.error("Email de signalement non envoyé:", e.message));
+
+  // TLS d'emblée (465) ou connexion claire puis STARTTLS (587). Forçable par SMTP_TLS=direct|starttls.
+  const direct = process.env.SMTP_TLS ? process.env.SMTP_TLS === "direct" : SMTP.port === 465;
+  let etapes = direct ? dialogue.slice() : ["EHLO ramygasy", "STARTTLS"];
+  let i = 0, tampon = "", chiffre = direct, sock;
+
+  // Une réponse SMTP peut tenir sur plusieurs lignes : « 250-… » annonce une suite,
+  // « 250 … » est la ligne finale. On n'avance qu'à la ligne finale, sinon le dialogue
+  // se désynchronise (les serveurs répondent en plusieurs lignes à EHLO).
+  function brancher(s) {
+    sock = s;
+    s.setTimeout(20000, () => { console.error("Email de signalement : délai dépassé"); s.destroy(); });
+    s.on("error", (e) => console.error("Email de signalement non envoyé:", e.message));
+    s.on("data", (buf) => {
+      tampon += buf.toString();
+      const lignes = tampon.split(/\r?\n/);
+      tampon = lignes.pop() || "";
+      for (const ligne of lignes) {
+        if (!/^\d{3} /.test(ligne)) continue; // ligne intermédiaire : on attend la fin
+        const code = parseInt(ligne.slice(0, 3), 10);
+        if (code >= 400) { console.error("Email de signalement refusé par le serveur :", ligne); s.destroy(); return; }
+        // Réponse au STARTTLS : on passe la connexion en chiffré, puis on reprend le dialogue
+        if (!chiffre && i >= etapes.length) {
+          chiffre = true;
+          const sur = tls.connect({ socket: s, servername: SMTP.host }, () => {
+            etapes = dialogue.slice(); i = 1; tampon = "";
+            sur.write(etapes[0] + "\r\n"); // après l'upgrade, pas de salutation : on relance l'EHLO
+          });
+          brancher(sur);
+          return;
+        }
+        if (i >= etapes.length) { s.end(); return; }
+        s.write(etapes[i++] + "\r\n");
+      }
+    });
+  }
+
+  brancher(direct ? tls.connect(SMTP.port, SMTP.host, () => {}) : net.connect(SMTP.port, SMTP.host));
 }
 
 app.use("/signaler", express.json({ limit: "4kb" }));
