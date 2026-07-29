@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2287-M">
+<meta name="version" content="v2288-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2287-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2288-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -1020,6 +1020,14 @@ function LigneMelds({ children }) {
     return () => window.removeEventListener("resize", ajuster);
   }, []);
   return <div ref={ref} className="flex gap-1.5 items-center flex-1 min-w-0">{children}</div>;
+}
+
+// Vignette du compte : photo ronde si définie, sinon avatar de profil, sinon 👤
+function PhotoCompte({ t }) {
+  let acc = {};
+  try { acc = JSON.parse(store.get("rami-account")) || {}; } catch (_) {}
+  if (acc.photo) return <img src={acc.photo} alt="" className="shrink-0" style={{ width: t, height: t, borderRadius: "50%", objectFit: "cover", border: "1px solid #f59e0b", verticalAlign: "middle" }} />;
+  return <span className="shrink-0" style={{ fontSize: Math.round(t * 0.78), lineHeight: 1 }}>{acc.avatar || "👤"}</span>;
 }
 
 function Confetti() {
@@ -2693,7 +2701,7 @@ function tapCard(id) {
     return out;
   }
   function activerCompte(d) {
-    store.set("rami-account", JSON.stringify({ pseudo: d.pseudo, code: d.code }));
+    store.set("rami-account", JSON.stringify({ pseudo: d.pseudo, code: d.code, avatar: d.avatar || null, photo: d.photo || null, renamedAt: d.renamedAt || null }));
     store.set("rami-stats", JSON.stringify(d.stats || {}));
     store.set("rami-succes", JSON.stringify(d.succes || {}));
     store.set("rami-name", d.pseudo);
@@ -2944,7 +2952,7 @@ function tapCard(id) {
           <div className="flex flex-col gap-2.5">
           {account.code ? (
             <div className="flex items-center gap-2 bg-emerald-950/50 border border-amber-500/40 rounded-xl px-3 py-2">
-              <span className="text-lg">👤</span>
+              <PhotoCompte t={30} />
               <div className="flex-1">
                 <div className="text-sm font-bold text-amber-300">{account.pseudo}</div>
                 <div className="text-[10px] text-emerald-400">Connecté — tu joues sous ton pseudo de compte</div>
@@ -3030,7 +3038,7 @@ function tapCard(id) {
                 {account.code ? (
                   <button onClick={() => { setLoginErr(""); setNewCode(null); setShowLogin(true); }}
                     className={tuile}>
-                    <span className="text-xl leading-none" style={ico}>👤</span>
+                    <PhotoCompte t={24} />
                     <span className="text-xs font-bold text-amber-300 leading-tight truncate">{account.pseudo}</span>
                   </button>
                 ) : (
@@ -3080,7 +3088,10 @@ function tapCard(id) {
                   </React.Fragment>
                 ) : account.code ? (
                   <React.Fragment>
-                    <h3 className="text-amber-300 font-bold text-center">👤 {account.pseudo}</h3>
+                    <div className="flex flex-col items-center gap-1">
+                      <PhotoCompte t={52} />
+                      <h3 className="text-amber-300 font-bold text-center">{account.pseudo}</h3>
+                    </div>
                     <p className="text-[11px] text-emerald-300 text-center">Ton code secret — c'est lui qui permet de retrouver ton compte sur n'importe quel appareil :</p>
                     <div className="text-3xl font-bold text-amber-300 tracking-[.3em] text-center" style={{ fontFamily: "Georgia, serif" }}>{account.code}</div>
                     <button onClick={() => { if (navigator.clipboard) navigator.clipboard.writeText(account.code).catch(() => {}); }}
@@ -3185,7 +3196,7 @@ function tapCard(id) {
                     <button onClick={() => setShowStats(false)} className="text-emerald-400 text-xl px-3 py-1 -mr-2">✕</button>
                   </div>
                   {account.code
-                    ? <div className="text-[11px] text-emerald-400 -mt-2">👤 {account.pseudo} · synchronisé sur tous tes appareils</div>
+                    ? <div className="text-[11px] text-emerald-400 -mt-2 flex items-center justify-center gap-1"><PhotoCompte t={14} /> {account.pseudo} · synchronisé sur tous tes appareils</div>
                     : <div className="text-[11px] text-emerald-400 -mt-2">Mode invité — connecte-toi pour garder tes stats</div>}
                   {soloEmpty && mpEmpty ? (
                     <div className="text-center text-emerald-300 text-sm py-6">🎴 Aucune partie terminée pour l'instant.<br />Joue une partie complète et tes stats apparaîtront ici !</div>

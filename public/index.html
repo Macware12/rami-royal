@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2287-M">
+<meta name="version" content="v2288-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2287-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2288-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -768,6 +768,14 @@ function LigneMelds({ children }) {
     return () => window.removeEventListener("resize", ajuster);
   }, []);
   return <div ref={ref} className="flex gap-1.5 items-center flex-1 min-w-0">{children}</div>;
+}
+
+// Vignette du compte : photo ronde si définie, sinon avatar de profil, sinon 👤
+function PhotoCompte({ t }) {
+  let acc = {};
+  try { acc = JSON.parse(store.get("rami-account")) || {}; } catch (_) {}
+  if (acc.photo) return <img src={acc.photo} alt="" className="shrink-0" style={{ width: t, height: t, borderRadius: "50%", objectFit: "cover", border: "1px solid #f59e0b", verticalAlign: "middle" }} />;
+  return <span className="shrink-0" style={{ fontSize: Math.round(t * 0.78), lineHeight: 1 }}>{acc.avatar || "👤"}</span>;
 }
 
 function Confetti() {
@@ -2088,7 +2096,7 @@ function App() {
               <h3 className="text-amber-300 font-bold text-center mb-1">⚙️ Réglages</h3>
               <button onClick={() => { setCptMenu(false); setCptErr(""); setCptNouveau(null); setCptMode("choix"); setCptPseudo(name.trim()); setCptOpen(true); }}
                 className="btn-gold font-bold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2">
-                <span>👤</span>
+                {nomVerrouille ? <PhotoCompte t={20} /> : <span>👤</span>}
                 <span>{nomVerrouille ? nomVerrouille + " — mon compte" : "Se connecter / Créer un compte"}</span>
               </button>
               <a href="/regles.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">📖 Règles complètes</a>
@@ -2104,7 +2112,7 @@ function App() {
               <p className="text-[10px] text-emerald-400 text-center -mt-1">« 4 couleurs » : ♦ en bleu et ♣ en vert — pensé pour le daltonisme.</p>
               <a href="/signaler.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🚩 Signaler un joueur</a>
               <a href="/confidentialite.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🔒 Confidentialité</a>
-              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2287-M</div>
+              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2288-M</div>
             </div>
           </div>
         )}
@@ -2405,7 +2413,7 @@ function App() {
                   <h3 className="text-amber-300 font-bold text-lg">📊 Mes statistiques</h3>
                   <button onClick={() => setCptStats(false)} className="text-emerald-400 text-xl px-3 py-1 -mr-2">✕</button>
                 </div>
-                {nomVerrouille && <div className="text-[11px] text-emerald-400 -mt-2">👤 {nomVerrouille} · synchronisé sur tous tes appareils</div>}
+                {nomVerrouille && <div className="text-[11px] text-emerald-400 -mt-2 flex items-center justify-center gap-1"><PhotoCompte t={14} /> {nomVerrouille} · synchronisé sur tous tes appareils</div>}
                 {(st.games || 0) === 0 && (mp.games || 0) === 0 ? (
                   <div className="text-center text-emerald-300 text-sm py-6">🎴 Aucune partie terminée pour l'instant.<br />Joue une partie complète et tes stats apparaîtront ici !</div>
                 ) : (
@@ -2444,7 +2452,7 @@ function App() {
           </div>
           {nomVerrouille ? (
             <div className="flex items-center gap-2 bg-emerald-950/50 border border-amber-500/40 rounded-xl px-3 py-2">
-              <span className="text-lg">👤</span>
+              <PhotoCompte t={30} />
               <div className="flex-1">
                 <div className="text-sm font-bold text-amber-300">{nomVerrouille}</div>
                 <div className="text-[10px] text-emerald-400">Connecté — tu joues sous ton pseudo de compte</div>
@@ -2519,7 +2527,7 @@ function App() {
           </div>
           {nomVerrouille ? (
             <div className="flex items-center gap-2 bg-emerald-950/50 border border-amber-500/40 rounded-xl px-3 py-2">
-              <span className="text-lg">👤</span>
+              <PhotoCompte t={30} />
               <div className="flex-1">
                 <div className="text-sm font-bold text-amber-300">{nomVerrouille}</div>
                 <div className="text-[10px] text-emerald-400">Connecté — tu joues sous ton pseudo de compte</div>
@@ -2616,7 +2624,7 @@ function App() {
                 </div>
               )}
               {nomVerrouille ? (
-                <div className="text-xs text-emerald-300">Salon <b className="text-amber-300 tracking-widest">{invite}</b> — tu entres en tant que <b className="text-amber-300">{nomVerrouille}</b> 👤</div>
+                <div className="text-xs text-emerald-300">Salon <b className="text-amber-300 tracking-widest">{invite}</b> — tu entres en tant que <PhotoCompte t={16} /> <b className="text-amber-300">{nomVerrouille}</b></div>
               ) : (
               <React.Fragment>
               <div className="text-xs text-emerald-300">Salon <b className="text-amber-300 tracking-widest">{invite}</b> — choisis ton pseudo :</div>
@@ -2638,7 +2646,7 @@ function App() {
           </div>
         )}
         <div className="flex gap-2 text-[11px] text-emerald-400 flex-wrap justify-center items-center pb-4">
-          <span className="opacity-60 self-center">v2287-M</span>
+          <span className="opacity-60 self-center">v2288-M</span>
         </div>
       </div>
     );
