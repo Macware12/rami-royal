@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2266-M">
+<meta name="version" content="v2267-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2266-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2267-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -999,7 +999,18 @@ function App() {
         cptMaj((x) => x + 1);
         setMsg("Ton compte a été supprimé définitivement.");
       })
-      .catch((e) => { setCptBusy(false); setCptErr(e.message || "Serveur injoignable — réessaie."); });
+      .catch((e) => {
+        if (/inexistant|incorrect/i.test(e.message || "")) {
+          // Déjà supprimé depuis un autre appareil : on nettoie simplement cette session
+          store.del("rami-account"); store.del("rami-stats"); store.del("rami-succes");
+          store.del("rami-jeton"); store.del("rami-defi");
+          setCptBusy(false); setCptOpen(false); setCptNouveau(null); setCptMode("choix");
+          cptMaj((x) => x + 1);
+          setMsg("Ce compte avait déjà été supprimé — te voilà en mode invité.");
+          return;
+        }
+        setCptBusy(false); setCptErr(e.message || "Serveur injoignable — réessaie.");
+      });
   }
   const [inviteInfo, setInviteInfo] = useState(null);
   const [avatar, setAvatar] = useState(store.get("ramimp-avatar") || AVATARS_POOL[0]);
@@ -1190,6 +1201,19 @@ function App() {
     });
     const raw = store.get("ramimp-save");
     if (raw) { try { setSaved(JSON.parse(raw)); } catch (_) {} }
+    const accBoot = readJSONls("rami-account");
+    if (accBoot.code) {
+      fetch(API_BASE + "/compte/info", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: accBoot.code }) })
+        .then((r) => r.json().then((d) => ({ status: r.status, d })))
+        .then(({ status, d }) => {
+          if (status === 404 || status === 403) {
+            // Compte supprimé (ou suspendu) depuis un autre appareil : déconnexion locale
+            cptDeconnecter();
+            setMsg(d && d.erreur && status === 403 ? d.erreur : "Ce compte a été supprimé — te voilà en mode invité.");
+          }
+        })
+        .catch(() => {}); // hors ligne : session locale conservée
+    }
     if (window.location.search.indexOf("classement=1") !== -1) {
       window.history.replaceState(null, "", window.location.pathname);
       ouvrirClassement();
@@ -2432,7 +2456,7 @@ function App() {
           <a href="/regles.html" className="underline">📖 Règles complètes</a>
           <a href="/confidentialite.html" className="underline">Confidentialité</a>
           <a href="/signaler.html" className="underline">Signaler un joueur</a>
-          <span className="opacity-60">v2266-M</span>
+          <span className="opacity-60">v2267-M</span>
         </div>
       </div>
     );

@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2266-M">
+<meta name="version" content="v2267-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2266-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2267-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -1458,11 +1458,22 @@ function RamiRoyal() {
     // Compte connecté : on rafraîchit les stats depuis le serveur (silencieux si hors ligne)
     const acc = readJSON("rami-account");
     if (acc.code) {
-      compteApi("connexion", { pseudo: acc.pseudo, code: acc.code }).then((d) => {
-        store.set("rami-stats", JSON.stringify(d.stats || {}));
-        store.set("rami-succes", JSON.stringify(d.succes || {}));
-        setStats(d.stats || {});
-      }).catch(() => {});
+      fetch(API_BASE + "/compte/info", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: acc.code }) })
+        .then((r) => r.json().then((d) => ({ status: r.status, d })))
+        .then(({ status, d }) => {
+          if (status === 404 || status === 403) {
+            // Compte supprimé (ou suspendu) depuis un autre appareil : on se déconnecte partout
+            deconnecterCompte();
+            setMsg(d && d.erreur && status === 403 ? d.erreur : "Ce compte a été supprimé — te voilà en mode invité.");
+            return;
+          }
+          if (d && d.stats) {
+            store.set("rami-stats", JSON.stringify(d.stats || {}));
+            store.set("rami-succes", JSON.stringify(d.succes || {}));
+            setStats(d.stats || {});
+          }
+        })
+        .catch(() => {}); // hors ligne : on garde la session locale telle quelle
     }
     const savedLevel = store.get("rami-level"); if (savedLevel) setLevel(savedLevel);
   }, []);
@@ -2616,7 +2627,19 @@ function tapCard(id) {
         setLoginBusy(false); setLoginMode("choix");
         setAccount({}); setStats({}); setShowLogin(false); setNewCode(null);
       })
-      .catch((e) => { setLoginBusy(false); setLoginErr(e.message || "Serveur injoignable — réessaie."); });
+      .catch((e) => {
+        if (/inexistant|incorrect/i.test(e.message || "")) {
+          // Déjà supprimé depuis un autre appareil : on nettoie simplement cette session
+          store.del("rami-account"); store.del("rami-stats"); store.del("rami-succes");
+          store.del("rami-jeton"); store.del("rami-defi");
+          succesSession.current = {};
+          setLoginBusy(false); setLoginMode("choix");
+          setAccount({}); setStats({}); setShowLogin(false); setNewCode(null);
+          setMsg("Ce compte avait déjà été supprimé — te voilà en mode invité.");
+          return;
+        }
+        setLoginBusy(false); setLoginErr(e.message || "Serveur injoignable — réessaie.");
+      });
   }
 
   function nextManche() {
