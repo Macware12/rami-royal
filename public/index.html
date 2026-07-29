@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2280-M">
+<meta name="version" content="v2281-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2280-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2281-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -746,6 +746,28 @@ function FlyingCard({ from, to, card, faceDown, delay, emphasis, onDone }) {
       <Card card={card || {}} faceDown={faceDown} flat />
     </div>
   );
+}
+
+// Ligne de combinaisons d'un joueur : se rétrécit automatiquement pour tenir sur UNE ligne.
+// En dessous de 55 % de la taille normale, on préfère repasser à la ligne (lisibilité d'abord).
+function LigneMelds({ children }) {
+  const ref = useRef(null);
+  const ajuster = () => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.zoom = "1";
+    el.style.flexWrap = "nowrap";
+    const ratio = el.scrollWidth > 0 ? el.clientWidth / el.scrollWidth : 1;
+    if (ratio >= 1) return;
+    if (ratio >= 0.55) el.style.zoom = String(Math.max(0.55, ratio - 0.01));
+    else el.style.flexWrap = "wrap";
+  };
+  React.useLayoutEffect(ajuster);
+  useEffect(() => {
+    window.addEventListener("resize", ajuster);
+    return () => window.removeEventListener("resize", ajuster);
+  }, []);
+  return <div ref={ref} className="flex gap-1.5 items-center flex-1 min-w-0">{children}</div>;
 }
 
 function Confetti() {
@@ -2025,7 +2047,7 @@ function App() {
               <p className="text-[10px] text-emerald-400 text-center -mt-1">« 4 couleurs » : ♦ en bleu et ♣ en vert — pensé pour le daltonisme.</p>
               <a href="/signaler.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🚩 Signaler un joueur</a>
               <a href="/confidentialite.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🔒 Confidentialité</a>
-              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2280-M</div>
+              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2281-M</div>
             </div>
           </div>
         )}
@@ -2559,7 +2581,7 @@ function App() {
           </div>
         )}
         <div className="flex gap-2 text-[11px] text-emerald-400 flex-wrap justify-center items-center pb-4">
-          <span className="opacity-60 self-center">v2280-M</span>
+          <span className="opacity-60 self-center">v2281-M</span>
         </div>
       </div>
     );
@@ -2843,7 +2865,7 @@ function App() {
                 <span className="text-base shrink-0" style={{ width: 22, marginTop: 6 }} title={(srv.players[o] || {}).name}>
                   {(srv.players[o] || {}).avatar || "🙂"}
                 </span>
-                <div className="flex flex-wrap gap-1.5 items-center flex-1">
+                <LigneMelds>
                   {g.melds.filter((m) => m.owner === o).map((m) => (
                     <MeldChip key={m.id} mid={m.id} meld={m}
                       small={true}
@@ -2851,7 +2873,7 @@ function App() {
                       onClick={() => { if (myTurn && selected.length === 1) { completeWith(m.id, selected[0]); setSelected([]); } }}
                       onLongPress={setZoomMeld} />
                   ))}
-                </div>
+                </LigneMelds>
               </div>
             ))}
           </div>
