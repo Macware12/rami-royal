@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2298-M">
+<meta name="version" content="v2299-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2298-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2299-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -1382,6 +1382,7 @@ function RamiRoyal() {
     const discard = [deck.pop()];
     return {
       players: ps, stock: deck, discard, melds: [], mancheIdx,
+      mancheDebut: Date.now(), // chrono de la manche (stat « manche la plus rapide »)
       history: history || [],
       turn: mancheIdx % ps.length,
       phase: "draw", staged: [], justPosed: false, lastDrawn: [],
@@ -1763,7 +1764,7 @@ function RamiRoyal() {
     return {
       ...state,
       players: state.players.map((p, i) => ({ ...p, total: summary[i].total })),
-      history: [...(state.history || []), { mancheIdx: state.mancheIdx, summary }],
+      history: [...(state.history || []), { mancheIdx: state.mancheIdx, summary, durMs: state.mancheDebut ? Date.now() - state.mancheDebut : null }],
       roundOver: { winnerIdx, bonusType, summary },
     };
   }
@@ -2966,6 +2967,7 @@ function tapCard(id) {
           manches: (g.history || []).slice(0, 10).map((hm) => ({
             label: (manchesList[hm.mancheIdx] || {}).label || "?",
             pts: (hm.summary[0].pts || 0) + (hm.summary[0].bonus || 0),
+            durMs: hm.durMs || null,
           })),
         });
       }

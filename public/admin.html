@@ -78,11 +78,11 @@
       <input id="filtre" placeholder="Filtrer par pseudo…">
       <div style="overflow-x:auto;">
         <table>
-          <thead><tr><th>Pseudo</th><th class="num">🪙</th><th class="num">🔥</th><th class="num">Solo (V/P)</th><th class="num">Multi (V/P)</th><th class="num">Succès</th><th class="num">⏱ Jeu</th><th>Vu le</th></tr></thead>
-          <tbody id="j-corps"><tr><td colspan="8">Chargement…</td></tr></tbody>
+          <thead><tr><th>Pseudo</th><th class="num">🪙</th><th class="num">🔥</th><th class="num">Solo (V/P)</th><th class="num">Multi (V/P)</th><th class="num">Succès</th><th>Contrat fort</th><th class="num">Manche + rapide</th><th class="num">⏱ Jeu</th><th>Vu le</th></tr></thead>
+          <tbody id="j-corps"><tr><td colspan="10">Chargement…</td></tr></tbody>
         </table>
       </div>
-      <div class="maj" style="text-align:left; margin-top:6px;">V/P = victoires / parties. ⏱ : temps de jeu cumulé (comptabilisé depuis juillet 2026). Triés du plus récent au plus ancien (500 max).</div>
+      <div class="maj" style="text-align:left; margin-top:6px;">V/P = victoires / parties. « Contrat fort » : le contrat où sa moyenne de points est la plus basse. ⏱ : temps de jeu cumulé (comptabilisé depuis juillet 2026). Triés du plus récent au plus ancien (500 max).</div>
     </div>
 
     <div class="carte">
@@ -116,6 +116,11 @@ function fmtDuree(ms) {
   var h = Math.floor(ms / 3600000), m = Math.round(ms % 3600000 / 60000);
   return h ? h + " h " + (m < 10 ? "0" : "") + m : m + " min";
 }
+function fmtChrono(ms) {
+  if (!ms) return "–";
+  var s = Math.round(ms / 1000);
+  return Math.floor(s / 60) + " min " + (s % 60 < 10 ? "0" : "") + (s % 60) + " s";
+}
 function fmtDate(t) {
   if (!t) return "–";
   var d = new Date(t), auj = new Date();
@@ -135,9 +140,11 @@ function rendreJoueurs() {
       '<td class="num">' + j.solo.victoires + " / " + j.solo.parties + "</td>" +
       '<td class="num">' + j.multi.victoires + " / " + j.multi.parties + "</td>" +
       '<td class="num">' + j.succes + "</td>" +
+      "<td>" + (j.favori ? esc2(j.favori.label) + ' <span style="opacity:.6">(' + j.favori.moyenne + " pts)</span>" : "–") + "</td>" +
+      '<td class="num">' + (j.mancheRapide ? fmtChrono(j.mancheRapide.ms) + ' <span style="opacity:.6">' + esc2(j.mancheRapide.label) + "</span>" : "–") + "</td>" +
       '<td class="num">' + fmtDuree(j.tempsJeuMs) + "</td>" +
       "<td>" + fmtDate(j.vuLe) + "</td></tr>";
-  }).join("") : "<tr><td colspan='8'>Aucun joueur.</td></tr>";
+  }).join("") : "<tr><td colspan='10'>Aucun joueur.</td></tr>";
 }
 document.addEventListener("input", function (e) { if (e.target && e.target.id === "filtre") rendreJoueurs(); });
 

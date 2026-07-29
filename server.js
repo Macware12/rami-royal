@@ -148,11 +148,12 @@ function saveComptes() {
 function cleanBucket(s) {
   const out = {};
   if (!s || typeof s !== "object") return out;
-  ["games", "wins", "streak", "bestStreak", "bestScore", "sumScore", "fastestWinMs"].forEach((k) => {
+  ["games", "wins", "streak", "bestStreak", "bestScore", "sumScore", "fastestWinMs", "mancheRapideMs"].forEach((k) => {
     if (typeof s[k] === "number" && isFinite(s[k])) out[k] = Math.max(0, Math.min(1e12, Math.round(s[k])));
   });
   // bestManche peut être négatif (bonus pose-tout) → on autorise les valeurs négatives
   if (typeof s.bestManche === "number" && isFinite(s.bestManche)) out.bestManche = Math.max(-1e6, Math.min(1e6, Math.round(s.bestManche)));
+  if (typeof s.mancheRapideLabel === "string") out.mancheRapideLabel = s.mancheRapideLabel.slice(0, 40);
   // contracts : { "libellé": { n, sum } } pour le contrat préféré
   if (s.contracts && typeof s.contracts === "object") {
     const co = {};
@@ -160,7 +161,10 @@ function cleanBucket(s) {
       if (typeof k !== "string" || k.length > 40) return;
       const c = s.contracts[k];
       if (c && typeof c === "object" && typeof c.n === "number" && typeof c.sum === "number" && isFinite(c.n) && isFinite(c.sum))
+      {
         co[k] = { n: Math.max(0, Math.min(1e9, Math.round(c.n))), sum: Math.round(c.sum) };
+        if (typeof c.fastMs === "number" && isFinite(c.fastMs)) co[k].fastMs = Math.max(0, Math.round(c.fastMs));
+      }
     });
     out.contracts = co;
   }
@@ -192,6 +196,8 @@ function mergeBucket(a, b) {
   if (temps.length) out.fastestWinMs = Math.min(...temps); // on garde la victoire la plus rapide
   const bm = [a.bestManche, b.bestManche].filter((x) => x != null);
   if (bm.length) out.bestManche = Math.min(...bm);
+  const mr = [a, b].filter((x) => x.mancheRapideMs != null).sort((x, y) => x.mancheRapideMs - y.mancheRapideMs)[0];
+  if (mr) { out.mancheRapideMs = mr.mancheRapideMs; if (mr.mancheRapideLabel) out.mancheRapideLabel = mr.mancheRapideLabel; }
   // Chaque appareil envoie son cumul complet : on garde, par contrat, la version au plus grand n
   // (comme games/wins en Math.max) pour ne pas double-compter à chaque synchro
   const ca = a.contracts || {}, cb = b.contracts || {};
@@ -625,6 +631,33 @@ function adminOk(req, res) {
 }
 
 // Résumé pour le tableau de bord admin : /admin/resume?cle=CLE
+// Contrat où le joueur s'en sort le mieux : moyenne de points la plus basse (min. 2 manches jouées)
+function contratFavori(solo, multi) {
+  const tot = {};
+  for (const src of [solo.contracts || {}, multi.contracts || {}]) {
+    for (const [label, cc] of Object.entries(src)) {
+      const t = tot[label] || (tot[label] = { n: 0, sum: 0 });
+      t.n += cc.n || 0; t.sum += cc.sum || 0;
+    }
+  }
+  let best = null;
+  for (const [label, t] of Object.entries(tot)) {
+    if (t.n < 2) continue;
+    const moy = t.sum / t.n;
+    if (!best || moy < best.moyenne) best = { label, moyenne: Math.round(moy), n: t.n };
+  }
+  return best;
+}
+// Manche la plus rapide, tous modes confondus
+function mancheLaPlusRapide(solo, multi) {
+  let best = null;
+  for (const b of [solo, multi]) {
+    if (b.mancheRapideMs == null) continue;
+    if (!best || b.mancheRapideMs < best.ms) best = { ms: b.mancheRapideMs, label: b.mancheRapideLabel || "?" };
+  }
+  return best;
+}
+
 // Vue détaillée par joueur : pièces, série, parties, victoires, temps de jeu…
 app.get("/admin/joueurs", (req, res) => {
   if (!adminOk(req, res)) return;
@@ -640,6 +673,8 @@ app.get("/admin/joueurs", (req, res) => {
         solo: { parties: s.games || 0, victoires: s.wins || 0 },
         multi: { parties: mp.games || 0, victoires: mp.wins || 0 },
         succes: c.succes ? Object.keys(c.succes).length : 0,
+        favori: contratFavori(s, mp),
+        mancheRapide: mancheLaPlusRapide(s, mp),
         tempsJeuMs: c.tempsJeuMs || 0,
         creeLe: c.createdAt || null, vuLe: c.lastSeen || null,
       };
@@ -803,6 +838,13 @@ app.post("/compte/partie", (req, res) => {
       if (!b.contracts[label] && Object.keys(b.contracts).length >= 20) return; // borne mémoire
       const cc = b.contracts[label] || { n: 0, sum: 0 };
       cc.n += 1; cc.sum += pts;
+      // Manche la plus rapide (durée), toutes manches confondues et par contrat
+      const dm = parseInt(m && m.durMs, 10);
+      if (isFinite(dm) && dm > 10000 && dm < 6 * 3600000) {
+        cc.fastMs = cc.fastMs == null ? dm : Math.min(cc.fastMs, dm);
+        b.mancheRapideMs = b.mancheRapideMs == null ? dm : Math.min(b.mancheRapideMs, dm);
+        if (b.mancheRapideMs === dm) b.mancheRapideLabel = label;
+      }
       b.contracts[label] = cc;
     });
   }
@@ -1221,6 +1263,7 @@ function startRound(room, mancheIdx) {
   }
   room.game = {
     mancheIdx,
+    mancheDebut: Date.now(), // chrono de la manche (stat « manche la plus rapide »)
     stock: deck,
     discard: [deck.pop()],
     melds: [],
@@ -1309,7 +1352,7 @@ function endStalemate(room) {
     q.total += pts;
     return { name: q.name, pts, bonus: 0, total: q.total };
   });
-  g.history.push({ mancheIdx: g.mancheIdx, label: contratCourant(g).label, summary });
+  g.history.push({ mancheIdx: g.mancheIdx, label: contratCourant(g).label, summary, durMs: g.mancheDebut ? Date.now() - g.mancheDebut : null });
   g.roundOver = { winnerIdx, bonusType: null, epuise: true, summary };
   const manches = g.manches || E.MANCHES;
   room.state = g.mancheIdx + 1 >= manches.length ? "over" : "roundEnd";
@@ -1740,7 +1783,7 @@ function checkRoundEnd(room, idx) {
     q.total += pts + bonus;
     return { name: q.name, pts, bonus, total: q.total };
   });
-  g.history.push({ mancheIdx: g.mancheIdx, label: contratCourant(g).label, summary }); // label = contrat réel (correct même en mode court)
+  g.history.push({ mancheIdx: g.mancheIdx, label: contratCourant(g).label, summary, durMs: g.mancheDebut ? Date.now() - g.mancheDebut : null }); // label = contrat réel (correct même en mode court)
   g.roundOver = { winnerIdx: idx, bonusType, summary };
   const manches = g.manches || E.MANCHES;
   room.state = g.mancheIdx + 1 >= manches.length ? "over" : "roundEnd";
