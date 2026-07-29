@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2290-M">
+<meta name="version" content="v2291-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2290-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2291-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -552,6 +552,21 @@ function helpArrangement(hand, contract, variant) {
     : (contract.esc || 0) >= (contract.tri || 0) ? variant % 2 === 0 : variant % 2 === 1;
   if (preferEsc) { if (wantEscAny) { takeRuns(); takeJokerRuns(); } if (wantTriAny) takeTris(); }
   else { if (wantTriAny) takeTris(); if (wantEscAny) { takeRuns(); takeJokerRuns(); } }
+
+  // Les cartes restantes qui prolongent un groupe complet rejoignent ce groupe
+  // au lieu de rester isolées : 4e carte d'un tri, carte qui continue un escalier.
+  for (const c of reals.filter((x) => !used.has(x.id))) {
+    for (const g of groups) {
+      if (!g.complete) continue;
+      const ok = g.kind === "tri"
+        ? g.cards.some((x) => !x.joker && x.rank === c.rank)
+        : validGroup("esc", [...g.cards, c]);
+      if (!ok) continue;
+      g.cards = g.kind === "esc" ? sortEscalier([...g.cards, c]) : [...g.cards, c];
+      used.add(c.id);
+      break;
+    }
+  }
 
   // Ébauches : paires (futur tri) et voisins de suite (futur escalier) — dans l'ordre du contrat
   const draftPairs = () => {
