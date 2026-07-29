@@ -341,9 +341,41 @@ app.post("/compte/connexion", (req, res) => {
   res.json(compteJson(c));
 });
 
+// ---------- Pièces et série quotidienne ----------
+// Récompenses SERVEUR uniquement : le client ne fait qu'afficher. Montants :
+// partie terminée 10, victoire +25, succès débloqué +25, défi du jour 15 (+10 si gagné),
+// série quotidienne croissante (jour 1 → 7+). Plafond anti-farm : 15 parties payées par jour.
+const PIECES = { partie: 10, victoire: 25, succes: 25, defi: 15, defiVictoire: 10 };
+const SERIE_RECOMPENSES = [10, 15, 20, 25, 30, 40, 50];
+const PARTIES_PAYEES_MAX = 15;
+const dateDuJour = () => new Date().toISOString().slice(0, 10);
+function crediterPieces(c, montant) { if (montant > 0) c.pieces = (c.pieces || 0) + montant; }
+// Première activité du jour : la série avance (ou repart à 1) et rapporte des pièces
+function majSerie(c) {
+  const auj = dateDuJour();
+  const s = c.serie && typeof c.serie === "object" ? c.serie : { jours: 0, dernier: null };
+  if (s.dernier === auj) { c.serie = s; return { jours: s.jours, gain: 0 }; }
+  const hier = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  s.jours = s.dernier === hier ? (s.jours || 0) + 1 : 1;
+  s.dernier = auj;
+  c.serie = s;
+  const gain = SERIE_RECOMPENSES[Math.min(s.jours - 1, SERIE_RECOMPENSES.length - 1)];
+  crediterPieces(c, gain);
+  return { jours: s.jours, gain };
+}
+// Nombre de parties déjà récompensées aujourd'hui (plafond anti-farm)
+function partieRecompensee(c) {
+  const auj = dateDuJour();
+  const pj = c.pjour && c.pjour.d === auj ? c.pjour : { d: auj, n: 0 };
+  pj.n += 1; c.pjour = pj;
+  return pj.n <= PARTIES_PAYEES_MAX;
+}
+const nbSucces = (s) => (s && typeof s === "object" ? Object.keys(s).length : 0);
+
 // Réponse standard des routes compte (avatar et photo de profil inclus)
 const compteJson = (c) => ({ code: c.code, pseudo: c.pseudo, stats: c.stats || {}, succes: c.succes || {},
-  avatar: c.avatar || null, photo: c.photo || null, renamedAt: c.renamedAt || null });
+  avatar: c.avatar || null, photo: c.photo || null, renamedAt: c.renamedAt || null,
+  pieces: c.pieces || 0, serie: (c.serie && c.serie.jours) || 0 });
 
 // Changer de pseudo sans perdre sa progression (le compte reste identifié par son code).
 // Limite anti-abus : 1 changement par semaine (le premier est libre — faute de frappe pardonnée).
@@ -751,10 +783,23 @@ app.post("/compte/partie", (req, res) => {
     });
   }
   c.stats = cleanStats(c.stats);
+  const succesAvant = nbSucces(c.succes);
   if (succes) c.succes = mergeSucces(c.succes, cleanSucces(succes));
+  // Pièces : partie + victoire (plafonnées par jour), succès nouveaux, série quotidienne
+  const payee = partieRecompensee(c);
+  const gains = {
+    partie: payee ? PIECES.partie : 0,
+    victoire: payee && w ? PIECES.victoire : 0,
+    succes: (nbSucces(c.succes) - succesAvant) * PIECES.succes,
+  };
+  const serie = majSerie(c);
+  gains.serie = serie.gain;
+  gains.serieJours = serie.jours;
+  gains.total = gains.partie + gains.victoire + gains.succes + gains.serie;
+  crediterPieces(c, gains.total - gains.serie); // la série est déjà créditée par majSerie
   c.lastSeen = Date.now();
   saveComptes();
-  res.json({ stats: c.stats, succes: c.succes || {} });
+  res.json({ stats: c.stats, succes: c.succes || {}, pieces: c.pieces || 0, gains });
 });
 
 // ---------- Défi du jour : classement mondial ----------
@@ -837,7 +882,15 @@ app.post("/defi/score", (req, res) => {
   if (pb) return res.status(403).json({ erreur: pb });
   jour.set(c.code, { pseudo: c.pseudo, total: Math.max(0, Math.min(5000, parseInt(total, 10) || 0)), won: Boolean(won), at: Date.now() });
   saveDefi();
-  res.json({ ok: true });
+  // Pièces du défi (le premier essai seul compte, donc pas de farm possible ici)
+  const gains = { defi: PIECES.defi, victoire: won ? PIECES.defiVictoire : 0 };
+  const serie = majSerie(c);
+  gains.serie = serie.gain;
+  gains.serieJours = serie.jours;
+  gains.total = gains.defi + gains.victoire + gains.serie;
+  crediterPieces(c, gains.defi + gains.victoire);
+  saveComptes();
+  res.json({ ok: true, pieces: c.pieces || 0, gains });
 });
 
 app.get("/defi/classement", (req, res) => {

@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2293-M">
+<meta name="version" content="v2294-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2293-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2294-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -256,9 +256,22 @@ function flushParties() {
       file.shift();
       store.set("rami-parties", JSON.stringify(file));
       if (d && d.stats) { store.set("rami-stats", JSON.stringify(d.stats)); store.set("rami-succes", JSON.stringify(d.succes || {})); }
+      if (d && d.gains && d.gains.total > 0) signalerGains(d);
       if (file.length) flushParties();
     })
     .catch(() => {}); // hors ligne : la file attend son heure
+}
+// Solde mis à jour + toast : appelé quand le serveur confirme des pièces gagnées
+function signalerGains(d) {
+  try {
+    const acc = JSON.parse(store.get("rami-account")) || {};
+    if (acc.code && typeof d.pieces === "number") {
+      acc.pieces = d.pieces;
+      if (d.gains && d.gains.serieJours) acc.serie = d.gains.serieJours;
+      store.set("rami-account", JSON.stringify(acc));
+    }
+  } catch (_) {}
+  try { window.dispatchEvent(new CustomEvent("rami-gains", { detail: d })); } catch (_) {}
 }
 function pousserPartie(delta) {
   let file = [];
@@ -1062,6 +1075,38 @@ function LigneMelds({ children }) {
 }
 
 // Vignette du compte : photo ronde si définie, sinon avatar de profil, sinon 👤
+// Toast des pièces gagnées : écoute l'événement "rami-gains" émis après chaque
+// partie ou défi enregistré côté serveur, et affiche le détail quelques secondes.
+function GainsToast() {
+  const [info, setInfo] = React.useState(null);
+  React.useEffect(() => {
+    const h = (e) => setInfo(e.detail);
+    window.addEventListener("rami-gains", h);
+    return () => window.removeEventListener("rami-gains", h);
+  }, []);
+  React.useEffect(() => {
+    if (!info) return;
+    const t = setTimeout(() => setInfo(null), 6500);
+    return () => clearTimeout(t);
+  }, [info]);
+  if (!info || !info.gains || !info.gains.total) return null;
+  const g = info.gains;
+  const det = [];
+  if (g.partie) det.push("partie +" + g.partie);
+  if (g.defi) det.push("défi +" + g.defi);
+  if (g.victoire) det.push("victoire +" + g.victoire);
+  if (g.succes) det.push("succès +" + g.succes);
+  if (g.serie) det.push("série " + g.serieJours + " j +" + g.serie);
+  return (
+    <div className="fixed left-1/2 -translate-x-1/2 z-40 px-4 py-2.5 rounded-2xl text-sm font-bold text-amber-200 text-center cursor-pointer"
+      style={{ top: "calc(env(safe-area-inset-top, 0px) + 10px)", background: "linear-gradient(180deg, rgba(6,58,42,.97), rgba(4,40,28,.97))", border: "1px solid #f59e0b88", boxShadow: "0 6px 18px rgba(0,0,0,.45)" }}
+      onClick={() => setInfo(null)}>
+      🪙 +{g.total} pièces
+      <span className="block text-[10px] font-normal text-emerald-300">{det.join(" · ")}{typeof info.pieces === "number" ? " — solde : " + info.pieces : ""}</span>
+    </div>
+  );
+}
+
 function PhotoCompte({ t }) {
   let acc = {};
   try { acc = JSON.parse(store.get("rami-account")) || {}; } catch (_) {}
@@ -1210,6 +1255,11 @@ function MeldChip({ meld, ownerName, onClick, highlight, mid, small, onLongPress
 }
 
 // ---------- Application ----------
+// Solde de pièces du compte (localStorage, mis à jour par signalerGains)
+function lireSolde() {
+  try { const a = JSON.parse(store.get("rami-account")) || {}; return { pieces: a.pieces || 0, serie: a.serie || 0 }; } catch (_) { return { pieces: 0, serie: 0 }; }
+}
+
 function RamiRoyal() {
   const [screen, setScreen] = useState("setup");
   const [nbAI, setNbAI] = useState(2);
@@ -1217,6 +1267,12 @@ function RamiRoyal() {
   const [introSlide, setIntroSlide] = useState(0); // écran d'apprentissage illustré avant le tutoriel
   const [tutoFlags, setTutoFlags] = useState({ drew: false, esc: false, tri: false, posed: false, complete: false, aide: false, scores: false, regles: false });
   const [tutoParty, setTutoParty] = useState(0); // confettis de mission
+  const [, gainsTick] = useState(0); // re-rendu du solde après un gain de pièces
+  useEffect(() => {
+    const h = () => gainsTick((x) => x + 1);
+    window.addEventListener("rami-gains", h);
+    return () => window.removeEventListener("rami-gains", h);
+  }, []);
   const [playerName, setPlayerName] = useState("");
   const [level, setLevel] = useState("moyen");
   const [shortMode, setShortMode] = useState(false); // Mode court : 3 manches au lieu de 8
@@ -1627,7 +1683,7 @@ function RamiRoyal() {
           }
           if (d && d.code) {
             // Profil à jour partout : photo, avatar, pseudo, stats
-            store.set("rami-account", JSON.stringify({ pseudo: d.pseudo, code: d.code, avatar: d.avatar || null, photo: d.photo || null, renamedAt: d.renamedAt || null }));
+            store.set("rami-account", JSON.stringify({ pseudo: d.pseudo, code: d.code, avatar: d.avatar || null, photo: d.photo || null, renamedAt: d.renamedAt || null, pieces: d.pieces || 0, serie: d.serie || 0 }));
             store.set("rami-name", d.pseudo);
             if (!partiesEnAttente()) { // des parties hors-ligne attendent : on ne les écrase pas
               store.set("rami-stats", JSON.stringify(d.stats || {}));
@@ -2740,7 +2796,7 @@ function tapCard(id) {
     return out;
   }
   function activerCompte(d) {
-    store.set("rami-account", JSON.stringify({ pseudo: d.pseudo, code: d.code, avatar: d.avatar || null, photo: d.photo || null, renamedAt: d.renamedAt || null }));
+    store.set("rami-account", JSON.stringify({ pseudo: d.pseudo, code: d.code, avatar: d.avatar || null, photo: d.photo || null, renamedAt: d.renamedAt || null, pieces: d.pieces || 0, serie: d.serie || 0 }));
     store.set("rami-stats", JSON.stringify(d.stats || {}));
     store.set("rami-succes", JSON.stringify(d.succes || {}));
     store.set("rami-name", d.pseudo);
@@ -2834,7 +2890,9 @@ function tapCard(id) {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ code: accDefi.code, date: cleDuJour(), total: g.players[0].total, won,
               jeton: lireJeton("jour-" + cleDuJour()) }),
-          }).catch(() => {}); // hors ligne : tant pis, le score reste local
+          }).then((r) => (r.ok ? r.json() : null))
+            .then((d) => { if (d && d.gains && d.gains.total) signalerGains(d); })
+            .catch(() => {}); // hors ligne : tant pis, le score reste local
         }
       }
       const acc = readJSON("rami-account");
@@ -2994,7 +3052,7 @@ function tapCard(id) {
               <PhotoCompte t={30} />
               <div className="flex-1">
                 <div className="text-sm font-bold text-amber-300">{account.pseudo}</div>
-                <div className="text-[10px] text-emerald-400">Connecté — tu joues sous ton pseudo de compte</div>
+                <div className="text-[10px] text-emerald-400">Connecté · <span className="font-bold text-yellow-300">🪙 {lireSolde().pieces}</span> — tu joues sous ton pseudo de compte</div>
               </div>
             </div>
           ) : (
@@ -3131,6 +3189,7 @@ function tapCard(id) {
                     <div className="flex flex-col items-center gap-1">
                       <PhotoCompte t={52} />
                       <h3 className="text-amber-300 font-bold text-center">{account.pseudo}</h3>
+                      <div className="text-xs font-bold text-yellow-300">🪙 {lireSolde().pieces} pièces{lireSolde().serie > 1 ? " · 🔥 série " + lireSolde().serie + " jours" : ""}</div>
                     </div>
                     <p className="text-[11px] text-emerald-300 text-center">Ton code secret — c'est lui qui permet de retrouver ton compte sur n'importe quel appareil :</p>
                     <div className="text-3xl font-bold text-amber-300 tracking-[.3em] text-center" style={{ fontFamily: "Georgia, serif" }}>{account.code}</div>
@@ -3306,7 +3365,7 @@ function tapCard(id) {
             <span className="text-2xl">👤</span>
             <span className="flex-1">
               <span className="block text-sm font-bold text-amber-300">{ranking[0].name === g.players[0].name ? "Belle victoire ! Garde-la précieusement" : "Ne perds pas ta progression"}</span>
-              <span className="block text-[11px] text-emerald-300">Crée ton compte gratuit : stats et succès sur tous tes appareils</span>
+              <span className="block text-[11px] text-emerald-300">Avec un compte, cette partie t'aurait rapporté des pièces 🪙 — stats et succès gardés partout</span>
             </span>
             <span className="text-amber-300 font-bold">→</span>
           </button>
@@ -3903,7 +3962,7 @@ function tapCard(id) {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<RamiRoyal />);
+ReactDOM.createRoot(document.getElementById('root')).render(<React.Fragment><RamiRoyal /><GainsToast /></React.Fragment>);
 </script>
 </body>
 </html>

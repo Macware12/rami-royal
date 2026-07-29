@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2293-M">
+<meta name="version" content="v2294-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2293-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2294-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -810,6 +810,38 @@ function LigneMelds({ children }) {
 }
 
 // Vignette du compte : photo ronde si définie, sinon avatar de profil, sinon 👤
+// Toast des pièces gagnées : écoute l'événement "rami-gains" émis après chaque
+// partie ou défi enregistré côté serveur, et affiche le détail quelques secondes.
+function GainsToast() {
+  const [info, setInfo] = React.useState(null);
+  React.useEffect(() => {
+    const h = (e) => setInfo(e.detail);
+    window.addEventListener("rami-gains", h);
+    return () => window.removeEventListener("rami-gains", h);
+  }, []);
+  React.useEffect(() => {
+    if (!info) return;
+    const t = setTimeout(() => setInfo(null), 6500);
+    return () => clearTimeout(t);
+  }, [info]);
+  if (!info || !info.gains || !info.gains.total) return null;
+  const g = info.gains;
+  const det = [];
+  if (g.partie) det.push("partie +" + g.partie);
+  if (g.defi) det.push("défi +" + g.defi);
+  if (g.victoire) det.push("victoire +" + g.victoire);
+  if (g.succes) det.push("succès +" + g.succes);
+  if (g.serie) det.push("série " + g.serieJours + " j +" + g.serie);
+  return (
+    <div className="fixed left-1/2 -translate-x-1/2 z-40 px-4 py-2.5 rounded-2xl text-sm font-bold text-amber-200 text-center cursor-pointer"
+      style={{ top: "calc(env(safe-area-inset-top, 0px) + 10px)", background: "linear-gradient(180deg, rgba(6,58,42,.97), rgba(4,40,28,.97))", border: "1px solid #f59e0b88", boxShadow: "0 6px 18px rgba(0,0,0,.45)" }}
+      onClick={() => setInfo(null)}>
+      🪙 +{g.total} pièces
+      <span className="block text-[10px] font-normal text-emerald-300">{det.join(" · ")}{typeof info.pieces === "number" ? " — solde : " + info.pieces : ""}</span>
+    </div>
+  );
+}
+
 function PhotoCompte({ t }) {
   let acc = {};
   try { acc = JSON.parse(store.get("rami-account")) || {}; } catch (_) {}
@@ -949,9 +981,22 @@ function flushParties() {
       file.shift();
       store.set("rami-parties", JSON.stringify(file));
       if (d && d.stats) { store.set("rami-stats", JSON.stringify(d.stats)); store.set("rami-succes", JSON.stringify(d.succes || {})); }
+      if (d && d.gains && d.gains.total > 0) signalerGains(d);
       if (file.length) flushParties();
     })
     .catch(() => {});
+}
+// Solde mis à jour + toast : appelé quand le serveur confirme des pièces gagnées
+function signalerGains(d) {
+  try {
+    const acc = JSON.parse(store.get("rami-account")) || {};
+    if (acc.code && typeof d.pieces === "number") {
+      acc.pieces = d.pieces;
+      if (d.gains && d.gains.serieJours) acc.serie = d.gains.serieJours;
+      store.set("rami-account", JSON.stringify(acc));
+    }
+  } catch (_) {}
+  try { window.dispatchEvent(new CustomEvent("rami-gains", { detail: d })); } catch (_) {}
 }
 function pousserPartie(delta) {
   let file = [];
@@ -996,6 +1041,11 @@ function App() {
   const [cptBusy, setCptBusy] = useState(false);
   const [cptNouveau, setCptNouveau] = useState(null); // code affiché après création
   const [, cptMaj] = useState(0); // forcer le re-rendu après connexion/déconnexion
+  useEffect(() => { // le solde du chip suit les gains de pièces
+    const h = () => cptMaj((x) => x + 1);
+    window.addEventListener("rami-gains", h);
+    return () => window.removeEventListener("rami-gains", h);
+  }, []);
   function compteApi(chemin, body) {
     return fetch(API_BASE + "/compte/" + chemin, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
@@ -1044,7 +1094,7 @@ function App() {
       .catch(() => setDefiClassement({ erreur: true }));
   }
   function cptActiver(d) {
-    store.set("rami-account", JSON.stringify({ pseudo: d.pseudo, code: d.code, avatar: d.avatar || null, photo: d.photo || null, renamedAt: d.renamedAt || null }));
+    store.set("rami-account", JSON.stringify({ pseudo: d.pseudo, code: d.code, avatar: d.avatar || null, photo: d.photo || null, renamedAt: d.renamedAt || null, pieces: d.pieces || 0, serie: d.serie || 0 }));
     if (!partiesEnAttente()) { // des parties hors-ligne attendent : on ne les écrase pas
       store.set("rami-stats", JSON.stringify(d.stats || {}));
       store.set("rami-succes", JSON.stringify(d.succes || {}));
@@ -2112,7 +2162,10 @@ function App() {
               <span className="text-base leading-none">{(nomVerrouille && compteActif.avatar) || "👤"}</span>
             )}
             {nomVerrouille ? (
-              <span className="text-sm font-bold text-amber-300 max-w-[120px] truncate">{nomVerrouille}</span>
+              <span className="flex flex-col items-start leading-tight">
+                <span className="text-sm font-bold text-amber-300 max-w-[120px] truncate">{nomVerrouille}</span>
+                <span className="text-[10px] font-bold text-yellow-300">🪙 {compteActif.pieces || 0}</span>
+              </span>
             ) : (
               <span className="text-sm font-bold">Se connecter</span>
             )}
@@ -2152,7 +2205,7 @@ function App() {
               <a href="/contact.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">💬 Nous contacter</a>
               <a href="/signaler.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🚩 Signaler un joueur</a>
               <a href="/confidentialite.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🔒 Confidentialité</a>
-              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2293-M</div>
+              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2294-M</div>
             </div>
           </div>
         )}
@@ -2236,6 +2289,7 @@ function App() {
                       <span className="text-4xl">{compteActif.avatar || "👤"}</span>
                     )}
                     <h3 className="text-amber-300 font-bold text-center">{compteActif.pseudo}</h3>
+                    <div className="text-xs font-bold text-yellow-300">🪙 {compteActif.pieces || 0} pièces{compteActif.serie > 1 ? " · 🔥 série " + compteActif.serie + " jours" : ""}</div>
                   </div>
                   <p className="text-[11px] text-emerald-300 text-center">Ton code secret — c'est lui qui permet de retrouver ton compte sur n'importe quel appareil :</p>
                   <div className="text-3xl font-bold text-amber-300 tracking-[.3em] text-center" style={{ fontFamily: "Georgia, serif" }}>{compteActif.code}</div>
@@ -2495,7 +2549,7 @@ function App() {
               <PhotoCompte t={30} />
               <div className="flex-1">
                 <div className="text-sm font-bold text-amber-300">{nomVerrouille}</div>
-                <div className="text-[10px] text-emerald-400">Connecté — tu joues sous ton pseudo de compte</div>
+                <div className="text-[10px] text-emerald-400">Connecté · <span className="font-bold text-yellow-300">🪙 {compteActif.pieces || 0}</span> — tu joues sous ton pseudo de compte</div>
               </div>
             </div>
           ) : (
@@ -2570,7 +2624,7 @@ function App() {
               <PhotoCompte t={30} />
               <div className="flex-1">
                 <div className="text-sm font-bold text-amber-300">{nomVerrouille}</div>
-                <div className="text-[10px] text-emerald-400">Connecté — tu joues sous ton pseudo de compte</div>
+                <div className="text-[10px] text-emerald-400">Connecté · <span className="font-bold text-yellow-300">🪙 {compteActif.pieces || 0}</span> — tu joues sous ton pseudo de compte</div>
               </div>
             </div>
           ) : (
@@ -2686,7 +2740,7 @@ function App() {
           </div>
         )}
         <div className="flex gap-2 text-[11px] text-emerald-400 flex-wrap justify-center items-center pb-4">
-          <span className="opacity-60 self-center">v2293-M</span>
+          <span className="opacity-60 self-center">v2294-M</span>
         </div>
       </div>
     );
@@ -2797,7 +2851,7 @@ function App() {
             <span className="text-2xl">👤</span>
             <span className="flex-1">
               <span className="block text-sm font-bold text-amber-300">{ranking[0].idx === youIdx ? "Belle victoire ! Garde-la précieusement" : "Ne perds pas ta progression"}</span>
-              <span className="block text-[11px] text-emerald-300">Crée ton compte gratuit : stats et succès sur tous tes appareils</span>
+              <span className="block text-[11px] text-emerald-300">Avec un compte, cette partie t'aurait rapporté des pièces 🪙 — stats et succès gardés partout</span>
             </span>
             <span className="text-amber-300 font-bold">→</span>
           </button>
@@ -3376,7 +3430,7 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+ReactDOM.createRoot(document.getElementById('root')).render(<React.Fragment><App /><GainsToast /></React.Fragment>);
 </script>
 </body>
 </html>
