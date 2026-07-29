@@ -625,6 +625,28 @@ function adminOk(req, res) {
 }
 
 // Résumé pour le tableau de bord admin : /admin/resume?cle=CLE
+// Vue détaillée par joueur : pièces, série, parties, victoires, temps de jeu…
+app.get("/admin/joueurs", (req, res) => {
+  if (!adminOk(req, res)) return;
+  const liste = [...comptes.values()]
+    .sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0))
+    .slice(0, 500)
+    .map((c) => {
+      const s = c.stats || {};
+      const mp = s.mp || {};
+      return {
+        code: c.code, pseudo: c.pseudo, banni: Boolean(c.banni),
+        pieces: c.pieces || 0, serie: (c.serie && c.serie.jours) || 0,
+        solo: { parties: s.games || 0, victoires: s.wins || 0 },
+        multi: { parties: mp.games || 0, victoires: mp.wins || 0 },
+        succes: c.succes ? Object.keys(c.succes).length : 0,
+        tempsJeuMs: c.tempsJeuMs || 0,
+        creeLe: c.createdAt || null, vuLe: c.lastSeen || null,
+      };
+    });
+  res.json({ total: comptes.size, joueurs: liste });
+});
+
 app.get("/admin/resume", (req, res) => {
   if (!adminOk(req, res)) return;
   const now = Date.now();
@@ -767,6 +789,8 @@ app.post("/compte/partie", (req, res) => {
   b.sumScore = (b.sumScore || 0) + sc;
   if (w) b.bestScore = b.bestScore == null ? sc : Math.min(b.bestScore, sc);
   const dur = parseInt(dureeMs, 10);
+  if (isFinite(dur) && dur > 0 && dur < 24 * 3600000)
+    c.tempsJeuMs = (c.tempsJeuMs || 0) + dur; // temps de jeu cumulé (vue admin)
   if (w && isFinite(dur) && dur > 30000 && dur < 24 * 3600000)
     b.fastestWinMs = b.fastestWinMs == null ? dur : Math.min(b.fastestWinMs, dur);
   if (Array.isArray(manches)) {

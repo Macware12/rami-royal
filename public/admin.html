@@ -29,6 +29,12 @@
   .pseudos { font-size: 12px; color: #a7f3d0; line-height: 1.8; }
   .maj { font-size: 10px; color: #34d399; opacity: .7; margin-top: 14px; text-align: center; }
   .err { color: #fca5a5; font-size: 13px; margin-top: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 8px; }
+  th { text-align: left; color: #fbbf24; font-size: 10px; text-transform: uppercase; padding: 4px 6px; border-bottom: 1px solid #14705266; }
+  td { padding: 5px 6px; border-bottom: 1px solid #0f4d3a55; color: #d1fae5; white-space: nowrap; }
+  td.num, th.num { text-align: right; }
+  .banni-tag { background: #7f1d1d; color: #fecaca; border-radius: 6px; padding: 1px 6px; font-size: 9px; margin-left: 4px; }
+  #filtre { margin-top: 4px; }
 </style>
 </head>
 <body>
@@ -68,6 +74,18 @@
     </div>
 
     <div class="carte">
+      <div style="font-size:13px; font-weight:bold; color:#fbbf24;">👥 Joueurs (<span id="j-total">–</span>)</div>
+      <input id="filtre" placeholder="Filtrer par pseudo…">
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Pseudo</th><th class="num">🪙</th><th class="num">🔥</th><th class="num">Solo</th><th class="num">Multi</th><th class="num">Succès</th><th class="num">⏱ Jeu</th><th>Vu le</th></tr></thead>
+          <tbody id="j-corps"><tr><td colspan="8">Chargement…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="maj" style="text-align:left; margin-top:6px;">Solo/Multi : victoires / parties. ⏱ : temps de jeu cumulé. Triés du plus récent au plus ancien (500 max).</div>
+    </div>
+
+    <div class="carte">
       <div style="font-size:13px; font-weight:bold; color:#fbbf24;">Raccourcis</div>
       <a class="btn sombre" id="lien-mod2" href="#">🚩 Modération</a>
       <a class="btn sombre" id="lien-stats" href="#">📊 Stats détaillées</a>
@@ -92,13 +110,46 @@ function montre() {
   document.getElementById("lien-stats").href = "/stats.html";
 }
 
+var joueurs = [];
+function fmtDuree(ms) {
+  if (!ms) return "–";
+  var h = Math.floor(ms / 3600000), m = Math.round(ms % 3600000 / 60000);
+  return h ? h + " h " + (m < 10 ? "0" : "") + m : m + " min";
+}
+function fmtDate(t) {
+  if (!t) return "–";
+  var d = new Date(t), auj = new Date();
+  var memeJour = d.toDateString() === auj.toDateString();
+  return memeJour ? d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+    : d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
+}
+function esc2(t) { var d = document.createElement("div"); d.textContent = t; return d.innerHTML; }
+function rendreJoueurs() {
+  var f = (document.getElementById("filtre").value || "").toLowerCase();
+  var corps = document.getElementById("j-corps");
+  var vus = joueurs.filter(function (j) { return !f || j.pseudo.toLowerCase().indexOf(f) !== -1; });
+  corps.innerHTML = vus.length ? vus.map(function (j) {
+    return "<tr><td>" + esc2(j.pseudo) + (j.banni ? '<span class="banni-tag">banni</span>' : "") + "</td>" +
+      '<td class="num">' + j.pieces + "</td>" +
+      '<td class="num">' + (j.serie || "–") + "</td>" +
+      '<td class="num">' + j.solo.victoires + " / " + j.solo.parties + "</td>" +
+      '<td class="num">' + j.multi.victoires + " / " + j.multi.parties + "</td>" +
+      '<td class="num">' + j.succes + "</td>" +
+      '<td class="num">' + fmtDuree(j.tempsJeuMs) + "</td>" +
+      "<td>" + fmtDate(j.vuLe) + "</td></tr>";
+  }).join("") : "<tr><td colspan='8'>Aucun joueur.</td></tr>";
+}
+document.addEventListener("input", function (e) { if (e.target && e.target.id === "filtre") rendreJoueurs(); });
+
 function rafraichir() {
   if (!CLE) return;
   Promise.all([
     fetch("/admin/resume?cle=" + encodeURIComponent(CLE)).then(function (r) { if (!r.ok) throw new Error("cle"); return r.json(); }),
     fetch("/stats.json?cle=" + encodeURIComponent(CLE)).then(function (r) { return r.json(); }).catch(function () { return {}; }),
+    fetch("/admin/joueurs?cle=" + encodeURIComponent(CLE)).then(function (r) { return r.json(); }).catch(function () { return null; }),
   ]).then(function (res) {
-    var a = res[0], s = res[1];
+    var a = res[0], s = res[1], j = res[2];
+    if (j && j.joueurs) { joueurs = j.joueurs; document.getElementById("j-total").textContent = j.total; rendreJoueurs(); }
     localStorage.setItem("rami-admin-cle", CLE);
     montre();
     // Alerte signalements
