@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2297-M">
+<meta name="version" content="v2298-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2297-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2298-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -2916,7 +2916,9 @@ function tapCard(id) {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ code: accAmi.code, id: g.defiAmi, total: g.players[0].total, won,
               jeton: lireJeton("ami-" + String(g.defiAmi).toUpperCase()) }),
-          }).catch(() => {});
+          }).then((r) => (r.ok ? r.json() : null))
+            .then((d) => { if (d && d.gains && d.gains.total) signalerGains(d); })
+            .catch(() => {});
         }
       }
       if (g.defi) {
@@ -3234,6 +3236,7 @@ function tapCard(id) {
                         Partie terminée <b className="text-yellow-300">+10</b> · victoire <b className="text-yellow-300">+25</b><br/>
                         Succès débloqué <b className="text-yellow-300">+25</b><br/>
                         Défi du jour <b className="text-yellow-300">+15</b> <span className="opacity-80">(+10 si gagné)</span><br/>
+                        Défi entre amis <b className="text-yellow-300">+10</b> <span className="opacity-80">(+5 si gagné)</span><br/>
                         Joue chaque jour : série de <b className="text-yellow-300">+10</b> (jour 1) à <b className="text-yellow-300">+50</b> (jour 7 et plus)<br/>
                         <span className="opacity-70">Au-delà de 15 parties par jour, les parties ne rapportent plus rien (les succès, si).</span>
                       </div>

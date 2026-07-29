@@ -345,7 +345,7 @@ app.post("/compte/connexion", (req, res) => {
 // Récompenses SERVEUR uniquement : le client ne fait qu'afficher. Montants :
 // partie terminée 10, victoire +25, succès débloqué +25, défi du jour 15 (+10 si gagné),
 // série quotidienne croissante (jour 1 → 7+). Plafond anti-farm : 15 parties payées par jour.
-const PIECES = { partie: 10, victoire: 25, succes: 25, defi: 15, defiVictoire: 10 };
+const PIECES = { partie: 10, victoire: 25, succes: 25, defi: 15, defiVictoire: 10, defiAmi: 10, defiAmiVictoire: 5 };
 const SERIE_RECOMPENSES = [10, 15, 20, 25, 30, 40, 50];
 const PARTIES_PAYEES_MAX = 15;
 const dateDuJour = () => new Date().toISOString().slice(0, 10);
@@ -989,7 +989,15 @@ app.post("/defi/prive-score", (req, res) => {
   if (pb) return res.status(403).json({ erreur: pb });
   d.scores[c.code] = { pseudo: c.pseudo, total: Math.max(0, Math.min(5000, parseInt(total, 10) || 0)), won: Boolean(won), at: Date.now() };
   saveDefisPrives();
-  res.json({ ok: true });
+  // Pièces du défi entre amis (le premier essai seul compte : pas de farm possible)
+  const gains = { defi: PIECES.defiAmi, victoire: won ? PIECES.defiAmiVictoire : 0 };
+  const serie = majSerie(c);
+  gains.serie = serie.gain;
+  gains.serieJours = serie.jours;
+  gains.total = gains.defi + gains.victoire + gains.serie;
+  crediterPieces(c, gains.defi + gains.victoire);
+  saveComptes();
+  res.json({ ok: true, pieces: c.pieces || 0, gains });
 });
 
 // Lookup par code seul (pour reconnexion multi-appareil) : retourne le compte complet si code valide
