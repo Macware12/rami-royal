@@ -560,6 +560,27 @@ function adminOk(req, res) {
   return true;
 }
 
+// Résumé pour le tableau de bord admin : /admin/resume?cle=CLE
+app.get("/admin/resume", (req, res) => {
+  if (!adminOk(req, res)) return;
+  const now = Date.now();
+  let nouveaux24h = 0, actifs7j = 0;
+  for (const c of comptes.values()) {
+    if (now - (c.createdAt || 0) < 86400000) nouveaux24h++;
+    if (now - (c.lastSeen || 0) < 7 * 86400000) actifs7j++;
+  }
+  const d = new Date();
+  const cleJour = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  res.json({
+    comptes: { total: comptes.size, nouveaux24h, actifs7j },
+    signalements: { total: signalements.length, aTraiter: signalements.filter((s) => !s.traite).length },
+    defiJour: (defiScores.get(cleJour) || new Map()).size,
+    defisPrives: defisPrives.size,
+    salons: rooms.size,
+    emailConfigure: Boolean(process.env.BREVO_API_KEY || SMTP.pass),
+  });
+});
+
 // Test de la configuration email (admin) : /moderation/test-email?cle=CLE
 app.get("/moderation/test-email", (req, res) => {
   if (!adminOk(req, res)) return;

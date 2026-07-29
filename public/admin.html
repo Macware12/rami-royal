@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Tableau de bord — Ramy Gasy</title>
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" href="/favicon.png">
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", Roboto, sans-serif; color: #d1fae5;
+    background: radial-gradient(ellipse at 50% -10%, #1a6b42 0%, #14532d 45%, #052e16 100%); min-height: 100vh; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 22px 16px 60px; }
+  h1 { font-family: Georgia, serif; color: #fcd34d; margin: 6px 0 2px; font-size: 26px; }
+  .sous { color: #6ee7b7; font-size: 12px; margin-bottom: 18px; }
+  .carte { background: linear-gradient(180deg, rgba(6,58,42,.92), rgba(4,40,28,.95)); border: 1px solid #14705266;
+    border-radius: 16px; padding: 14px 16px; margin-top: 12px; }
+  .grille { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 12px; }
+  .tuile { background: rgba(4,40,28,.8); border: 1px solid #14705266; border-radius: 14px; padding: 12px; text-align: center; }
+  .tuile b { display: block; font-size: 30px; color: #fcd34d; font-family: Georgia, serif; }
+  .tuile span { font-size: 11px; color: #a7f3d0; }
+  .alerte { border-color: #f87171; background: linear-gradient(180deg, rgba(127,29,29,.5), rgba(69,10,10,.6)); }
+  .alerte b { color: #fca5a5; font-size: 17px; }
+  .ok b { color: #6ee7b7; font-size: 15px; }
+  a.btn { display: inline-block; background: linear-gradient(180deg,#fcd34d,#f59e0b); color: #052e16; font-weight: bold;
+    text-decoration: none; padding: 9px 16px; border-radius: 12px; font-size: 13px; box-shadow: 0 3px 0 #b45309; margin: 6px 6px 0 0; }
+  a.btn.sombre { background: linear-gradient(180deg,#115e45,#0b3d2e); color: #a7f3d0; box-shadow: 0 3px 0 #052e16; border: 1px solid #14705266; }
+  input { background: #02241866; border: 1px solid #147052; border-radius: 12px; padding: 10px; color: #d1fae5; font: inherit; width: 100%; box-sizing: border-box; }
+  .pseudos { font-size: 12px; color: #a7f3d0; line-height: 1.8; }
+  .maj { font-size: 10px; color: #34d399; opacity: .7; margin-top: 14px; text-align: center; }
+  .err { color: #fca5a5; font-size: 13px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎛️ Tableau de bord</h1>
+  <div class="sous">Ramy Gasy — vue d'ensemble en direct (rafraîchie chaque minute)</div>
+
+  <div class="carte" id="cle-carte">
+    <label style="font-size:13px; color:#a7f3d0;">Clé d'administration
+      <input id="cle" type="password" placeholder="Ta clé secrète" style="margin-top:6px;">
+    </label>
+    <a class="btn" href="#" id="entrer" style="margin-top:10px;">Entrer</a>
+    <div class="err" id="err"></div>
+  </div>
+
+  <div id="tableau" style="display:none;">
+    <div class="carte alerte" id="alerte" style="display:none;">
+      <b id="alerte-txt">🚨</b>
+      <div style="margin-top:6px;"><a class="btn" id="lien-moderation" href="#">Traiter les signalements →</a></div>
+    </div>
+    <div class="carte ok" id="calme" style="display:none;"><b>✅ Aucun signalement en attente</b></div>
+
+    <div class="grille">
+      <div class="tuile"><b id="t-connectes">–</b><span>connectés maintenant</span></div>
+      <div class="tuile"><b id="t-parties">–</b><span>parties en cours</span></div>
+      <div class="tuile"><b id="t-salons">–</b><span>salons ouverts</span></div>
+      <div class="tuile"><b id="t-comptes">–</b><span>comptes au total</span></div>
+      <div class="tuile"><b id="t-nouveaux">–</b><span>nouveaux comptes (24 h)</span></div>
+      <div class="tuile"><b id="t-actifs">–</b><span>comptes actifs (7 j)</span></div>
+      <div class="tuile"><b id="t-defi">–</b><span>défi du jour : participants</span></div>
+      <div class="tuile"><b id="t-prives">–</b><span>défis entre amis actifs</span></div>
+    </div>
+
+    <div class="carte">
+      <div style="font-size:13px; font-weight:bold; color:#fbbf24;">👥 En ligne en ce moment</div>
+      <div class="pseudos" id="pseudos">–</div>
+    </div>
+
+    <div class="carte">
+      <div style="font-size:13px; font-weight:bold; color:#fbbf24;">Raccourcis</div>
+      <a class="btn sombre" id="lien-mod2" href="#">🚩 Modération</a>
+      <a class="btn sombre" id="lien-stats" href="#">📊 Stats détaillées</a>
+      <a class="btn sombre" href="https://dashboard.render.com" target="_blank">🖥️ Render</a>
+      <a class="btn sombre" href="https://console.neon.tech" target="_blank">🗄️ Neon (base)</a>
+      <div class="err" id="email-info" style="display:none;">✉️ Envoi d'email non configuré — l'alerte ci-dessus reste ton radar (ou configure BREVO_API_KEY plus tard).</div>
+    </div>
+
+    <div class="maj" id="maj"></div>
+  </div>
+</div>
+
+<script>
+var CLE = localStorage.getItem("rami-admin-cle") || "";
+var timer = null;
+
+function montre() {
+  document.getElementById("cle-carte").style.display = "none";
+  document.getElementById("tableau").style.display = "";
+  document.getElementById("lien-moderation").href = "/moderation.html";
+  document.getElementById("lien-mod2").href = "/moderation.html";
+  document.getElementById("lien-stats").href = "/stats.html";
+}
+
+function rafraichir() {
+  if (!CLE) return;
+  Promise.all([
+    fetch("/admin/resume?cle=" + encodeURIComponent(CLE)).then(function (r) { if (!r.ok) throw new Error("cle"); return r.json(); }),
+    fetch("/stats.json?cle=" + encodeURIComponent(CLE)).then(function (r) { return r.json(); }).catch(function () { return {}; }),
+  ]).then(function (res) {
+    var a = res[0], s = res[1];
+    localStorage.setItem("rami-admin-cle", CLE);
+    montre();
+    // Alerte signalements
+    var n = a.signalements.aTraiter;
+    document.getElementById("alerte").style.display = n > 0 ? "" : "none";
+    document.getElementById("calme").style.display = n > 0 ? "none" : "";
+    if (n > 0) document.getElementById("alerte-txt").textContent = "🚨 " + n + " signalement" + (n > 1 ? "s" : "") + " à traiter";
+    document.title = (n > 0 ? "(" + n + ") " : "") + "Tableau de bord — Ramy Gasy";
+    // Tuiles
+    document.getElementById("t-connectes").textContent = s.total != null ? s.total : (s.connectes || "–");
+    document.getElementById("t-parties").textContent = s.parties != null ? s.parties : "–";
+    document.getElementById("t-salons").textContent = a.salons;
+    document.getElementById("t-comptes").textContent = a.comptes.total;
+    document.getElementById("t-nouveaux").textContent = a.comptes.nouveaux24h;
+    document.getElementById("t-actifs").textContent = a.comptes.actifs7j;
+    document.getElementById("t-defi").textContent = a.defiJour;
+    document.getElementById("t-prives").textContent = a.defisPrives;
+    // Pseudos en ligne
+    var ps = [].concat(s.pseudosMulti || [], s.pseudosSolo || []);
+    document.getElementById("pseudos").textContent = ps.length ? ps.join(" · ") : "Personne pour l'instant.";
+    document.getElementById("email-info").style.display = a.emailConfigure ? "none" : "";
+    document.getElementById("maj").textContent = "Dernière mise à jour : " + new Date().toLocaleTimeString("fr-FR");
+  }).catch(function () {
+    document.getElementById("err").textContent = "Clé refusée ou serveur injoignable.";
+    document.getElementById("cle-carte").style.display = "";
+    document.getElementById("tableau").style.display = "none";
+  });
+}
+
+document.getElementById("entrer").addEventListener("click", function (e) {
+  e.preventDefault();
+  CLE = document.getElementById("cle").value.trim();
+  rafraichir();
+});
+document.getElementById("cle").addEventListener("keydown", function (e) { if (e.key === "Enter") { CLE = e.target.value.trim(); rafraichir(); } });
+
+if (CLE) { document.getElementById("cle").value = CLE; rafraichir(); }
+timer = setInterval(rafraichir, 60000);
+</script>
+</body>
+</html>
