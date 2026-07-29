@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2273-M">
+<meta name="version" content="v2274-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2273-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2274-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -3591,9 +3591,9 @@ function tapCard(id) {
               <button onClick={() => setShowHelp(false)} className="text-emerald-300 px-2">✕</button>
             </div>
             <div className="flex gap-2 mb-3">
-              <button onClick={() => { UI_PREFS.big = !UI_PREFS.big; store.set("rami-big", UI_PREFS.big ? "1" : "0"); setG((s) => (s ? { ...s } : s)); }}
+              <button onClick={() => { UI_PREFS.big = !UI_PREFS.big; store.set("rami-big", UI_PREFS.big ? "1" : "0"); store.set("ramimp-big", UI_PREFS.big ? "1" : "0"); setG((s) => (s ? { ...s } : s)); }}
                 className={`flex-1 py-2 rounded-xl text-xs font-bold ${UI_PREFS.big ? "btn-gold" : "btn-dark"}`}>🔍 Grandes cartes</button>
-              <button onClick={() => { UI_PREFS.four = !UI_PREFS.four; store.set("rami-4col", UI_PREFS.four ? "1" : "0"); setG((s) => (s ? { ...s } : s)); }}
+              <button onClick={() => { UI_PREFS.four = !UI_PREFS.four; store.set("rami-4col", UI_PREFS.four ? "1" : "0"); store.set("ramimp-4col", UI_PREFS.four ? "1" : "0"); setG((s) => (s ? { ...s } : s)); }}
                 className={`flex-1 py-2 rounded-xl text-xs font-bold ${UI_PREFS.four ? "btn-gold" : "btn-dark"}`}>🎨 4 couleurs</button>
             </div>
             <ol className="list-decimal ml-4 space-y-2 text-emerald-100 text-xs">

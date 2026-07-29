@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2273-M">
+<meta name="version" content="v2274-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2273-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2274-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -1922,7 +1922,7 @@ function App() {
           <button onClick={() => setCptMenu(true)}
             className={`fixed top-3 right-3 z-40 rounded-full px-3.5 py-2 flex items-center gap-2 ${nomVerrouille ? "panel text-emerald-100" : "btn-gold"}`}
             style={nomVerrouille ? { borderColor: "#f59e0b88" } : {}}
-            title={nomVerrouille ? "Gérer mon compte" : "Se connecter / Créer un compte"}>
+            title="Réglages — compte, règles, sons, affichage">
             {nomVerrouille && compteActif.photo ? (
               <img src={compteActif.photo} alt="" className="w-6 h-6 rounded-full object-cover shrink-0" style={{ border: "1px solid #f59e0b" }} />
             ) : (
@@ -1933,6 +1933,7 @@ function App() {
             ) : (
               <span className="text-sm font-bold">Se connecter</span>
             )}
+            <span className="text-base leading-none" style={{ opacity: 0.85 }}>⚙️</span>
             {(() => {
               try {
                 const n = Object.keys(JSON.parse(store.get("rami-succes") || "{}")).length;
@@ -1958,9 +1959,16 @@ function App() {
               <button onClick={() => { setMuted((m) => !m); }} className="btn-dark font-bold py-2.5 rounded-xl text-sm">
                 {muted ? "🔇 Sons coupés — réactiver" : "🔊 Sons activés — couper"}
               </button>
+              <div className="flex gap-2">
+                <button onClick={() => { UI_PREFS.big = !UI_PREFS.big; const v = UI_PREFS.big ? "1" : "0"; store.set("ramimp-big", v); store.set("rami-big", v); cptMaj((x) => x + 1); }}
+                  className={`flex-1 py-2.5 rounded-xl text-sm font-bold ${UI_PREFS.big ? "btn-gold" : "btn-dark"}`}>🔍 Grandes cartes</button>
+                <button onClick={() => { UI_PREFS.four = !UI_PREFS.four; const v = UI_PREFS.four ? "1" : "0"; store.set("ramimp-4col", v); store.set("rami-4col", v); cptMaj((x) => x + 1); }}
+                  className={`flex-1 py-2.5 rounded-xl text-sm font-bold ${UI_PREFS.four ? "btn-gold" : "btn-dark"}`}>🎨 4 couleurs</button>
+              </div>
+              <p className="text-[10px] text-emerald-400 text-center -mt-1">« 4 couleurs » : ♦ en bleu et ♣ en vert — pensé pour le daltonisme.</p>
               <a href="/signaler.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🚩 Signaler un joueur</a>
               <a href="/confidentialite.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🔒 Confidentialité</a>
-              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2273-M</div>
+              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2274-M</div>
             </div>
           </div>
         )}
@@ -2482,7 +2490,7 @@ function App() {
           </div>
         )}
         <div className="flex gap-2 text-[11px] text-emerald-400 flex-wrap justify-center items-center pb-4">
-          <span className="opacity-60 self-center">v2273-M</span>
+          <span className="opacity-60 self-center">v2274-M</span>
         </div>
       </div>
     );
@@ -3042,9 +3050,9 @@ function App() {
               <button onClick={() => setShowHelp(false)} className="text-emerald-300 px-2">✕</button>
             </div>
             <div className="flex gap-2 mb-3">
-              <button onClick={() => { UI_PREFS.big = !UI_PREFS.big; store.set("ramimp-big", UI_PREFS.big ? "1" : "0"); setTick((x) => x + 1); }}
+              <button onClick={() => { UI_PREFS.big = !UI_PREFS.big; const v = UI_PREFS.big ? "1" : "0"; store.set("ramimp-big", v); store.set("rami-big", v); setTick((x) => x + 1); }}
                 className={`flex-1 py-2 rounded-xl text-xs font-bold ${UI_PREFS.big ? "btn-gold" : "btn-dark"}`}>🔍 Grandes cartes</button>
-              <button onClick={() => { UI_PREFS.four = !UI_PREFS.four; store.set("ramimp-4col", UI_PREFS.four ? "1" : "0"); setTick((x) => x + 1); }}
+              <button onClick={() => { UI_PREFS.four = !UI_PREFS.four; const v = UI_PREFS.four ? "1" : "0"; store.set("ramimp-4col", v); store.set("rami-4col", v); setTick((x) => x + 1); }}
                 className={`flex-1 py-2 rounded-xl text-xs font-bold ${UI_PREFS.four ? "btn-gold" : "btn-dark"}`}>🎨 4 couleurs</button>
             </div>
             <ol className="list-decimal ml-4 space-y-2 text-emerald-100 text-xs">
