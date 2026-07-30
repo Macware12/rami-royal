@@ -1821,7 +1821,6 @@ function handleJokerNet(room, idx) {
   const g = room.game;
   if (!g || room.state !== "playing") return "Pas de partie en cours.";
   if (!room.options.pouvoirs) return "L'hôte a désactivé les pouvoirs 💎 dans ce salon.";
-  if (g.turn !== idx || g.phase !== "play") return "Le joker s'invoque pendant ton tour, après avoir pioché.";
   const p = room.players[idx];
   if (p.jokerNetUsed) return "Joker déjà invoqué cette manche (1 max).";
   const ji = g.stock.findIndex((c) => c.joker);
