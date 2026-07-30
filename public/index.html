@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2341-M">
+<meta name="version" content="v2342-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2341-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2342-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -102,8 +102,8 @@ const STYLE = (
     .table-pad { padding-right: 84px; }
     .accueil-cartes { display: flex; flex-direction: column; align-items: center; gap: 16px; width: 100%; }
     @media (min-width: 760px) {
-      .accueil-cartes { display: grid; grid-template-columns: repeat(2, 320px); gap: 14px 18px; justify-content: center; align-items: stretch; }
-      .accueil-cartes > * { width: 320px; max-width: 320px; }
+      .accueil-cartes { display: grid; grid-template-columns: repeat(2, 380px); gap: 14px 18px; justify-content: center; align-items: stretch; }
+      .accueil-cartes > * { width: 380px; max-width: 380px; }
     }
     @media (max-width: 759px) {
       .table-pad { padding-right: 12px; }
@@ -1258,7 +1258,7 @@ function MissionsDuJour() {
   try { connecte = Boolean((JSON.parse(store.get("rami-account")) || {}).code); } catch (_) {}
   const faites = cat.missions.filter((m) => etat.valide.includes(m.id) || (etat.prog[m.type] || 0) >= m.cible).length;
   return (
-    <div className="panel rounded-2xl px-4 py-3 w-full max-w-xs text-left">
+    <div className="panel rounded-2xl px-4 py-3 w-full max-w-md text-left">
       <div className="flex items-center justify-between mb-1.5">
         <span className="text-sm font-bold text-amber-300">🎯 Missions du jour</span>
         <span className="text-[10px] text-emerald-400 font-bold">{faites}/3{faites === 3 ? " ✓" : ""}</span>
@@ -2718,7 +2718,7 @@ function App() {
             <h1 className="text-5xl text-amber-300" style={{ fontFamily: "Georgia, serif" }}>Ramy Gasy</h1>
             <p className="text-emerald-200 text-sm mt-1">Le rami à contrats de Madagascar</p>
           </div>
-          <div className="panel rounded-2xl p-5 w-full max-w-xs flex flex-col gap-3 text-emerald-100" style={{ borderColor: "#f59e0b66" }}>
+          <div className="panel rounded-2xl p-5 w-full max-w-md flex flex-col gap-3 text-emerald-100" style={{ borderColor: "#f59e0b66" }}>
             <p className="text-sm text-center leading-relaxed">Bienvenue ! 🎴</p>
             <p className="text-[12px] text-emerald-300 text-center leading-relaxed">
               Avec un <b className="text-amber-300">compte gratuit</b> (pseudo + code à 6 chiffres, sans email) :
@@ -2772,7 +2772,7 @@ function App() {
             {/* Ce qui est « vivant » reste toujours visible : reprise en cours et missions du jour */}
             {salonEnCours && compteActif && (
               <button onClick={reprendreSalonCompte}
-                className="panel rounded-2xl p-4 w-full max-w-xs flex items-center gap-3 text-emerald-100 text-left" style={{ borderColor: "#34d39988" }}>
+                className="panel rounded-2xl p-4 w-full max-w-md flex items-center gap-3 text-emerald-100 text-left" style={{ borderColor: "#34d39988" }}>
                 <span className="text-3xl">🌐</span>
                 <span className="flex-1">
                   <span className="block font-bold text-base text-emerald-200">Reprendre ta partie multijoueur</span>
@@ -2784,7 +2784,7 @@ function App() {
               </button>
             )}
             {soloSave && (
-              <a href="/solo.html?reprendre=1" className="panel rounded-2xl p-4 w-full max-w-xs flex items-center gap-3 text-emerald-100 no-underline" style={{ borderColor: "#34d39988" }}>
+              <a href="/solo.html?reprendre=1" className="panel rounded-2xl p-4 w-full max-w-md flex items-center gap-3 text-emerald-100 no-underline" style={{ borderColor: "#34d39988" }}>
                 <span className="text-3xl">🎮</span>
                 <span className="flex-1">
                   <span className="block font-bold text-base text-emerald-200">Reprendre ta partie solo</span>
@@ -2796,7 +2796,7 @@ function App() {
 
             {/* Portail 1 : jouer — masqué quand l'autre portail est ouvert */}
             {menu !== "defis" && <button onClick={() => setMenu(menu === "jouer" ? null : "jouer")}
-              className={`rounded-2xl px-4 py-4 w-full max-w-xs flex items-center gap-3 text-left ${menu === "jouer" ? "btn-gold" : "panel text-emerald-100"}`}
+              className={`rounded-2xl px-4 py-4 w-full max-w-md flex items-center gap-3 text-left ${menu === "jouer" ? "btn-gold" : "panel text-emerald-100"}`}
               style={menu === "jouer" ? {} : { borderColor: "#f59e0b88" }}>
               <span className="text-3xl">▶️</span>
               <span className="flex-1">
@@ -2806,7 +2806,7 @@ function App() {
               <span className="text-xl font-bold">{menu === "jouer" ? "✕" : "→"}</span>
             </button>}
             {menu === "jouer" && (
-              <div className="flex flex-col gap-2 w-full max-w-xs pl-2" style={{ borderLeft: "2px solid #f59e0b44" }}>
+              <div className="flex flex-col gap-2 w-full max-w-md pl-2" style={{ borderLeft: "2px solid #f59e0b44" }}>
                 {item({ k: "solo", ico: "🎮", titre: "Jouer en solo", sous: "Contre l'ordinateur, tout de suite", couleur: "#d1fae5", bord: "#14705266", go: () => { window.location.href = "/solo.html"; } })}
                 {item({ k: "mp", ico: "🌐", titre: "Multijoueur en ligne", sous: "Avec tes amis, chacun sur son téléphone", couleur: "#fcd34d", bord: "#f59e0b66", go: () => setShowMp(true) })}
                 {local && item({ k: "loc", ico: "📡", titre: "Multijoueur local", sous: "Sans internet — téléphones proches ✈️", couleur: "#7dd3fc", bord: "#38bdf866", go: openLocal })}
@@ -2816,7 +2816,7 @@ function App() {
 
             {/* Portail 2 : défis et classements — masqué quand l'autre portail est ouvert */}
             {menu !== "jouer" && <button onClick={() => setMenu(menu === "defis" ? null : "defis")}
-              className={`rounded-2xl px-4 py-4 w-full max-w-xs flex items-center gap-3 text-left relative ${menu === "defis" ? "btn-gold" : "panel text-emerald-100"}`}
+              className={`rounded-2xl px-4 py-4 w-full max-w-md flex items-center gap-3 text-left relative ${menu === "defis" ? "btn-gold" : "panel text-emerald-100"}`}
               style={menu === "defis" ? {} : { borderColor: "#c084fc88" }}>
               <span className="text-3xl">🏆</span>
               <span className="flex-1">
@@ -2827,7 +2827,7 @@ function App() {
               {!defiFait && menu !== "defis" && <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-amber-400 border border-amber-600" title="Défi du jour pas encore joué" />}
             </button>}
             {menu === "defis" && (
-              <div className="flex flex-col gap-2 w-full max-w-xs pl-2" style={{ borderLeft: "2px solid #c084fc44" }}>
+              <div className="flex flex-col gap-2 w-full max-w-md pl-2" style={{ borderLeft: "2px solid #c084fc44" }}>
                 {defiFait
                   ? item({ k: "defi", ico: "🏆", titre: "Défi du jour · classement", sous: "✓ Fait — " + defiFait.total + " pts" + (defiFait.won ? " 🏆" : "") + " · voir le monde entier", couleur: "#e9d5ff", bord: "#c084fc66", go: ouvrirClassement })
                   : item({ k: "defi", ico: "🗓️", titre: "Défi du jour", sous: "La même donne pour tous, chaque jour", couleur: "#e9d5ff", bord: "#c084fc66", go: () => { window.location.href = "/solo.html?defi=1"; } })}
@@ -2905,7 +2905,7 @@ function App() {
               <a href="/contact.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">💬 Nous contacter</a>
               <a href="/signaler.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🚩 Signaler un joueur</a>
               <a href="/confidentialite.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🔒 Confidentialité</a>
-              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2341-M</div>
+              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2342-M</div>
             </div>
           </div>
         )}
@@ -3314,7 +3314,7 @@ function App() {
         {/* Multijoueur local — uniquement dans l'app (Bluetooth/WiFi direct, sans internet) */}
 
         {showLocal && (
-        <div className="panel rounded-2xl p-5 w-full max-w-xs flex flex-col gap-4 text-emerald-100" style={{ borderColor: "#38bdf866" }}>
+        <div className="panel rounded-2xl p-5 w-full max-w-md flex flex-col gap-4 text-emerald-100" style={{ borderColor: "#38bdf866" }}>
           <div className="flex items-center gap-2">
             <span className="text-2xl">📡</span>
             <div className="flex-1">
@@ -3389,7 +3389,7 @@ function App() {
         )}
 
         {showMp && (
-        <div className="panel rounded-2xl p-5 w-full max-w-xs flex flex-col gap-4 text-emerald-100" style={{ borderColor: "#f59e0b66" }}>
+        <div className="panel rounded-2xl p-5 w-full max-w-md flex flex-col gap-4 text-emerald-100" style={{ borderColor: "#f59e0b66" }}>
           <div className="flex items-center gap-2">
             <span className="text-2xl">🌐</span>
             <div className="flex-1">
@@ -3500,10 +3500,10 @@ function App() {
           </div>
         </div>
         )}
-        {msg && <p className="text-xs text-amber-200 text-center max-w-xs">{msg}</p>}
+        {msg && <p className="text-xs text-amber-200 text-center max-w-md">{msg}</p>}
         {invite && (
           <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-6">
-            <div className="panel rounded-2xl p-6 w-full max-w-xs text-center flex flex-col gap-3" style={{ borderColor: "#fbbf24" }}>
+            <div className="panel rounded-2xl p-6 w-full max-w-md text-center flex flex-col gap-3" style={{ borderColor: "#fbbf24" }}>
               <div className="text-4xl">🎴</div>
               <div className="text-amber-300 font-bold text-lg" style={{ fontFamily: "Georgia, serif" }}>
                 {inviteInfo && inviteInfo.ok ? `${inviteInfo.hote} t'invite à sa table !` : "Tu es invité !"}
@@ -3539,7 +3539,7 @@ function App() {
           </div>
         )}
         <div className="flex gap-2 text-[11px] text-emerald-400 flex-wrap justify-center items-center pb-4">
-          <span className="opacity-60 self-center">v2341-M</span>
+          <span className="opacity-60 self-center">v2342-M</span>
         </div>
       </div>
     );
@@ -3584,7 +3584,7 @@ function App() {
           <div className="text-[10px] text-emerald-400 mt-1">{srv.options.turnSeconds}s par tour · bots {srv.options.level} · {srv.options.pouvoirs === false ? "⚖️ sans pouvoirs 💎" : "💎 pouvoirs autorisés"}</div>
         </div>
         )}
-        <div className="panel rounded-2xl p-4 w-full max-w-xs">
+        <div className="panel rounded-2xl p-4 w-full max-w-md">
           {srv.players.map((p) => (
             <div key={p.idx} className="flex items-center gap-2 py-1.5 border-b border-emerald-800 last:border-0">
               <span className="text-lg">{p.avatar || "🙂"}{p.isBot ? <span className="text-[10px]"> 🤖</span> : null}</span>
@@ -3636,7 +3636,7 @@ function App() {
         {STYLE}
         {ranking[0].idx === youIdx && <Confetti />}
         <h1 className="text-3xl text-amber-300" style={{ fontFamily: "Georgia, serif", textShadow: "0 3px 10px rgba(0,0,0,.6)" }}>Partie terminée</h1>
-        <div className="panel rounded-2xl p-5 w-full max-w-xs">
+        <div className="panel rounded-2xl p-5 w-full max-w-md">
           {ranking.map((p, i) => (
             <div key={p.idx} className={`flex justify-between py-2 border-b border-emerald-800 last:border-0 ${i === 0 ? "text-amber-300 font-bold" : ""}`}>
               <span>{i === 0 ? "👑 " : `${i + 1}. `}{p.avatar || "🙂"} {p.name}{p.isBot ? " 🤖" : ""}</span>
@@ -3646,7 +3646,7 @@ function App() {
         </div>
         {!nomVerrouille && (
           <button onClick={() => { setCptErr(""); setCptNouveau(null); setCptMode("choix"); setCptOpen(true); quitRoom(); }}
-            className="panel rounded-2xl px-4 py-3 w-full max-w-xs text-left flex items-center gap-3" style={{ borderColor: "#f59e0b88" }}>
+            className="panel rounded-2xl px-4 py-3 w-full max-w-md text-left flex items-center gap-3" style={{ borderColor: "#f59e0b88" }}>
             <span className="text-2xl">👤</span>
             <span className="flex-1">
               <span className="block text-sm font-bold text-amber-300">{ranking[0].idx === youIdx ? "Belle victoire ! Garde-la précieusement" : "Ne perds pas ta progression"}</span>
@@ -3659,7 +3659,7 @@ function App() {
           📤 Partager le score
         </button>
         {srv.rematch ? (
-          <div className="panel rounded-2xl p-4 w-full max-w-xs text-center" style={{ borderColor: "#fbbf24" }}>
+          <div className="panel rounded-2xl p-4 w-full max-w-md text-center" style={{ borderColor: "#fbbf24" }}>
             <div className="text-sm font-bold text-amber-200 mb-1">🔁 Revanche proposée !</div>
             <div className="text-base mb-2">
               {srv.players.map((p) => (
@@ -4129,7 +4129,7 @@ function App() {
       {/* Confirmation de sortie */}
       {showQuit && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6 z-30">
-          <div className="panel rounded-2xl p-5 w-full max-w-xs text-center">
+          <div className="panel rounded-2xl p-5 w-full max-w-md text-center">
             <div className="text-3xl mb-2">🏠</div>
             <h2 className="text-amber-300 font-bold text-lg mb-1">Quitter la partie ?</h2>
             {(() => {
@@ -4269,7 +4269,7 @@ function App() {
       {/* Fin de manche */}
       {g.roundOver && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6 z-10">
-          <div className="panel rounded-2xl p-5 w-full max-w-xs text-emerald-100">
+          <div className="panel rounded-2xl p-5 w-full max-w-md text-emerald-100">
             <h2 className="text-amber-300 font-bold text-lg mb-1" style={{ fontFamily: "Georgia, serif" }}>
               {(srv.players[g.roundOver.winnerIdx] || {}).name} gagne la manche !
             </h2>
