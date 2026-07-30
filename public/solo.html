@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2340-M">
+<meta name="version" content="v2341-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2340-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2341-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -3154,6 +3154,7 @@ function tapCard(id) {
       const melds = [...s.melds, ...s.staged.map((m, i) => ({ ...m, id: Date.now() + i, owner: 0 }))];
       const players = s.players.map((p, i) => (i === 0 ? { ...p, posed: true } : p));
       let ns = { ...s, melds, staged: [], players, justPosed: true };
+      setMsg("✅ Contrat posé !");
       ns = addLog(ns, "Tu poses ton contrat !");
       ns = checkWin(ns, 0);
       return ns;
