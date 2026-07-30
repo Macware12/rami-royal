@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2308-M">
+<meta name="version" content="v2309-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2308-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2309-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -384,6 +384,11 @@ const STYLE = (
     /* Blocs de combinaisons par joueur : 1 colonne sur téléphone, 2 colonnes dès l'iPad
        (joueurs impairs à gauche, pairs à droite, remplissage ligne par ligne) */
     .table-grille { display: grid; grid-template-columns: 1fr; gap: 8px; align-items: start; }
+    .table-pad { padding-right: 84px; }
+    @media (max-width: 759px) {
+      .table-pad { padding-right: 12px; }
+      .table-grille { gap: 5px; }
+    }
     /* Grand écran (desktop/iPad) : le jeu garde une largeur de table de jeu, centré */
     @media (min-width: 760px) {
       .fit-screen { max-width: 880px; margin-left: auto; margin-right: auto; }
@@ -1100,6 +1105,26 @@ function FlyingCard({ from, to, card, faceDown, delay, emphasis, onDone }) {
 
 // Ligne de combinaisons d'un joueur : se rétrécit automatiquement pour tenir sur UNE ligne.
 // En dessous de 55 % de la taille normale, on préfère repasser à la ligne (lisibilité d'abord).
+// La grille de la table se rétrécit d'elle-même (zoom) pour tout montrer sans scroll :
+// sur iPhone, 4-6 joueurs qui posent tenaient plus dans l'écran — on scrollait sans fin.
+function GrilleAuto({ children }) {
+  const ref = React.useRef(null);
+  const ajuster = () => {
+    const el = ref.current;
+    if (!el || !el.parentElement) return;
+    el.style.zoom = "1";
+    const dispo = el.parentElement.clientHeight - 10;
+    const ratio = el.scrollHeight > 0 ? dispo / el.scrollHeight : 1;
+    if (ratio < 1) el.style.zoom = String(Math.max(0.58, ratio - 0.01));
+  };
+  React.useLayoutEffect(ajuster);
+  React.useEffect(() => {
+    window.addEventListener("resize", ajuster);
+    return () => window.removeEventListener("resize", ajuster);
+  }, []);
+  return <div ref={ref} className="table-grille">{children}</div>;
+}
+
 function LigneMelds({ children }) {
   const ref = useRef(null);
   const ajuster = () => {
@@ -3744,7 +3769,7 @@ function tapCard(id) {
 
       {/* Table regroupée par joueur */}
       <div className="flex-1 relative" style={{ minHeight: 120 }}>
-        <div ref={tableScrollRef} className="table-zone absolute inset-0 overflow-y-auto px-2 py-1" style={{ paddingRight: 84 }}>
+        <div ref={tableScrollRef} className="table-zone table-pad absolute inset-0 overflow-y-auto px-2 py-1">
           {g.melds.length === 0 && (
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center px-6">
               <div className="text-6xl" style={{ opacity: 0.16, filter: "drop-shadow(0 4px 8px rgba(0,0,0,.4))" }}>🎴</div>
@@ -3752,7 +3777,7 @@ function tapCard(id) {
               <div className="text-[11px] text-emerald-400 mt-1" style={{ opacity: 0.5 }}>Contrat de la manche : {contract.label}</div>
             </div>
           )}
-          <div className="table-grille">
+          <GrilleAuto>
             {[...new Set(g.melds.map((m) => m.owner))].map((o) => (
               <div key={o} className="flex items-start gap-1.5">
                 <span className="text-base shrink-0" style={{ width: 22, marginTop: 6 }} title={g.players[o].name}>{g.players[o].avatar || "🙂"}</span>
@@ -3767,7 +3792,7 @@ function tapCard(id) {
                 </LigneMelds>
               </div>
             ))}
-          </div>
+          </GrilleAuto>
         </div>
         {g.melds.length > 0 && (
           <button onClick={() => setShowTable(true)}
