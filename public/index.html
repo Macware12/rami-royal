@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2337-M">
+<meta name="version" content="v2338-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2337-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2338-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -1603,6 +1603,8 @@ function App() {
   const [cptNouveau, setCptNouveau] = useState(null); // code affiché après création
   const [choixBots, setChoixBots] = useState(null); // { code, bots } : choisir quel bot remplacer
   const [hebdo, setHebdo] = useState(null); // classement de la semaine (null | "chargement" | données)
+  // Portail ouvert sur l'accueil ("jouer" | "defis" | null). Un nouveau venu voit « Jouer » déplié.
+  const [menu, setMenu] = useState(() => (store.get("rami-played") || store.get("rami-name") || store.get("ramimp-name") ? null : "jouer"));
   const [, cptMaj] = useState(0); // forcer le re-rendu après connexion/déconnexion
   useEffect(() => { // le solde du chip suit les gains de diamants
     const h = () => cptMaj((x) => x + 1);
@@ -2732,8 +2734,6 @@ function App() {
     // Premier lancement : « Apprendre » passe en tête. Un joueur est considéré « ancien » dès
     // qu'un indice le montre (partie lancée, compte, pseudo mémorisé, sauvegarde) — ainsi
     // l'ordre reste cohérent entre le web et l'app, même sur un appareil pas resservi depuis longtemps.
-    const dejaJoue = Boolean(store.get("rami-played") || compteActif || store.get("rami-name") ||
-      store.get("ramimp-name") || store.get("rami-save") || store.get("rami-level"));
     const soloSave = Boolean(store.get("rami-save"));   // une partie solo attend d'être reprise
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 pt-16" style={bgStyle}>
@@ -2749,34 +2749,24 @@ function App() {
 
         {/* Cartes de jeu — la reprise d'abord, puis un ordre adapté au profil du visiteur */}
         {!showMp && !showLocal && (() => {
-          const carteSolo = (
-            <a href={soloSave ? "/solo.html?reprendre=1" : "/solo.html"}
-              className="panel rounded-2xl p-4 w-full max-w-xs flex items-center gap-3 text-emerald-100 no-underline"
-              style={soloSave ? { borderColor: "#34d39988" } : {}}>
-              <span className="text-3xl">🎮</span>
+          // Un défi du jour non joué met une pastille sur le portail « Défis »
+          let defiFait = null;
+          try { const d = JSON.parse(store.get("rami-defi") || "null"); if (d && d.date === cleDuJour()) defiFait = d; } catch (_) {}
+          const local = Boolean(window.RamyLocalNet && window.RamyLocalNet.available());
+          // Élément de sous-menu (même allure que les anciennes cartes)
+          const item = (props) => (
+            <div key={props.k} onClick={props.go} className="panel rounded-2xl p-4 w-full flex items-center gap-3 text-emerald-100 text-left cursor-pointer"
+              style={{ borderColor: props.bord }}>
+              <span className="text-3xl">{props.ico}</span>
               <span className="flex-1">
-                <span className="block font-bold text-base">Jouer en solo</span>
-                {soloSave ? (
-                  <span className="block text-xs font-bold text-emerald-300">▶ Ta partie en cours t'attend — reprendre</span>
-                ) : (
-                  <span className="block text-xs text-emerald-300">Contre l'ordinateur, tout de suite, sans compte</span>
-                )}
+                <span className="block font-bold text-base" style={{ color: props.couleur }}>{props.titre}</span>
+                <span className="block text-xs text-emerald-300">{props.sous}</span>
               </span>
               <span className="text-amber-300 text-xl font-bold">→</span>
-            </a>
-          );
-          const carteTuto = (
-            <a href="/solo.html?tuto=1" className="panel rounded-2xl p-4 w-full max-w-xs flex items-center gap-3 no-underline"
-              style={{ borderColor: "#67e8f966" }}>
-              <span className="text-3xl">🎓</span>
-              <span className="flex-1">
-                <span className="block font-bold text-base text-cyan-200">Apprendre à jouer</span>
-                <span className="block text-xs text-emerald-300">Partie guidée avec Maki 🐒 — 5 minutes</span>
-              </span>
-              <span className="text-amber-300 text-xl font-bold">→</span>
-            </a>
+            </div>
           );
           return (<div className="accueil-cartes">
+            {/* Ce qui est « vivant » reste toujours visible : reprise en cours et missions du jour */}
             {salonEnCours && compteActif && (
               <button onClick={reprendreSalonCompte}
                 className="panel rounded-2xl p-4 w-full max-w-xs flex items-center gap-3 text-emerald-100 text-left" style={{ borderColor: "#34d39988" }}>
@@ -2790,76 +2780,66 @@ function App() {
                 <span className="text-amber-300 text-xl font-bold">→</span>
               </button>
             )}
-            {dejaJoue ? carteSolo : carteTuto}
-            {dejaJoue ? carteTuto : carteSolo}
-            <MissionsDuJour />
-            <button onClick={() => {
-                setHebdo("chargement");
-                const accH = readJSONls("rami-account");
-                fetch(API_BASE + "/hebdo/classement" + (accH.code ? "?code=" + accH.code : ""))
-                  .then((r) => r.json()).then(setHebdo)
-                  .catch(() => setHebdo({ erreur: "Serveur injoignable — réessaie." }));
-              }}
-              className="panel rounded-2xl p-4 w-full max-w-xs flex items-center gap-3 text-emerald-100 text-left" style={{ borderColor: "#fbbf2466" }}>
-              <span className="text-3xl">🏆</span>
-              <span className="flex-1">
-                <span className="block font-bold text-base text-amber-200">Classement de la semaine</span>
-                <span className="block text-xs text-emerald-300">Le top 3 des victoires gagne des 💎 dimanche</span>
-              </span>
-              <span className="text-amber-300 text-xl font-bold">→</span>
-            </button>
-            <button onClick={() => { setDefiAmi("menu"); setDefiAmiData(null); setDefiAmiCode(""); }}
-              className="panel rounded-2xl p-4 w-full max-w-xs flex items-center gap-3 text-emerald-100 text-left" style={{ borderColor: "#f8717166" }}>
-              <span className="text-3xl">⚔️</span>
-              <span className="flex-1">
-                <span className="block font-bold text-base text-red-200">Défier tes amis</span>
-                <span className="block text-xs text-emerald-300">La même donne que toi — que le meilleur gagne</span>
-              </span>
-              <span className="text-amber-300 text-xl font-bold">→</span>
-            </button>
-            {(() => {
-              let defiFait = null;
-              try { const d = JSON.parse(store.get("rami-defi") || "null"); if (d && d.date === cleDuJour()) defiFait = d; } catch (_) {}
-              return defiFait ? (
-                <button onClick={ouvrirClassement} className="panel rounded-2xl p-4 w-full max-w-xs flex items-center gap-3 text-emerald-100 text-left" style={{ borderColor: "#c084fc66" }}>
-                  <span className="text-3xl">🏆</span>
-                  <span className="flex-1">
-                    <span className="block font-bold text-base text-purple-200">Défi du jour · classement</span>
-                    <span className="block text-xs text-emerald-300">✓ Fait — {defiFait.total} pts{defiFait.won ? " 🏆" : ""} · voir le monde entier</span>
-                  </span>
-                  <span className="text-amber-300 text-xl font-bold">→</span>
-                </button>
-              ) : (
-                <a href="/solo.html?defi=1" className="panel rounded-2xl p-4 w-full max-w-xs flex items-center gap-3 text-emerald-100 no-underline" style={{ borderColor: "#c084fc66" }}>
-                  <span className="text-3xl">🗓️</span>
-                  <span className="flex-1">
-                    <span className="block font-bold text-base text-purple-200">Défi du jour</span>
-                    <span className="block text-xs text-emerald-300">La même donne pour tous, chaque jour</span>
-                  </span>
-                  <span className="text-amber-300 text-xl font-bold">→</span>
-                </a>
-              );
-            })()}
-            <button onClick={() => setShowMp(true)}
-              className="panel rounded-2xl p-4 w-full max-w-xs flex items-center gap-3 text-emerald-100 text-left" style={{ borderColor: "#f59e0b66" }}>
-              <span className="text-3xl">🌐</span>
-              <span className="flex-1">
-                <span className="block font-bold text-base text-amber-300">Multijoueur en ligne</span>
-                <span className="block text-xs text-emerald-300">Avec tes amis, chacun sur son téléphone</span>
-              </span>
-              <span className="text-amber-300 text-xl font-bold">→</span>
-            </button>
-            {window.RamyLocalNet && window.RamyLocalNet.available() && (
-              <button onClick={openLocal}
-                className="panel rounded-2xl p-4 w-full max-w-xs flex items-center gap-3 text-emerald-100 text-left" style={{ borderColor: "#38bdf866" }}>
-                <span className="text-3xl">📡</span>
+            {soloSave && (
+              <a href="/solo.html?reprendre=1" className="panel rounded-2xl p-4 w-full max-w-xs flex items-center gap-3 text-emerald-100 no-underline" style={{ borderColor: "#34d39988" }}>
+                <span className="text-3xl">🎮</span>
                 <span className="flex-1">
-                  <span className="block font-bold text-base text-sky-300">Multijoueur local</span>
-                  <span className="block text-xs text-emerald-300">Sans internet — téléphones proches (avion ✈️)</span>
+                  <span className="block font-bold text-base text-emerald-200">Reprendre ta partie solo</span>
+                  <span className="block text-xs text-emerald-300">▶ Elle t'attend là où tu l'as laissée</span>
                 </span>
                 <span className="text-amber-300 text-xl font-bold">→</span>
-              </button>
+              </a>
             )}
+
+            {/* Portail 1 : jouer */}
+            <button onClick={() => setMenu(menu === "jouer" ? null : "jouer")}
+              className={`rounded-2xl px-4 py-4 w-full max-w-xs flex items-center gap-3 text-left ${menu === "jouer" ? "btn-gold" : "panel text-emerald-100"}`}
+              style={menu === "jouer" ? {} : { borderColor: "#f59e0b88" }}>
+              <span className="text-3xl">▶️</span>
+              <span className="flex-1">
+                <span className={`block font-bold text-lg ${menu === "jouer" ? "" : "text-amber-300"}`}>Jouer</span>
+                <span className={`block text-xs ${menu === "jouer" ? "opacity-80" : "text-emerald-300"}`}>Solo, entre amis, ou apprendre</span>
+              </span>
+              <span className="text-xl font-bold">{menu === "jouer" ? "▾" : "→"}</span>
+            </button>
+            {menu === "jouer" && (
+              <div className="flex flex-col gap-2 w-full max-w-xs pl-2" style={{ borderLeft: "2px solid #f59e0b44" }}>
+                {item({ k: "solo", ico: "🎮", titre: "Jouer en solo", sous: "Contre l'ordinateur, tout de suite", couleur: "#d1fae5", bord: "#14705266", go: () => { window.location.href = "/solo.html"; } })}
+                {item({ k: "mp", ico: "🌐", titre: "Multijoueur en ligne", sous: "Avec tes amis, chacun sur son téléphone", couleur: "#fcd34d", bord: "#f59e0b66", go: () => setShowMp(true) })}
+                {local && item({ k: "loc", ico: "📡", titre: "Multijoueur local", sous: "Sans internet — téléphones proches ✈️", couleur: "#7dd3fc", bord: "#38bdf866", go: openLocal })}
+                {item({ k: "tuto", ico: "🎓", titre: "Apprendre à jouer", sous: "Partie guidée avec Maki 🐒 — 5 minutes", couleur: "#a5f3fc", bord: "#67e8f966", go: () => { window.location.href = "/solo.html?tuto=1"; } })}
+              </div>
+            )}
+
+            {/* Portail 2 : défis et classements */}
+            <button onClick={() => setMenu(menu === "defis" ? null : "defis")}
+              className={`rounded-2xl px-4 py-4 w-full max-w-xs flex items-center gap-3 text-left relative ${menu === "defis" ? "btn-gold" : "panel text-emerald-100"}`}
+              style={menu === "defis" ? {} : { borderColor: "#c084fc88" }}>
+              <span className="text-3xl">🏆</span>
+              <span className="flex-1">
+                <span className={`block font-bold text-lg ${menu === "defis" ? "" : "text-purple-200"}`}>Défis</span>
+                <span className={`block text-xs ${menu === "defis" ? "opacity-80" : "text-emerald-300"}`}>{defiFait ? "Défi du jour fait ✓ · classements" : "Défi du jour à faire · amis · classements"}</span>
+              </span>
+              <span className="text-xl font-bold">{menu === "defis" ? "▾" : "→"}</span>
+              {!defiFait && menu !== "defis" && <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-amber-400 border border-amber-600" title="Défi du jour pas encore joué" />}
+            </button>
+            {menu === "defis" && (
+              <div className="flex flex-col gap-2 w-full max-w-xs pl-2" style={{ borderLeft: "2px solid #c084fc44" }}>
+                {defiFait
+                  ? item({ k: "defi", ico: "🏆", titre: "Défi du jour · classement", sous: "✓ Fait — " + defiFait.total + " pts" + (defiFait.won ? " 🏆" : "") + " · voir le monde entier", couleur: "#e9d5ff", bord: "#c084fc66", go: ouvrirClassement })
+                  : item({ k: "defi", ico: "🗓️", titre: "Défi du jour", sous: "La même donne pour tous, chaque jour", couleur: "#e9d5ff", bord: "#c084fc66", go: () => { window.location.href = "/solo.html?defi=1"; } })}
+                {item({ k: "amis", ico: "⚔️", titre: "Défier tes amis", sous: "La même donne que toi — que le meilleur gagne", couleur: "#fecaca", bord: "#f8717166", go: () => { setDefiAmi("menu"); setDefiAmiData(null); setDefiAmiCode(""); } })}
+                {item({ k: "hebdo", ico: "📅", titre: "Classement de la semaine", sous: "Le top 3 des victoires gagne des 💎 dimanche", couleur: "#fde68a", bord: "#fbbf2466", go: () => {
+                  setHebdo("chargement");
+                  const accH = readJSONls("rami-account");
+                  fetch(API_BASE + "/hebdo/classement" + (accH.code ? "?code=" + accH.code : ""))
+                    .then((r) => r.json()).then(setHebdo)
+                    .catch(() => setHebdo({ erreur: "Serveur injoignable — réessaie." }));
+                } })}
+              </div>
+            )}
+
+            <MissionsDuJour />
           </div>);
         })()}
 
@@ -2922,7 +2902,7 @@ function App() {
               <a href="/contact.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">💬 Nous contacter</a>
               <a href="/signaler.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🚩 Signaler un joueur</a>
               <a href="/confidentialite.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🔒 Confidentialité</a>
-              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2337-M</div>
+              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2338-M</div>
             </div>
           </div>
         )}
@@ -3547,7 +3527,7 @@ function App() {
           </div>
         )}
         <div className="flex gap-2 text-[11px] text-emerald-400 flex-wrap justify-center items-center pb-4">
-          <span className="opacity-60 self-center">v2337-M</span>
+          <span className="opacity-60 self-center">v2338-M</span>
         </div>
       </div>
     );
