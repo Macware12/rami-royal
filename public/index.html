@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2305-M">
+<meta name="version" content="v2306-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2305-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2306-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -1357,10 +1357,11 @@ function App() {
     if (!invite) { setInviteInfo(null); return; }
     fetch(API_BASE + "/salon-info?code=" + invite).then((r) => r.json()).then(setInviteInfo).catch(() => {});
   }, [invite]);
-  const [turnSeconds, setTurnSeconds] = useState(45);
-  const [level, setLevel] = useState("moyen");
-  const [shortMode, setShortMode] = useState(false); // Mode court : 3 manches
-  const [pouvoirs, setPouvoirs] = useState(true); // pouvoirs 💎 autorisés dans le salon
+  // Réglages de salon mémorisés : tout est présélectionné comme la dernière fois
+  const [turnSeconds, setTurnSeconds] = useState(() => { const v = parseInt(store.get("ramimp-turn"), 10); return [45, 60, 90].includes(v) ? v : 45; });
+  const [level, setLevel] = useState(() => ["facile", "moyen", "difficile"].includes(store.get("ramimp-level")) ? store.get("ramimp-level") : "moyen");
+  const [shortMode, setShortMode] = useState(() => store.get("ramimp-court") === "1"); // Mode court : 3 manches
+  const [pouvoirs, setPouvoirs] = useState(() => store.get("ramimp-pouvoirs") !== "0"); // pouvoirs 💎 autorisés
   const [msg, setMsg] = useState("");
   const [selected, setSelected] = useState([]);
   const [staged, setStaged] = useState([]);
@@ -1789,6 +1790,10 @@ function App() {
     const n = nomJoueur();
     store.set("ramimp-name", n);
     store.set("ramimp-avatar", avatar);
+    store.set("ramimp-turn", String(turnSeconds));
+    store.set("ramimp-level", level);
+    store.set("ramimp-court", shortMode ? "1" : "0");
+    store.set("ramimp-pouvoirs", pouvoirs ? "1" : "0");
     socket.emit("createRoom", { name: n, options: { turnSeconds, level, shortMode, pouvoirs }, avatar, compte: (compteActif && compteActif.code) || undefined }, (res) => {
       if (!res.ok) return setMsg(res.error || "Erreur.");
       store.set("rami-played", "1");
@@ -2358,7 +2363,7 @@ function App() {
               <a href="/contact.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">💬 Nous contacter</a>
               <a href="/signaler.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🚩 Signaler un joueur</a>
               <a href="/confidentialite.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🔒 Confidentialité</a>
-              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2305-M</div>
+              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2306-M</div>
             </div>
           </div>
         )}
@@ -2917,7 +2922,7 @@ function App() {
           </div>
         )}
         <div className="flex gap-2 text-[11px] text-emerald-400 flex-wrap justify-center items-center pb-4">
-          <span className="opacity-60 self-center">v2305-M</span>
+          <span className="opacity-60 self-center">v2306-M</span>
         </div>
       </div>
     );

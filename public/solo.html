@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2305-M">
+<meta name="version" content="v2306-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2305-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2306-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -1571,6 +1571,7 @@ function RamiRoyal() {
     store.set("rami-name", name);
     store.set("rami-avatar", myAvatar);
     store.set("rami-level", lvlChoisi);
+    if (!defi && !defiAmi) { store.set("rami-ai", String(nbAI)); store.set("rami-court", courtChoisi ? "1" : "0"); }
     const manchesFinales = courtChoisi ? genererManchesAleatoires(graineBase ? graineDe(graineBase, "manches") : undefined).map((i) => MANCHES[i]) : MANCHES;
     setG({ ...newRound(players, 0, null, null, manchesFinales, graineBase ? graineDe(graineBase, 0) : undefined), level: lvlChoisi, shortMode: courtChoisi, manches: manchesFinales, defi, defiAmi: defiAmi ? defiAmi.id : null, graineBase, startedAt: Date.now() });
     setSelected([]);
@@ -1820,6 +1821,8 @@ function RamiRoyal() {
         .catch(() => {}); // hors ligne : on garde la session locale telle quelle
     }
     const savedLevel = store.get("rami-level"); if (savedLevel) setLevel(savedLevel);
+    const savedAI = parseInt(store.get("rami-ai"), 10); if ([1, 2, 3].includes(savedAI)) setNbAI(savedAI);
+    const savedCourt = store.get("rami-court"); if (savedCourt != null) setShortMode(savedCourt === "1");
   }, []);
 
   function showIntro(mIdx, manches) {
