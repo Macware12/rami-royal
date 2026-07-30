@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2345-M">
+<meta name="version" content="v2346-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2345-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2346-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -58,7 +58,8 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 <body>
 <div id="root"><div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;">
 <div style="font-family:Georgia,serif;font-size:40px;color:#fcd34d;text-shadow:0 3px 10px rgba(0,0,0,.6);">Ramy Gasy</div>
-<div style="font-family:-apple-system,'Segoe UI',sans-serif;font-size:13px;color:#6ee7b7;">🎴 Préparation de la table…</div>
+<img src="/icon-192.png" alt="" style="width:64px;height:64px;border-radius:16px;opacity:.85;margin-bottom:10px;">
+<div style="font-family:-apple-system,'Segoe UI',sans-serif;font-size:13px;color:#6ee7b7;">Préparation de la table…</div>
 </div></div>
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef } = React;
@@ -2763,7 +2764,8 @@ function App() {
             <p className="text-emerald-200 text-sm mt-1">Le rami à contrats de Madagascar</p>
           </div>
           <div className="panel rounded-2xl p-5 w-full max-w-md flex flex-col gap-3 text-emerald-100" style={{ borderColor: "#f59e0b66" }}>
-            <p className="text-sm text-center leading-relaxed">Bienvenue ! 🎴</p>
+            <img src="/icon-192.png" alt="" style={{ width: 64, height: 64, borderRadius: 16, margin: "0 auto" }} />
+            <p className="text-sm text-center leading-relaxed">Bienvenue !</p>
             <p className="text-[12px] text-emerald-300 text-center leading-relaxed">
               Avec un <b className="text-amber-300">compte gratuit</b> (pseudo + code à 6 chiffres, sans email) :
               tes stats et succès te suivent partout, tu reprends tes parties sur n'importe quel appareil,
@@ -2848,7 +2850,7 @@ function App() {
             {menu !== "defis" && <button onClick={() => setMenu(menu === "jouer" ? null : "jouer")}
               className={`rounded-2xl px-4 py-4 w-full max-w-md flex items-center gap-3 text-left ${menu === "jouer" ? "btn-gold" : "panel text-emerald-100"}`}
               style={menu === "jouer" ? {} : { borderColor: "#f59e0b88" }}>
-              <span className="text-3xl">🎴</span>
+              <img src="/icon-192.png" alt="" style={{ width: 34, height: 34, borderRadius: 9, flexShrink: 0 }} />
               <span className="flex-1">
                 <span className={`block font-bold text-lg ${menu === "jouer" ? "" : "text-amber-300"}`}>Jouer</span>
                 <span className={`block text-xs ${menu === "jouer" ? "opacity-80" : "text-emerald-300"}`}>Solo, entre amis, ou apprendre</span>
@@ -2963,7 +2965,7 @@ function App() {
               <a href="/contact.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">💬 Nous contacter</a>
               <a href="/signaler.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🚩 Signaler un joueur</a>
               <a href="/confidentialite.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🔒 Confidentialité</a>
-              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2345-M</div>
+              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2346-M</div>
             </div>
           </div>
         )}
@@ -3562,7 +3564,7 @@ function App() {
         {invite && (
           <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-6">
             <div className="panel rounded-2xl p-6 w-full max-w-md text-center flex flex-col gap-3" style={{ borderColor: "#fbbf24" }}>
-              <div className="text-4xl">🎴</div>
+              <img src="/icon-192.png" alt="" style={{ width: 56, height: 56, borderRadius: 14, margin: "0 auto" }} />
               <div className="text-amber-300 font-bold text-lg" style={{ fontFamily: "Georgia, serif" }}>
                 {inviteInfo && inviteInfo.ok ? `${inviteInfo.hote} t'invite à sa table !` : "Tu es invité !"}
               </div>
@@ -3597,7 +3599,7 @@ function App() {
           </div>
         )}
         <div className="flex gap-2 text-[11px] text-emerald-400 flex-wrap justify-center items-center pb-4">
-          <span className="opacity-60 self-center">v2345-M</span>
+          <span className="opacity-60 self-center">v2346-M</span>
         </div>
       </div>
     );
