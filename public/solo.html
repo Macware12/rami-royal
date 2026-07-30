@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2311-M">
+<meta name="version" content="v2312-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2311-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2312-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -2208,6 +2208,21 @@ function tapCard(id) {
     setTableOverflow(el.scrollHeight > el.clientHeight + 4);
   }, [g]);
 
+  // Filet de sécurité : signale toute duplication de carte entre les zones de jeu
+  // (mains, pioche, défausse, table, « Prêt ») — pour attraper une régression au plus tôt.
+  useEffect(() => {
+    if (!g) return;
+    try {
+      const zones = [...g.players.flatMap((p) => p.hand), ...g.stock, ...g.discard,
+        ...g.melds.flatMap((m) => m.cards), ...(g.staged || []).flatMap((m) => m.cards)];
+      const vus = new Set();
+      for (const c of zones) {
+        if (vus.has(c.id)) { console.error("⚠️ Carte dupliquée détectée :", cardName(c), c.id); break; }
+        vus.add(c.id);
+      }
+    } catch (_) {}
+  }, [g]);
+
   // Sécurité : annuler le jet en attente après 8 secondes
   useEffect(() => {
     if (!pendingDiscard) return;
@@ -2925,16 +2940,18 @@ function tapCard(id) {
       let swapped = true;
       while (swapped) {
         swapped = false;
-        for (const m of melds) {
+        for (let k = 0; k < melds.length; k++) {
+          const m = melds[k];
           if (m.type !== "esc") continue;
           for (let ji = 0; ji < m.cards.length && !swapped; ji++) {
             if (!m.cards[ji].joker) continue;
             const c = hand.find((h) => !h.joker && isOrderedEscalier(m.cards.map((x, i2) => (i2 === ji ? h : x))));
             if (!c) continue;
             const jk = m.cards[ji];
-            m.cards = m.cards.map((x, i2) => (i2 === ji ? c : x));
-            hand.splice(hand.indexOf(c), 1);
-            hand.push(jk);
+            // Copie de la combinaison : muter l'objet partagé avec l'état React dupliquait
+            // des cartes quand la fonction d'état était ré-exécutée (bug des « 2♥ en trop »)
+            melds[k] = { ...m, cards: m.cards.map((x, i2) => (i2 === ji ? c : x)) };
+            hand = [...hand.filter((x) => x.id !== c.id), jk];
             ns = addLog(ns, ai.name + " échange " + cardName(c) + " contre un Joker !");
             swapped = true;
           }
@@ -2949,9 +2966,10 @@ function tapCard(id) {
         changed = false;
         for (const c of hand) {
           if (level === "facile" && c.joker) continue;
-          const m = melds.find((m) => (level !== "facile" || m.owner === idx) && validGroup(m.type, [...m.cards, c]));
-          if (m) {
-            m.cards = normMeld(m.type, [...m.cards, c]);
+          const mi = melds.findIndex((m) => (level !== "facile" || m.owner === idx) && validGroup(m.type, [...m.cards, c]));
+          if (mi !== -1) {
+            // Copie (jamais de mutation de l'objet partagé — source du bug de duplication)
+            melds[mi] = { ...melds[mi], cards: normMeld(melds[mi].type, [...melds[mi].cards, c]) };
             hand = hand.filter((x) => x.id !== c.id);
             ns = addLog(ns, ai.name + " complète avec " + cardName(c));
             changed = true;
