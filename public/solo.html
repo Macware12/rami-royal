@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2350-M">
+<meta name="version" content="v2351-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2350-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2351-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -2192,7 +2192,11 @@ function RamiRoyal() {
     }
     if (window.location.search.indexOf("defi=1") !== -1) {
       window.history.replaceState(null, "", window.location.pathname);
-      setTimeout(() => startGame({ defi: true, level: "difficile", shortMode: true }), 0);
+      // Déjà terminé aujourd'hui ? Une seule tentative — on renvoie vers l'accueil.
+      let dejaFait = null;
+      try { const d = JSON.parse(store.get("rami-defi") || "null"); if (d && d.date === cleDuJour()) dejaFait = d; } catch (_) {}
+      if (dejaFait) setMsg("🗓️ Tu as déjà terminé le défi du jour (" + dejaFait.total + " pts) — rendez-vous demain !");
+      else setTimeout(() => startGame({ defi: true, level: "difficile", shortMode: true }), 0);
     }
     const mAmi = window.location.search.match(/defiami=([A-Za-z0-9]{5})/);
     if (mAmi) {

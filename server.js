@@ -1287,6 +1287,11 @@ app.post("/defi/commencer", (req, res) => {
   const c = typeof code === "string" && /^[0-9]{6}$/.test(code.trim()) ? comptes.get(code.trim()) : null;
   if (!c) { noteEchecCode(req); return res.status(403).json({ erreur: "Compte requis." }); }
   if (typeof cible !== "string" || !cible || cible.length > 40) return res.status(400).json({ erreur: "Défi invalide." });
+  // Défi du jour : une seule tentative une fois la partie TERMINÉE (abandonner permet de recommencer)
+  if (cible.indexOf("jour-") === 0) {
+    const jourD = defiScores.get(cible.slice(5));
+    if (jourD && jourD.has(c.code)) return res.status(409).json({ erreur: "Tu as déjà terminé le défi du jour — rendez-vous demain !", deja: true });
+  }
   if (jetons.size > 200000) return res.status(503).json({ erreur: "Serveur occupé — réessaie." });
   const jeton = crypto.randomBytes(16).toString("hex");
   jetons.set(jeton, { compte: c.code, cible, emisA: Date.now() });
