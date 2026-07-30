@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2347-M">
+<meta name="version" content="v2348-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2347-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2348-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -1538,7 +1538,7 @@ function MissionsDuJour() {
   try { connecte = Boolean((JSON.parse(store.get("rami-account")) || {}).code); } catch (_) {}
   const faites = cat.missions.filter((m) => etat.valide.includes(m.id) || (etat.prog[m.type] || 0) >= m.cible).length;
   return (
-    <div className="panel rounded-2xl px-4 py-3 w-full max-w-xs text-left">
+    <div className="panel rounded-2xl px-4 py-3 w-full text-left">
       <div className="flex items-center justify-between mb-1.5">
         <span className="text-sm font-bold text-amber-300">🎯 Missions du jour</span>
         <span className="text-[10px] text-emerald-400 font-bold">{faites}/3{faites === 3 ? " ✓" : ""}</span>
