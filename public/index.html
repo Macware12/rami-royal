@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2304-M">
+<meta name="version" content="v2305-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2304-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2305-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -87,6 +87,8 @@ const STYLE = (
     .btn-gold:active { transform: translateY(2px); }
     .btn-green { background: linear-gradient(180deg, #34d399, #059669); color: #022c22; box-shadow: 0 3px 0 #065f46, 0 6px 12px rgba(0,0,0,.35); }
     .btn-green:active { transform: translateY(2px); }
+    .btn-diamant { background: linear-gradient(180deg, #7dd3fc, #0ea5e9); color: #082f49; box-shadow: 0 3px 0 #0369a1, 0 6px 12px rgba(0,0,0,.35); }
+    .btn-diamant:active { transform: translateY(2px); }
     .btn-dark { background: linear-gradient(180deg, #115e45, #0b3d2e); color: #a7f3d0; box-shadow: 0 3px 0 #052e16, 0 5px 10px rgba(0,0,0,.35); border: 1px solid #14705266; }
     .btn-dark:active { transform: translateY(2px); }
     .btn-red { background: linear-gradient(180deg, #f87171, #dc2626); color: #fff; box-shadow: 0 3px 0 #7f1d1d, 0 6px 12px rgba(0,0,0,.4); }
@@ -810,6 +812,43 @@ function LigneMelds({ children }) {
 }
 
 // Vignette du compte : photo ronde si définie, sinon avatar de profil, sinon 👤
+// Récap des tarifs 💎, ouvert d'un tap sur le solde (événement "rami-tarifs")
+function TarifsDiamants() {
+  const [ouvert, setOuvert] = React.useState(false);
+  React.useEffect(() => {
+    const h = () => setOuvert(true);
+    window.addEventListener("rami-tarifs", h);
+    return () => window.removeEventListener("rami-tarifs", h);
+  }, []);
+  if (!ouvert) return null;
+  const L = ({ n, v }) => (
+    <div className="flex justify-between gap-3 text-xs text-emerald-200"><span>{n}</span><b className="text-yellow-300 whitespace-nowrap">{v}</b></div>
+  );
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setOuvert(false)}>
+      <div className="panel rounded-2xl p-5 w-full max-w-sm flex flex-col gap-2 relative" onClick={(e) => e.stopPropagation()}>
+        <button onClick={() => setOuvert(false)} className="absolute top-1 right-1 p-2.5 text-emerald-400 text-xl leading-none">✕</button>
+        <h3 className="text-amber-300 font-bold text-center" style={{ fontFamily: "Georgia, serif" }}>💎 Les diamants</h3>
+        <div className="text-[11px] font-bold text-amber-300 uppercase mt-1">Comment en gagner</div>
+        <L n="Partie terminée" v="+10" />
+        <L n="Victoire" v="+25" />
+        <L n="Succès débloqué" v="+25" />
+        <L n="Défi du jour (1er essai)" v="+15 · +10 si gagné" />
+        <L n="Défi entre amis (1er essai)" v="+10 · +5 si gagné" />
+        <L n="Série quotidienne 🔥 (jour 1 → 7+)" v="+10 → +50" />
+        <L n="Création de compte" v="🎁 +100" />
+        <div className="text-[10px] text-emerald-400 -mt-1">Au-delà de 15 parties par jour, les parties ne rapportent plus (les succès, si).</div>
+        <div className="text-[11px] font-bold text-amber-300 uppercase mt-1">À quoi les dépenser</div>
+        <L n="💡 Aide (après les 3 offertes)" v="5" />
+        <L n="✨ Achat net — sans carte de pénalité" v="15" />
+        <L n="🛒 4e jeton d'achat (1/manche)" v="20" />
+        <L n="🤡 Joker invoqué (1/manche)" v="30" />
+        <div className="text-[10px] text-emerald-400">⚖️ Pouvoirs désactivés pendant les défis, et dans les salons où l'hôte les a coupés.</div>
+      </div>
+    </div>
+  );
+}
+
 // Annonce unique de l'arrivée des diamants (ne s'affiche qu'une fois par appareil)
 function AnnonceDiamants() {
   const [visible, setVisible] = React.useState(() => {
@@ -2319,7 +2358,7 @@ function App() {
               <a href="/contact.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">💬 Nous contacter</a>
               <a href="/signaler.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🚩 Signaler un joueur</a>
               <a href="/confidentialite.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🔒 Confidentialité</a>
-              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2304-M</div>
+              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2305-M</div>
             </div>
           </div>
         )}
@@ -2878,7 +2917,7 @@ function App() {
           </div>
         )}
         <div className="flex gap-2 text-[11px] text-emerald-400 flex-wrap justify-center items-center pb-4">
-          <span className="opacity-60 self-center">v2304-M</span>
+          <span className="opacity-60 self-center">v2305-M</span>
         </div>
       </div>
     );
@@ -3207,16 +3246,20 @@ function App() {
             <div className="flex gap-2 mt-1 justify-center">
               <button onClick={() => act({ type: "buy" })} disabled={me.buysLeft <= 0}
                 className="btn-gold px-3 py-1.5 rounded-xl text-xs font-bold disabled:opacity-40">💰 Acheter (+1 pénalité)</button>
-              {srv.options.pouvoirs !== false && <button onClick={() => peutAchatNet() ? act({ type: "buy", net: true }) : setMsg(messageVerrou(COUT_ACHAT_NET))} disabled={me.buysLeft <= 0}
-                title={"Achat net : la carte sans la carte de pénalité, pour " + COUT_ACHAT_NET + " diamants"}
-                className={(peutAchatNet() ? "btn-green" : "btn-dark opacity-70") + " px-3 py-1.5 rounded-xl text-xs font-bold disabled:opacity-40"}>{peutAchatNet() ? "✨" : "🔒"} Achat net · {COUT_ACHAT_NET} 💎</button>}
-              {srv.options.pouvoirs !== false && me.buysLeft <= 0 && !me.extraBuyUsed && (
-                <button onClick={() => peutPayer(COUT_ACHAT_EXTRA) ? act({ type: "rechargeAchat" }) : setMsg(messageVerrou(COUT_ACHAT_EXTRA))}
-                  title="Un 4e jeton d'achat pour cette manche (1 recharge max)"
-                  className={(peutPayer(COUT_ACHAT_EXTRA) ? "btn-green" : "btn-dark opacity-70") + " px-3 py-1.5 rounded-xl text-xs font-bold"}>{peutPayer(COUT_ACHAT_EXTRA) ? "🛒" : "🔒"} +1 achat · {COUT_ACHAT_EXTRA} 💎</button>
-              )}
               <button onClick={() => setPassedWindow(g.buyWindowUntil)} className="btn-dark px-3 py-1.5 rounded-xl text-xs font-bold">Passer</button>
             </div>
+            {srv.options.pouvoirs !== false && (
+              <div className="flex gap-2 mt-1.5 justify-center">
+                <button onClick={() => peutAchatNet() ? act({ type: "buy", net: true }) : setMsg(messageVerrou(COUT_ACHAT_NET))} disabled={me.buysLeft <= 0}
+                  title={"Achat net : la carte sans la carte de pénalité, pour " + COUT_ACHAT_NET + " diamants"}
+                  className={(peutAchatNet() ? "btn-diamant" : "btn-dark opacity-70") + " px-2.5 py-1 rounded-lg text-[10px] font-bold disabled:opacity-40"}>{peutAchatNet() ? "✨" : "🔒"} Achat net · {COUT_ACHAT_NET} 💎</button>
+                {me.buysLeft <= 0 && !me.extraBuyUsed && (
+                  <button onClick={() => peutPayer(COUT_ACHAT_EXTRA) ? act({ type: "rechargeAchat" }) : setMsg(messageVerrou(COUT_ACHAT_EXTRA))}
+                    title="Un 4e jeton d'achat pour cette manche (1 recharge max)"
+                    className={(peutPayer(COUT_ACHAT_EXTRA) ? "btn-diamant" : "btn-dark opacity-70") + " px-2.5 py-1 rounded-lg text-[10px] font-bold"}>{peutPayer(COUT_ACHAT_EXTRA) ? "🛒" : "🔒"} +1 achat · {COUT_ACHAT_EXTRA} 💎</button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       ) : myTurn && pendingDiscard ? (
@@ -3239,7 +3282,7 @@ function App() {
           <div className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col items-center gap-1 bg-emerald-950/60 border border-amber-500/40 rounded-xl px-2.5 py-1.5"
             title={"Toi : " + (me.total || 0) + " points au total" + (!me.posed ? " · tes achats restants cette manche" : "")}>
             <span className="text-[10px] font-bold text-amber-300">{me.avatar || "🙂"} Toi · {me.total || 0} pts</span>
-            {(() => { try { const a = JSON.parse(store.get("rami-account")) || {}; return a.code ? <span className="text-[10px] font-bold text-yellow-300">💎 {a.pieces || 0}</span> : null; } catch (_) { return null; } })()}
+            {(() => { try { const a = JSON.parse(store.get("rami-account")) || {}; return a.code ? <span onClick={() => { try { window.dispatchEvent(new CustomEvent("rami-tarifs")); } catch (_) {} }} className="text-[10px] font-bold text-yellow-300 cursor-pointer underline decoration-dotted" title="Tarifs des diamants">💎 {a.pieces || 0}</span> : null; } catch (_) { return null; } })()}
             {!me.posed && (
               <span className="flex items-center gap-1">
                 <span className="text-[10px]">🛒</span>
@@ -3348,7 +3391,7 @@ function App() {
                     jokerArme.current = 0;
                     act({ type: "jokerNet" });
                   }} title="Sort un joker de la pioche — une seule fois par manche"
-                  className={(peutPayer(COUT_JOKER) ? (Date.now() - jokerArme.current <= 3500 ? "btn-gold pulse-gold" : "btn-green") : "btn-dark opacity-70") + " px-4 py-2 rounded-xl text-sm font-bold"}>{Date.now() - jokerArme.current <= 3500 ? "✔ Confirmer · " + COUT_JOKER + " 💎" : (peutPayer(COUT_JOKER) ? "🤡" : "🔒") + " Joker · " + COUT_JOKER + " 💎"}</button>
+                  className={(peutPayer(COUT_JOKER) ? (Date.now() - jokerArme.current <= 3500 ? "btn-gold pulse-gold" : "btn-diamant") : "btn-dark opacity-70") + " px-4 py-2 rounded-xl text-sm font-bold"}>{Date.now() - jokerArme.current <= 3500 ? "✔ Confirmer · " + COUT_JOKER + " 💎" : (peutPayer(COUT_JOKER) ? "🤡" : "🔒") + " Joker · " + COUT_JOKER + " 💎"}</button>
               )}
               <button onClick={helpSort} className="btn-dark px-4 py-2 rounded-xl text-sm font-bold">💡 Aide{(() => {
                 const rest = Math.max(0, AIDES_GRATUITES - aidesInfo().n);
@@ -3591,7 +3634,7 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<React.Fragment><App /><GainsToast /><AnnonceDiamants /></React.Fragment>);
+ReactDOM.createRoot(document.getElementById('root')).render(<React.Fragment><App /><GainsToast /><AnnonceDiamants /><TarifsDiamants /></React.Fragment>);
 </script>
 </body>
 </html>
