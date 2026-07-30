@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2315-M">
+<meta name="version" content="v2316-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2315-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2316-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -2599,7 +2599,7 @@ function App() {
               <a href="/contact.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">💬 Nous contacter</a>
               <a href="/signaler.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🚩 Signaler un joueur</a>
               <a href="/confidentialite.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🔒 Confidentialité</a>
-              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2315-M</div>
+              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2316-M</div>
             </div>
           </div>
         )}
@@ -3158,7 +3158,7 @@ function App() {
           </div>
         )}
         <div className="flex gap-2 text-[11px] text-emerald-400 flex-wrap justify-center items-center pb-4">
-          <span className="opacity-60 self-center">v2315-M</span>
+          <span className="opacity-60 self-center">v2316-M</span>
         </div>
       </div>
     );
@@ -3851,6 +3851,11 @@ function App() {
             <h2 className="text-amber-300 font-bold text-lg mb-1" style={{ fontFamily: "Georgia, serif" }}>
               {(srv.players[g.roundOver.winnerIdx] || {}).name} gagne la manche !
             </h2>
+{g.roundOver.epuise && (
+              <p className="text-[11px] text-amber-200 mb-2 leading-relaxed bg-emerald-950/60 border border-amber-500/30 rounded-xl px-3 py-2">
+                ⚖️ <b>Manche insolvable</b> — la pioche a été rebattue 3 fois sans vainqueur : les cartes restantes ne permettaient plus à personne de finir. Dans ce cas, la règle donne la manche au joueur avec la <b>main la plus légère</b> (le moins de points en main), même s'il lui reste des cartes.
+              </p>
+            )}
             {g.roundOver.bonusType === "anticipe" && <p className="text-xs text-amber-200 mb-2">Pose-tout anticipé : bonus −{10 * srv.players.length} pts</p>}
             {g.roundOver.bonusType === "final" && <p className="text-xs text-amber-200 mb-2">Pose-tout final : bonus −{50 * srv.players.length} pts</p>}
             <div className="text-sm">
