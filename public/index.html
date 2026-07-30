@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2301-M">
+<meta name="version" content="v2302-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2301-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2302-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -810,7 +810,7 @@ function LigneMelds({ children }) {
 }
 
 // Vignette du compte : photo ronde si définie, sinon avatar de profil, sinon 👤
-// Toast des pièces gagnées : écoute l'événement "rami-gains" émis après chaque
+// Toast des diamants gagnées : écoute l'événement "rami-gains" émis après chaque
 // partie ou défi enregistré côté serveur, et affiche le détail quelques secondes.
 function GainsToast() {
   const [info, setInfo] = React.useState(null);
@@ -837,7 +837,7 @@ function GainsToast() {
     <div className="fixed left-1/2 -translate-x-1/2 z-40 px-4 py-2.5 rounded-2xl text-sm font-bold text-amber-200 text-center cursor-pointer"
       style={{ top: "calc(env(safe-area-inset-top, 0px) + 10px)", background: "linear-gradient(180deg, rgba(6,58,42,.97), rgba(4,40,28,.97))", border: "1px solid #f59e0b88", boxShadow: "0 6px 18px rgba(0,0,0,.45)" }}
       onClick={() => setInfo(null)}>
-      🪙 +{g.total} pièces
+      💎 +{g.total} diamants
       <span className="block text-[10px] font-normal text-emerald-300">{det.join(" · ")}{typeof info.pieces === "number" ? " — solde : " + info.pieces : ""}</span>
     </div>
   );
@@ -987,7 +987,7 @@ function flushParties() {
     })
     .catch(() => {});
 }
-// L'Aide est offerte 3 fois par partie, puis coûte des pièces
+// L'Aide est offerte 3 fois par partie, puis coûte des diamants
 const AIDES_GRATUITES = 3;
 const COUT_AIDE = 5;
 // Achat « net » : la carte de la défausse SANS la carte de pénalité (consomme un jeton 🛒)
@@ -999,7 +999,7 @@ function peutPayer(montant) {
   try { const a = JSON.parse(store.get("rami-account")) || {}; return Boolean(a.code) && (a.pieces || 0) >= montant; } catch (_) { return false; }
 }
 const peutAchatNet = () => peutPayer(COUT_ACHAT_NET);
-// Débite des pièces (optimiste : l'interface bouge tout de suite, le serveur confirme)
+// Débite des diamants (optimiste : l'interface bouge tout de suite, le serveur confirme)
 function depenserPieces(montant, motif) {
   let acc = {};
   try { acc = JSON.parse(store.get("rami-account")) || {}; } catch (_) {}
@@ -1023,7 +1023,7 @@ function depenserPieces(montant, motif) {
     .catch(() => {}); // hors ligne : le débit optimiste local suffit
 }
 
-// Solde mis à jour + toast : appelé quand le serveur confirme des pièces gagnées
+// Solde mis à jour + toast : appelé quand le serveur confirme des diamants gagnées
 function signalerGains(d) {
   try {
     const acc = JSON.parse(store.get("rami-account")) || {};
@@ -1078,7 +1078,7 @@ function App() {
   const [cptBusy, setCptBusy] = useState(false);
   const [cptNouveau, setCptNouveau] = useState(null); // code affiché après création
   const [, cptMaj] = useState(0); // forcer le re-rendu après connexion/déconnexion
-  useEffect(() => { // le solde du chip suit les gains de pièces
+  useEffect(() => { // le solde du chip suit les gains de diamants
     const h = () => cptMaj((x) => x + 1);
     window.addEventListener("rami-gains", h);
     return () => window.removeEventListener("rami-gains", h);
@@ -1816,8 +1816,8 @@ function App() {
     if (ai.n >= AIDES_GRATUITES) {
       let acc = {};
       try { acc = JSON.parse(store.get("rami-account")) || {}; } catch (_) {}
-      if (!acc.code) { setMsg("💡 Tes " + AIDES_GRATUITES + " aides gratuites de la partie sont utilisées — crée un compte (pastille en haut à droite) pour continuer (" + COUT_AIDE + " 🪙 par aide)."); return; }
-      if ((acc.pieces || 0) < COUT_AIDE) { setMsg("💡 Aides gratuites épuisées — il te faut " + COUT_AIDE + " pièces (solde : 🪙 " + (acc.pieces || 0) + "). Termine des parties pour en gagner !"); return; }
+      if (!acc.code) { setMsg("💡 Tes " + AIDES_GRATUITES + " aides gratuites de la partie sont utilisées — crée un compte (pastille en haut à droite) pour continuer (" + COUT_AIDE + " 💎 par aide)."); return; }
+      if ((acc.pieces || 0) < COUT_AIDE) { setMsg("💡 Aides gratuites épuisées — il te faut " + COUT_AIDE + " diamants (solde : 💎 " + (acc.pieces || 0) + "). Termine des parties pour en gagner !"); return; }
       depenserPieces(COUT_AIDE, "aide");
     }
     ai.n += 1;
@@ -2227,7 +2227,7 @@ function App() {
             {nomVerrouille ? (
               <span className="flex flex-col items-start leading-tight">
                 <span className="text-sm font-bold text-amber-300 max-w-[120px] truncate">{nomVerrouille}</span>
-                <span className="text-[10px] font-bold text-yellow-300">🪙 {compteActif.pieces || 0}</span>
+                <span className="text-[10px] font-bold text-yellow-300">💎 {compteActif.pieces || 0}</span>
               </span>
             ) : (
               <span className="text-sm font-bold">Se connecter</span>
@@ -2268,7 +2268,7 @@ function App() {
               <a href="/contact.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">💬 Nous contacter</a>
               <a href="/signaler.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🚩 Signaler un joueur</a>
               <a href="/confidentialite.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🔒 Confidentialité</a>
-              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2301-M</div>
+              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2302-M</div>
             </div>
           </div>
         )}
@@ -2352,10 +2352,10 @@ function App() {
                       <span className="text-4xl">{compteActif.avatar || "👤"}</span>
                     )}
                     <h3 className="text-amber-300 font-bold text-center">{compteActif.pseudo}</h3>
-                    <div className="text-xs font-bold text-yellow-300">🪙 {compteActif.pieces || 0} pièces{compteActif.serie > 1 ? " · 🔥 série " + compteActif.serie + " jours" : ""}</div>
+                    <div className="text-xs font-bold text-yellow-300">💎 {compteActif.pieces || 0} diamants{compteActif.serie > 1 ? " · 🔥 série " + compteActif.serie + " jours" : ""}</div>
                   </div>
                   <details className="text-[10px] text-emerald-300 bg-emerald-950/40 border border-emerald-800/40 rounded-xl px-3 py-2">
-                      <summary className="font-bold text-amber-300 cursor-pointer">🪙 Comment gagner des pièces ?</summary>
+                      <summary className="font-bold text-amber-300 cursor-pointer">💎 Comment gagner des diamants ?</summary>
                       <div className="mt-1 leading-relaxed text-left">
                         Partie terminée <b className="text-yellow-300">+10</b> · victoire <b className="text-yellow-300">+25</b><br/>
                         Succès débloqué <b className="text-yellow-300">+25</b><br/>
@@ -2624,7 +2624,7 @@ function App() {
               <PhotoCompte t={30} />
               <div className="flex-1">
                 <div className="text-sm font-bold text-amber-300">{nomVerrouille}</div>
-                <div className="text-[10px] text-emerald-400">Connecté · <span className="font-bold text-yellow-300">🪙 {compteActif.pieces || 0}</span> — tu joues sous ton pseudo de compte</div>
+                <div className="text-[10px] text-emerald-400">Connecté · <span className="font-bold text-yellow-300">💎 {compteActif.pieces || 0}</span> — tu joues sous ton pseudo de compte</div>
               </div>
             </div>
           ) : (
@@ -2699,7 +2699,7 @@ function App() {
               <PhotoCompte t={30} />
               <div className="flex-1">
                 <div className="text-sm font-bold text-amber-300">{nomVerrouille}</div>
-                <div className="text-[10px] text-emerald-400">Connecté · <span className="font-bold text-yellow-300">🪙 {compteActif.pieces || 0}</span> — tu joues sous ton pseudo de compte</div>
+                <div className="text-[10px] text-emerald-400">Connecté · <span className="font-bold text-yellow-300">💎 {compteActif.pieces || 0}</span> — tu joues sous ton pseudo de compte</div>
               </div>
             </div>
           ) : (
@@ -2815,7 +2815,7 @@ function App() {
           </div>
         )}
         <div className="flex gap-2 text-[11px] text-emerald-400 flex-wrap justify-center items-center pb-4">
-          <span className="opacity-60 self-center">v2301-M</span>
+          <span className="opacity-60 self-center">v2302-M</span>
         </div>
       </div>
     );
@@ -2926,7 +2926,7 @@ function App() {
             <span className="text-2xl">👤</span>
             <span className="flex-1">
               <span className="block text-sm font-bold text-amber-300">{ranking[0].idx === youIdx ? "Belle victoire ! Garde-la précieusement" : "Ne perds pas ta progression"}</span>
-              <span className="block text-[11px] text-emerald-300">Avec un compte, cette partie t'aurait rapporté des pièces 🪙 — stats et succès gardés partout</span>
+              <span className="block text-[11px] text-emerald-300">Avec un compte, cette partie t'aurait rapporté des diamants 💎 — stats et succès gardés partout</span>
             </span>
             <span className="text-amber-300 font-bold">→</span>
           </button>
@@ -3146,13 +3146,13 @@ function App() {
                 className="btn-gold px-3 py-1.5 rounded-xl text-xs font-bold disabled:opacity-40">💰 Acheter (+1 pénalité)</button>
               {peutAchatNet() && (
                 <button onClick={() => act({ type: "buy", net: true })} disabled={me.buysLeft <= 0}
-                  title={"Achat net : la carte sans la carte de pénalité, pour " + COUT_ACHAT_NET + " pièces"}
-                  className="btn-green px-3 py-1.5 rounded-xl text-xs font-bold disabled:opacity-40">✨ Achat net · {COUT_ACHAT_NET} 🪙</button>
+                  title={"Achat net : la carte sans la carte de pénalité, pour " + COUT_ACHAT_NET + " diamants"}
+                  className="btn-green px-3 py-1.5 rounded-xl text-xs font-bold disabled:opacity-40">✨ Achat net · {COUT_ACHAT_NET} 💎</button>
               )}
               {me.buysLeft <= 0 && !me.extraBuyUsed && peutPayer(COUT_ACHAT_EXTRA) && (
                 <button onClick={() => act({ type: "rechargeAchat" })}
                   title="Un 4e jeton d'achat pour cette manche (1 recharge max)"
-                  className="btn-green px-3 py-1.5 rounded-xl text-xs font-bold">🛒 +1 achat · {COUT_ACHAT_EXTRA} 🪙</button>
+                  className="btn-green px-3 py-1.5 rounded-xl text-xs font-bold">🛒 +1 achat · {COUT_ACHAT_EXTRA} 💎</button>
               )}
               <button onClick={() => setPassedWindow(g.buyWindowUntil)} className="btn-dark px-3 py-1.5 rounded-xl text-xs font-bold">Passer</button>
             </div>
@@ -3178,7 +3178,7 @@ function App() {
           <div className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col items-center gap-1 bg-emerald-950/60 border border-amber-500/40 rounded-xl px-2.5 py-1.5"
             title={"Toi : " + (me.total || 0) + " points au total" + (!me.posed ? " · tes achats restants cette manche" : "")}>
             <span className="text-[10px] font-bold text-amber-300">{me.avatar || "🙂"} Toi · {me.total || 0} pts</span>
-            {(() => { try { const a = JSON.parse(store.get("rami-account")) || {}; return a.code ? <span className="text-[10px] font-bold text-yellow-300">🪙 {a.pieces || 0}</span> : null; } catch (_) { return null; } })()}
+            {(() => { try { const a = JSON.parse(store.get("rami-account")) || {}; return a.code ? <span className="text-[10px] font-bold text-yellow-300">💎 {a.pieces || 0}</span> : null; } catch (_) { return null; } })()}
             {!me.posed && (
               <span className="flex items-center gap-1">
                 <span className="text-[10px]">🛒</span>
@@ -3282,11 +3282,11 @@ function App() {
             <>
               {myTurn && g.phase === "play" && me && !me.jokerNetUsed && peutPayer(COUT_JOKER) && (
                 <button onClick={() => act({ type: "jokerNet" })} title="Sort un joker de la pioche — une seule fois par manche"
-                  className="btn-green px-4 py-2 rounded-xl text-sm font-bold">🤡 Joker · {COUT_JOKER} 🪙</button>
+                  className="btn-green px-4 py-2 rounded-xl text-sm font-bold">🤡 Joker · {COUT_JOKER} 💎</button>
               )}
               <button onClick={helpSort} className="btn-dark px-4 py-2 rounded-xl text-sm font-bold">💡 Aide{(() => {
                 const rest = Math.max(0, AIDES_GRATUITES - aidesInfo().n);
-                return <span className="text-[10px] font-normal"> {rest > 0 ? "●".repeat(rest) + "○".repeat(AIDES_GRATUITES - rest) : COUT_AIDE + " 🪙"}</span>;
+                return <span className="text-[10px] font-normal"> {rest > 0 ? "●".repeat(rest) + "○".repeat(AIDES_GRATUITES - rest) : COUT_AIDE + " 💎"}</span>;
               })()}</button>
               {!contract.poseTout && <button onClick={autoStage} className="btn-dark px-4 py-2 rounded-xl text-sm font-bold">✨ Classer mes cartes</button>}
             </>
@@ -3409,9 +3409,9 @@ function App() {
             </div>
             <ol className="list-decimal ml-4 space-y-2 text-emerald-100 text-xs">
               <li><b>Pioche</b> une carte (ou prends celle de la défausse, gratuite à ton tour).</li>
-              <li><b>Prépare le contrat</b> : touche 3+ cartes de même valeur (tri) ou qui se suivent (escalier), puis valide. Le bouton 💡 Aide classe ta main selon le contrat — 3 aides offertes par partie (les points ● du bouton), ensuite 5 🪙 pièces chacune. 🪄 prépare la pose quand elle est possible !</li>
-              <li><b>Achat net</b> : pendant une fenêtre d'achat, le bouton ✨ prend la carte <b>sans la carte de pénalité</b> pour 15 🪙 pièces (il consomme quand même un jeton 🛒). Il n'apparaît que si ton compte a assez de pièces.</li>
-              <li><b>Pouvoirs 🪙</b> : à court de jetons, 🛒 +1 achat (20 pièces, 1 recharge par manche) ; pendant ton tour, 🤡 Joker (30 pièces, 1 par manche) sort un joker de la pioche.</li>
+              <li><b>Prépare le contrat</b> : touche 3+ cartes de même valeur (tri) ou qui se suivent (escalier), puis valide. Le bouton 💡 Aide classe ta main selon le contrat — 3 aides offertes par partie (les points ● du bouton), ensuite 5 💎 diamants chacune. 🪄 prépare la pose quand elle est possible !</li>
+              <li><b>Achat net</b> : pendant une fenêtre d'achat, le bouton ✨ prend la carte <b>sans la carte de pénalité</b> pour 15 💎 diamants (il consomme quand même un jeton 🛒). Il n'apparaît que si ton compte a assez de diamants.</li>
+              <li><b>Pouvoirs 💎</b> : à court de jetons, 🛒 +1 achat (20 diamants, 1 recharge par manche) ; pendant ton tour, 🤡 Joker (30 diamants, 1 par manche) sort un joker de la pioche.</li>
               <li><b>Pose</b> quand le contrat est complet (bouton doré), en une seule fois.</li>
               <li><b>Jette</b> une carte pour finir ton tour : glisse-la sur la défausse, puis <b>touche la défausse pour confirmer</b> 🔒 (touche une carte de ta main pour annuler). Premier à vider sa main = gagnant !</li>
             </ol>

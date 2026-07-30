@@ -78,13 +78,13 @@
       <input id="filtre" placeholder="Filtrer par pseudo…">
       <div style="overflow-x:auto;">
         <table>
-          <thead><tr><th>Pseudo</th><th class="num">🪙</th><th class="num">🔥</th><th class="num">Solo (V/P)</th><th class="num">Multi (V/P)</th><th class="num">Succès</th><th>Contrat fort</th><th class="num">Manche + rapide</th><th class="num">⏱ Jeu</th><th>Vu le</th></tr></thead>
+          <thead><tr><th>Pseudo</th><th class="num">💎</th><th class="num">🔥</th><th class="num">Solo (V/P)</th><th class="num">Multi (V/P)</th><th class="num">Succès</th><th>Contrat fort</th><th class="num">Manche + rapide</th><th class="num">⏱ Jeu</th><th>Vu le</th></tr></thead>
           <tbody id="j-corps"><tr><td colspan="10">Chargement…</td></tr></tbody>
         </table>
       </div>
       <div style="display:flex; gap:6px; margin-top:10px; flex-wrap:wrap; align-items:center;">
         <input id="don-joueur" placeholder="Pseudo ou code" style="flex:1; min-width:130px;">
-        <input id="don-montant" type="number" placeholder="Pièces (-500 pour retirer)" style="flex:1; min-width:130px;">
+        <input id="don-montant" type="number" placeholder="Diamants (-500 pour retirer)" style="flex:1; min-width:130px;">
         <a class="btn" href="#" id="don-ok" style="margin:0;">🎁 Appliquer</a>
       </div>
       <div class="err" id="don-msg"></div>
@@ -199,7 +199,7 @@ document.getElementById("don-ok").addEventListener("click", function (e) {
   var msg = document.getElementById("don-msg");
   if (!j || !m) { msg.textContent = "Indique un joueur et un montant."; return; }
   var n = parseInt(m, 10);
-  if (!confirm((n < 0 ? "Retirer " + Math.abs(n) + " pièces à « " : "Créditer " + n + " pièces à « ") + j + " » ?")) return;
+  if (!confirm((n < 0 ? "Retirer " + Math.abs(n) + " diamants à « " : "Créditer " + n + " diamants à « ") + j + " » ?")) return;
   msg.textContent = "Envoi…";
   fetch("/admin/pieces?cle=" + encodeURIComponent(CLE), {
     method: "POST", headers: { "Content-Type": "application/json" },
@@ -207,7 +207,7 @@ document.getElementById("don-ok").addEventListener("click", function (e) {
   }).then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.erreur || "Erreur"); return d; }); })
     .then(function (d) {
       msg.style.color = "#6ee7b7";
-      msg.textContent = "✅ " + d.pseudo + " a maintenant " + d.pieces + " pièces.";
+      msg.textContent = "✅ " + d.pseudo + " a maintenant " + d.pieces + " diamants.";
       document.getElementById("don-montant").value = "";
       rafraichir();
     })
