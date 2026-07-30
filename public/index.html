@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2320-M">
+<meta name="version" content="v2321-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2320-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2321-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -924,7 +924,7 @@ function TarifsDiamants() {
         <L n="💡 Aide (après l'offerte de la manche)" v="5" />
         <L n="✨ Achat net — sans carte de pénalité" v="15" />
         <L n="🛒 4e jeton d'achat (1/manche)" v="20" />
-        <L n="🤡 Joker invoqué (1/manche)" v="30" />
+        <L n="🪄 Joker magique (1/manche)" v="30" />
         <div className="text-[10px] text-emerald-400">⚖️ Pouvoirs désactivés pendant les défis, et dans les salons où l'hôte les a coupés.</div>
         <button onClick={() => { setOuvert(false); try { window.dispatchEvent(new CustomEvent("rami-boutique")); } catch (_) {} }}
           className="btn-diamant font-bold py-2.5 rounded-xl text-sm mt-1">➕ Obtenir des diamants</button>
@@ -949,7 +949,7 @@ function AnnonceDiamants() {
           Gagne des 💎 en <b className="text-amber-300">terminant des parties</b>, en <b className="text-amber-300">jouant chaque jour</b> (série 🔥) et via les <b className="text-amber-300">défis et succès</b>.
         </p>
         <p className="text-xs text-emerald-200 leading-relaxed">
-          Dépense-les en pouvoirs : <b className="text-amber-300">✨ achat net</b> (sans carte de pénalité), <b className="text-amber-300">🛒 4e achat</b>, <b className="text-amber-300">🤡 joker invoqué</b>, aides supplémentaires.
+          Dépense-les en pouvoirs : <b className="text-amber-300">✨ achat net</b> (sans carte de pénalité), <b className="text-amber-300">🛒 4e achat</b>, <b className="text-amber-300">🪄 joker magique</b>, aides supplémentaires.
         </p>
         <p className="text-[11px] text-yellow-300 font-bold">🎁 100 💎 offerts à la création d'un compte !</p>
         <button onClick={fermer} className="btn-gold font-bold py-2.5 rounded-xl text-sm">C'est parti !</button>
@@ -2609,7 +2609,7 @@ function App() {
               <a href="/contact.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">💬 Nous contacter</a>
               <a href="/signaler.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🚩 Signaler un joueur</a>
               <a href="/confidentialite.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🔒 Confidentialité</a>
-              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2320-M</div>
+              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2321-M</div>
             </div>
           </div>
         )}
@@ -2704,7 +2704,7 @@ function App() {
                         Défi entre amis <b className="text-yellow-300">+10</b> <span className="opacity-80">(+5 si gagné)</span><br/>
                         Joue chaque jour : série de <b className="text-yellow-300">+10</b> (jour 1) à <b className="text-yellow-300">+50</b> (jour 7 et plus)<br/>
                         <span className="opacity-70">Au-delà de 15 parties par jour, les parties ne rapportent plus rien (les succès, si).</span><br/>
-                        À dépenser : aide (2e de la manche) <b className="text-yellow-300">5</b> · achat net <b className="text-yellow-300">15</b> · 4e achat <b className="text-yellow-300">20</b> · joker <b className="text-yellow-300">30</b> · 🎁 <b className="text-yellow-300">100</b> offertes à l'inscription
+                        À dépenser : aide (2e de la manche) <b className="text-yellow-300">5</b> · achat net <b className="text-yellow-300">15</b> · 4e achat <b className="text-yellow-300">20</b> · joker magique <b className="text-yellow-300">30</b> · 🎁 <b className="text-yellow-300">100</b> offertes à l'inscription
                       </div>
                     </details>
                   <p className="text-[11px] text-emerald-300 text-center">Ton code secret — c'est lui qui permet de retrouver ton compte sur n'importe quel appareil :</p>
@@ -3168,7 +3168,7 @@ function App() {
           </div>
         )}
         <div className="flex gap-2 text-[11px] text-emerald-400 flex-wrap justify-center items-center pb-4">
-          <span className="opacity-60 self-center">v2320-M</span>
+          <span className="opacity-60 self-center">v2321-M</span>
         </div>
       </div>
     );
@@ -3634,11 +3634,11 @@ function App() {
               {srv.options.pouvoirs !== false && me && !me.jokerNetUsed && (
                 <button onClick={() => {
                     if (!peutPayer(COUT_JOKER)) { setMsg(messageVerrou(COUT_JOKER)); return; }
-                    if (Date.now() - jokerArme.current > 3500) { jokerArme.current = Date.now(); setMsg("🤡 Invoquer un joker pour " + COUT_JOKER + " 💎 ? Touche à nouveau le bouton pour confirmer."); return; }
+                    if (Date.now() - jokerArme.current > 3500) { jokerArme.current = Date.now(); setMsg("🪄 Invoquer un joker magique pour " + COUT_JOKER + " 💎 ? Touche à nouveau le bouton pour confirmer."); return; }
                     jokerArme.current = 0;
                     act({ type: "jokerNet" });
-                  }} title="Sort un joker de la pioche — à tout moment, une seule fois par manche"
-                  className={(peutPayer(COUT_JOKER) ? (Date.now() - jokerArme.current <= 3500 ? "btn-gold pulse-gold" : "btn-diamant") : "btn-dark opacity-70") + " px-4 py-2 rounded-xl text-sm font-bold"}>{Date.now() - jokerArme.current <= 3500 ? "✔ Confirmer · " + COUT_JOKER + " 💎" : (peutPayer(COUT_JOKER) ? "🤡" : "🔒") + " Joker · " + COUT_JOKER + " 💎"}</button>
+                  }} title="Crée un joker magique dans ta main — à tout moment, une seule fois par manche"
+                  className={(peutPayer(COUT_JOKER) ? (Date.now() - jokerArme.current <= 3500 ? "btn-gold pulse-gold" : "btn-diamant") : "btn-dark opacity-70") + " px-4 py-2 rounded-xl text-sm font-bold"}>{Date.now() - jokerArme.current <= 3500 ? "✔ Confirmer · " + COUT_JOKER + " 💎" : (peutPayer(COUT_JOKER) ? "🪄" : "🔒") + " Joker magique · " + COUT_JOKER + " 💎"}</button>
               )}
               <button onClick={helpSort} className="btn-dark px-4 py-2 rounded-xl text-sm font-bold">💡 Aide{(() => {
                 const rest = Math.max(0, AIDES_GRATUITES - aidesInfo().n);
@@ -3767,7 +3767,7 @@ function App() {
               <li><b>Pioche</b> une carte (ou prends celle de la défausse, gratuite à ton tour).</li>
               <li><b>Prépare le contrat</b> : touche 3+ cartes de même valeur (tri) ou qui se suivent (escalier), puis valide. Le bouton 💡 Aide classe ta main selon le contrat — une aide offerte par manche (le point ● du bouton), ensuite 5 💎 chacune. 🪄 prépare la pose quand elle est possible !</li>
               <li><b>Achat net</b> : pendant une fenêtre d'achat, le bouton ✨ prend la carte <b>sans la carte de pénalité</b> pour 15 💎 diamants (il consomme quand même un jeton 🛒). Il n'apparaît que si ton compte a assez de diamants.</li>
-              <li><b>Pouvoirs 💎</b> : à court de jetons, 🛒 +1 achat (20 diamants, 1 recharge par manche) ; à tout moment, 🤡 Joker (30 diamants, 1 par manche) sort un joker de la pioche.</li>
+              <li><b>Pouvoirs 💎</b> : à court de jetons, 🛒 +1 achat (20 diamants, 1 recharge par manche) ; à tout moment, 🪄 Joker magique (30 diamants, 1 par manche) crée un joker de plus dans ta main.</li>
               <li><b>Pose</b> quand le contrat est complet (bouton doré), en une seule fois.</li>
               <li><b>Jette</b> une carte pour finir ton tour : glisse-la sur la défausse, puis <b>touche la défausse pour confirmer</b> 🔒 (touche une carte de ta main pour annuler). Premier à vider sa main = gagnant !</li>
             </ol>

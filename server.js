@@ -1879,18 +1879,17 @@ function handleJokerNet(room, idx) {
   if (!room.options.pouvoirs) return "L'hôte a désactivé les pouvoirs 💎 dans ce salon.";
   const p = room.players[idx];
   if (p.jokerNetUsed) return "Joker déjà invoqué cette manche (1 max).";
-  const ji = g.stock.findIndex((c) => c.joker);
-  if (ji === -1) return "Plus aucun joker dans la pioche !";
   const c = p.compte ? comptes.get(p.compte) : null;
-  if (!c) return "Il faut un compte pour invoquer un joker.";
+  if (!c) return "Il faut un compte pour invoquer un joker magique.";
   if ((c.pieces || 0) < COUT_JOKER) return "Il te faut " + COUT_JOKER + " diamants (solde : " + (c.pieces || 0) + ").";
   c.pieces -= COUT_JOKER;
   saveComptes();
-  pousserSolde(p, -COUT_JOKER, "joker invoqué");
-  const jk = g.stock.splice(ji, 1)[0];
+  pousserSolde(p, -COUT_JOKER, "joker magique");
+  // Joker MAGIQUE : créé de toutes pièces (indépendant des 4 jokers du paquet)
+  const jk = { id: "jm" + Date.now() + Math.floor(Math.random() * 1000), rank: 0, suit: "★", joker: true };
   p.hand.push(jk);
   p.jokerNetUsed = true;
-  log(room, "🤡 " + p.name + " invoque un joker de la pioche (" + COUT_JOKER + " 💎)");
+  log(room, "🪄 " + p.name + " invoque un joker magique (" + COUT_JOKER + " 💎)");
   io.to(room.code).emit("fx", { kind: "draw", source: "stock", idx });
   broadcast(room); // le joker apparaît immédiatement dans la main
   return null;
