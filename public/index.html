@@ -2791,8 +2791,8 @@ function App() {
               </a>
             )}
 
-            {/* Portail 1 : jouer */}
-            <button onClick={() => setMenu(menu === "jouer" ? null : "jouer")}
+            {/* Portail 1 : jouer — masqué quand l'autre portail est ouvert */}
+            {menu !== "defis" && <button onClick={() => setMenu(menu === "jouer" ? null : "jouer")}
               className={`rounded-2xl px-4 py-4 w-full max-w-xs flex items-center gap-3 text-left ${menu === "jouer" ? "btn-gold" : "panel text-emerald-100"}`}
               style={menu === "jouer" ? {} : { borderColor: "#f59e0b88" }}>
               <span className="text-3xl">▶️</span>
@@ -2800,8 +2800,8 @@ function App() {
                 <span className={`block font-bold text-lg ${menu === "jouer" ? "" : "text-amber-300"}`}>Jouer</span>
                 <span className={`block text-xs ${menu === "jouer" ? "opacity-80" : "text-emerald-300"}`}>Solo, entre amis, ou apprendre</span>
               </span>
-              <span className="text-xl font-bold">{menu === "jouer" ? "▾" : "→"}</span>
-            </button>
+              <span className="text-xl font-bold">{menu === "jouer" ? "✕" : "→"}</span>
+            </button>}
             {menu === "jouer" && (
               <div className="flex flex-col gap-2 w-full max-w-xs pl-2" style={{ borderLeft: "2px solid #f59e0b44" }}>
                 {item({ k: "solo", ico: "🎮", titre: "Jouer en solo", sous: "Contre l'ordinateur, tout de suite", couleur: "#d1fae5", bord: "#14705266", go: () => { window.location.href = "/solo.html"; } })}
@@ -2811,8 +2811,8 @@ function App() {
               </div>
             )}
 
-            {/* Portail 2 : défis et classements */}
-            <button onClick={() => setMenu(menu === "defis" ? null : "defis")}
+            {/* Portail 2 : défis et classements — masqué quand l'autre portail est ouvert */}
+            {menu !== "jouer" && <button onClick={() => setMenu(menu === "defis" ? null : "defis")}
               className={`rounded-2xl px-4 py-4 w-full max-w-xs flex items-center gap-3 text-left relative ${menu === "defis" ? "btn-gold" : "panel text-emerald-100"}`}
               style={menu === "defis" ? {} : { borderColor: "#c084fc88" }}>
               <span className="text-3xl">🏆</span>
@@ -2820,9 +2820,9 @@ function App() {
                 <span className={`block font-bold text-lg ${menu === "defis" ? "" : "text-purple-200"}`}>Défis</span>
                 <span className={`block text-xs ${menu === "defis" ? "opacity-80" : "text-emerald-300"}`}>{defiFait ? "Défi du jour fait ✓ · classements" : "Défi du jour à faire · amis · classements"}</span>
               </span>
-              <span className="text-xl font-bold">{menu === "defis" ? "▾" : "→"}</span>
+              <span className="text-xl font-bold">{menu === "defis" ? "✕" : "→"}</span>
               {!defiFait && menu !== "defis" && <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-amber-400 border border-amber-600" title="Défi du jour pas encore joué" />}
-            </button>
+            </button>}
             {menu === "defis" && (
               <div className="flex flex-col gap-2 w-full max-w-xs pl-2" style={{ borderLeft: "2px solid #c084fc44" }}>
                 {defiFait
@@ -2839,7 +2839,7 @@ function App() {
               </div>
             )}
 
-            <MissionsDuJour />
+            {!menu && <MissionsDuJour />}
           </div>);
         })()}
 
