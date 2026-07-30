@@ -908,7 +908,10 @@ function missionsDuJour(date) {
   // Choix déterministe : hachage simple de la date → 3 missions distinctes
   let h = 2166136261;
   for (const ch of date) { h ^= ch.charCodeAt(0); h = (h * 16777619) >>> 0; }
-  const idx = [];
+  // Le défi du jour est TOUJOURS l'une des missions (pilier du rendez-vous quotidien),
+  // complété par 2 missions tournantes choisies par la date.
+  const iDefi = MISSIONS_CATALOGUE.findIndex((m) => m.id === "defi");
+  const idx = [iDefi];
   while (idx.length < 3) {
     h = (h * 1103515245 + 12345) >>> 0;
     const i = h % MISSIONS_CATALOGUE.length;
@@ -1798,7 +1801,7 @@ function doBuy(room, idx) {
   g.takenCards = [...(g.takenCards || []), { idx, card: bought }]; // mémoire pour la défausse défensive des bots
   g.discardLocked = true; // après un achat, la carte du dessous ne peut pas être prise
   if (g.achatNet) delete g.achatNet[idx];
-  log(room, p.name + " achète " + E.cardName(bought) + (sansPenalite ? " (achat net 💎 — sans pénalité)" : " (+1 pénalité)"));
+  log(room, p.name + " achète " + E.cardName(bought) + (sansPenalite ? " (sans pénalité 💎)" : " (+1 pénalité)"));
   io.to(room.code).emit("fx", { kind: "buy", idx, card: bought });
 }
 
@@ -1844,11 +1847,11 @@ function handleBuyRequest(room, idx, net) {
     // Achat « net » : payé en diamants, la carte de pénalité est évitée. Les diamants sont
     // débitées tout de suite ; si un autre joueur remporte l'enchère, elles sont rendues.
     const c = p.compte ? comptes.get(p.compte) : null;
-    if (!c) return "Il faut un compte pour l'achat net (pastille en haut à droite).";
+    if (!c) return "Il faut un compte pour acheter sans pénalité (pastille en haut à droite).";
     if ((c.pieces || 0) < COUT_ACHAT_NET) return "Il te faut " + COUT_ACHAT_NET + " diamants (solde : " + (c.pieces || 0) + ").";
     c.pieces -= COUT_ACHAT_NET;
     saveComptes();
-    pousserSolde(p, -COUT_ACHAT_NET, "achat net");
+    pousserSolde(p, -COUT_ACHAT_NET, "achat sans pénalité");
     g.achatNet = g.achatNet || {};
     g.achatNet[idx] = true;
   }
@@ -1864,7 +1867,7 @@ function rembourserAchatsNets(room, sauf) {
     if (i === sauf) continue;
     const p = room.players[i];
     const c = p && p.compte ? comptes.get(p.compte) : null;
-    if (c) { c.pieces = (c.pieces || 0) + COUT_ACHAT_NET; saveComptes(); pousserSolde(p, COUT_ACHAT_NET, "achat net remboursé"); }
+    if (c) { c.pieces = (c.pieces || 0) + COUT_ACHAT_NET; saveComptes(); pousserSolde(p, COUT_ACHAT_NET, "achat remboursé"); }
     delete g.achatNet[k];
   }
 }
@@ -2610,7 +2613,7 @@ io.on("connection", (socket) => {
     else if (a.type === "pose") err = handlePose(myRoom, me.idx, a.melds);
     else if (a.type === "complete") err = handleComplete(myRoom, me.idx, a.meldId, a.cardId);
     else if (a.type === "discard") err = handleDiscard(myRoom, me.idx, a.cardId);
-    else if (a.type === "buy") { err = handleBuyRequest(myRoom, me.idx, a.net); if (!err) socket.emit("info", a.net ? "Achat net demandé (15 💎)…" : "Demande d'achat enregistrée…"); }
+    else if (a.type === "buy") { err = handleBuyRequest(myRoom, me.idx, a.net); if (!err) socket.emit("info", a.net ? "Achat sans pénalité demandé (15 💎)…" : "Demande d'achat enregistrée…"); }
     else if (a.type === "rechargeAchat") { err = handleRechargeAchat(myRoom, me.idx); if (!err) socket.emit("info", "🛒 Jeton rechargé — tu peux acheter !"); }
     else if (a.type === "jokerNet") err = handleJokerNet(myRoom, me.idx);
     else if (a.type === "resume") { me.p.absent = false; me.p.timeouts = 0; log(myRoom, `${me.p.name} reprend la main`); broadcast(myRoom); }
