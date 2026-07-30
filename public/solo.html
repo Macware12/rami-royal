@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2343-M">
+<meta name="version" content="v2344-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2343-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2344-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -3836,11 +3836,6 @@ function tapCard(id) {
               </div>
             );
           })()}
-          <div className="flex gap-3 justify-center flex-wrap">
-            <a href="/confidentialite.html" className="text-[10px] text-emerald-400 underline">Politique de confidentialité</a>
-            <a href="/contact.html" className="text-[10px] text-emerald-400 underline">Nous contacter</a>
-            <a href="/signaler.html" className="text-[10px] text-emerald-400 underline">Signaler un joueur</a>
-          </div>
           {showLogin && (
             <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 flex items-center justify-center p-4" onClick={() => !loginBusy && setShowLogin(false)}>
               <div className="panel rounded-2xl p-5 w-full max-w-sm flex flex-col gap-3 relative" onClick={(e) => e.stopPropagation()}>
