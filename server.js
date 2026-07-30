@@ -2243,7 +2243,7 @@ io.on("connection", (socket) => {
     broadcast(room);
   });
 
-  socket.on("joinRoom", ({ code, name, avatar, compte } = {}, cb) => {
+  socket.on("joinRoom", ({ code, name, avatar, compte, botIdx } = {}, cb) => {
     if (typeof cb !== "function") cb = () => {};
     const room = rooms.get(String(code || "").toUpperCase());
     if (!room) return cb({ ok: false, error: "Salon introuvable. Vérifie le code." });
@@ -2274,8 +2274,24 @@ io.on("connection", (socket) => {
     if (room.state !== "lobby") {
       // Partie en cours : on peut rejoindre en prenant la place d'un bot (main, points
       // et jetons du bot conservés — le nouveau venu hérite de sa situation)
-      const bot = room.players.find((p) => p.isBot);
-      if (!bot) return cb({ ok: false, error: "La partie a déjà commencé et aucun bot n'est remplaçable (utilise « Reprendre » si tu en faisais partie)." });
+      const bots = room.players.filter((p) => p.isBot);
+      if (bots.length === 0) return cb({ ok: false, error: "La partie a déjà commencé et aucun bot n'est remplaçable (utilise « Reprendre » si tu en faisais partie)." });
+      let bot = null;
+      if (botIdx != null) {
+        const vise = room.players[parseInt(botIdx, 10)];
+        if (!vise || !vise.isBot) return cb({ ok: false, error: "Ce bot n'est plus remplaçable — quelqu'un t'a devancé ?" });
+        bot = vise;
+      } else if (bots.length === 1) {
+        bot = bots[0]; // un seul bot : pas besoin de choisir
+      } else {
+        // Plusieurs bots : le client affiche le choix et rappellera avec botIdx
+        return cb({
+          ok: false, choixBots: bots.map((b) => ({
+            idx: room.players.indexOf(b), name: b.name, avatar: b.avatar,
+            total: b.total, handCount: b.hand.length, posed: b.posed,
+          })),
+        });
+      }
       const ancienNom = bot.name;
       const idx = room.players.indexOf(bot);
       bot.isBot = false;

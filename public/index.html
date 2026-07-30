@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2324-M">
+<meta name="version" content="v2325-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2324-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2325-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -1386,6 +1386,7 @@ function App() {
   const [cptErr, setCptErr] = useState("");
   const [cptBusy, setCptBusy] = useState(false);
   const [cptNouveau, setCptNouveau] = useState(null); // code affiché après création
+  const [choixBots, setChoixBots] = useState(null); // { code, bots } : choisir quel bot remplacer
   const [, cptMaj] = useState(0); // forcer le re-rendu après connexion/déconnexion
   useEffect(() => { // le solde du chip suit les gains de diamants
     const h = () => cptMaj((x) => x + 1);
@@ -1554,6 +1555,7 @@ function App() {
     store.set("ramimp-avatar", avatar);
     setMsg("Connexion au salon " + code + "…");
     socket.emit("joinRoom", { code, name: n, avatar, compte: (compteActif && compteActif.code) || undefined }, (res) => {
+      if (res && res.choixBots) { setChoixBots({ code, bots: res.choixBots }); setMsg(""); return; }
       if (!res.ok) return setMsg(res.error || "Salon introuvable — il a peut-être expiré.");
       store.set("rami-played", "1");
       store.set("ramimp-save", JSON.stringify({ code: res.code, token: res.token, name: n }));
@@ -2103,6 +2105,20 @@ function App() {
     store.set("ramimp-name", n);
     store.set("ramimp-avatar", avatar);
     socket.emit("joinRoom", { code: joinCode.trim().toUpperCase(), name: n, avatar, compte: (compteActif && compteActif.code) || undefined }, (res) => {
+      if (res && res.choixBots) { setChoixBots({ code: joinCode.trim().toUpperCase(), bots: res.choixBots }); setMsg(""); return; }
+      if (!res.ok) return setMsg(res.error || "Erreur.");
+      store.set("rami-played", "1");
+      store.set("ramimp-save", JSON.stringify({ code: res.code, token: res.token, name: n }));
+      setSaved(null);
+    });
+  }
+  function remplacerBot(idx) {
+    const cible = choixBots;
+    setChoixBots(null);
+    if (!cible) return;
+    const n = nomJoueur();
+    socket.emit("joinRoom", { code: cible.code, name: n, avatar, compte: (compteActif && compteActif.code) || undefined, botIdx: idx }, (res) => {
+      if (res && res.choixBots) { setChoixBots({ code: cible.code, bots: res.choixBots }); return; } // le bot visé vient d'être pris
       if (!res.ok) return setMsg(res.error || "Erreur.");
       store.set("rami-played", "1");
       store.set("ramimp-save", JSON.stringify({ code: res.code, token: res.token, name: n }));
@@ -2642,7 +2658,29 @@ function App() {
               <a href="/contact.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">💬 Nous contacter</a>
               <a href="/signaler.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🚩 Signaler un joueur</a>
               <a href="/confidentialite.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🔒 Confidentialité</a>
-              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2324-M</div>
+              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2325-M</div>
+            </div>
+          </div>
+        )}
+
+        {/* Choix du bot à remplacer (partie en cours) */}
+        {choixBots && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 flex items-center justify-center p-4" onClick={() => setChoixBots(null)}>
+            <div className="panel rounded-2xl p-5 w-full max-w-sm flex flex-col gap-2.5 relative" onClick={(e) => e.stopPropagation()}>
+              <button onClick={() => setChoixBots(null)} className="absolute top-1 right-1 p-2.5 text-emerald-400 text-xl leading-none">✕</button>
+              <h3 className="text-amber-300 font-bold text-center" style={{ fontFamily: "Georgia, serif" }}>🎭 Quel bot veux-tu remplacer ?</h3>
+              <p className="text-[11px] text-emerald-300 text-center -mt-1">Tu hérites de sa main, de ses points et de ses jetons — choisis bien !</p>
+              {choixBots.bots.map((b) => (
+                <button key={b.idx} onClick={() => remplacerBot(b.idx)}
+                  className="panel rounded-2xl px-4 py-3 flex items-center gap-3 text-left" style={{ borderColor: "#f59e0b88" }}>
+                  <span className="text-3xl">{b.avatar || "🤖"}</span>
+                  <span className="flex-1">
+                    <span className="block text-sm font-bold text-amber-300">{b.name}</span>
+                    <span className="block text-[11px] text-emerald-300">{b.total} pts · {b.handCount} cartes en main · {b.posed ? "contrat posé ✓" : "pas encore posé"}</span>
+                  </span>
+                  <span className="text-amber-300 text-xl font-bold">→</span>
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -3201,7 +3239,7 @@ function App() {
           </div>
         )}
         <div className="flex gap-2 text-[11px] text-emerald-400 flex-wrap justify-center items-center pb-4">
-          <span className="opacity-60 self-center">v2324-M</span>
+          <span className="opacity-60 self-center">v2325-M</span>
         </div>
       </div>
     );
