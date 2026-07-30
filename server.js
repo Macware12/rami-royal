@@ -352,6 +352,7 @@ app.post("/compte/connexion", (req, res) => {
 // partie terminée 10, victoire +25, succès débloqué +25, défi du jour 15 (+10 si gagné),
 // série quotidienne croissante (jour 1 → 7+). Plafond anti-farm : 15 parties payées par jour.
 const PIECES = { partie: 10, victoire: 25, succes: 25, defi: 15, defiVictoire: 10, defiAmi: 10, defiAmiVictoire: 5 };
+const COUT_ACHAT_NET = 15; // achat « net » : la carte sans la carte de pénalité
 const SERIE_RECOMPENSES = [10, 15, 20, 25, 30, 40, 50];
 const PARTIES_PAYEES_MAX = 15;
 const dateDuJour = () => new Date().toISOString().slice(0, 10);
@@ -1656,14 +1657,16 @@ function doBuy(room, idx) {
     g.discard = t2 ? [t2] : [];
     g.recycles = (g.recycles || 0) + 1; // compteur anti-manche-infinie
   }
-  const penalty = g.stock.pop();
+  const sansPenalite = Boolean(g.achatNet && g.achatNet[idx]);
+  const penalty = sansPenalite ? null : g.stock.pop();
   p.hand.push(bought);
   if (penalty) p.hand.push(penalty); // pas de pénalité possible si tout est épuisé
   p.buysLeft--;
   p.lastTaken = bought;
   g.takenCards = [...(g.takenCards || []), { idx, card: bought }]; // mémoire pour la défausse défensive des bots
   g.discardLocked = true; // après un achat, la carte du dessous ne peut pas être prise
-  log(room, p.name + " achète " + E.cardName(bought) + " (+1 pénalité)");
+  if (g.achatNet) delete g.achatNet[idx];
+  log(room, p.name + " achète " + E.cardName(bought) + (sansPenalite ? " (achat net 🪙 — sans pénalité)" : " (+1 pénalité)"));
   io.to(room.code).emit("fx", { kind: "buy", idx, card: bought });
 }
 
@@ -1695,7 +1698,7 @@ function openBuyWindow(room, discarderIdx) {
   room.buyTimer = setTimeout(() => safeRun(() => resolveBuyWindow(room)), BUY_WINDOW_MS);
 }
 
-function handleBuyRequest(room, idx) {
+function handleBuyRequest(room, idx, net) {
   const g = room.game;
   if (g.phase !== "buyWindow") return "Il n'y a pas d'achat possible en ce moment.";
   const p = room.players[idx];
@@ -1704,8 +1707,32 @@ function handleBuyRequest(room, idx) {
   if (idx === g.lastDiscarderIdx) return "Tu ne peux pas racheter ta propre défausse.";
   if (idx === (g.lastDiscarderIdx + 1) % room.players.length) return "Tu es le joueur suivant : tu prendras la carte gratuitement à ton tour.";
   if (p.buysLeft <= 0) return "Plus d'achats disponibles (3 max par manche).";
+  if (net) {
+    // Achat « net » : payé en pièces, la carte de pénalité est évitée. Les pièces sont
+    // débitées tout de suite ; si un autre joueur remporte l'enchère, elles sont rendues.
+    const c = p.compte ? comptes.get(p.compte) : null;
+    if (!c) return "Il faut un compte pour l'achat net (pastille en haut à droite).";
+    if ((c.pieces || 0) < COUT_ACHAT_NET) return "Il te faut " + COUT_ACHAT_NET + " pièces (solde : " + (c.pieces || 0) + ").";
+    c.pieces -= COUT_ACHAT_NET;
+    saveComptes();
+    g.achatNet = g.achatNet || {};
+    g.achatNet[idx] = true;
+  }
   if (!g.buyRequests.includes(idx)) g.buyRequests.push(idx);
   return null;
+}
+// Remboursement de l'achat net quand la carte échappe au joueur (enchère perdue, fenêtre close)
+function rembourserAchatsNets(room, sauf) {
+  const g = room.game;
+  if (!g || !g.achatNet) return;
+  for (const k of Object.keys(g.achatNet)) {
+    const i = parseInt(k, 10);
+    if (i === sauf) continue;
+    const p = room.players[i];
+    const c = p && p.compte ? comptes.get(p.compte) : null;
+    if (c) { c.pieces = (c.pieces || 0) + COUT_ACHAT_NET; saveComptes(); }
+    delete g.achatNet[k];
+  }
 }
 
 function maybeResolveRematch(room) {
@@ -1762,11 +1789,14 @@ function resolveBuyWindow(room) {
   if (requests.length > 0 && g.discard.length > 0) {
     const ordered = requests.sort((a, b) => ((a - g.lastDiscarderIdx + n) % n) - ((b - g.lastDiscarderIdx + n) % n));
     const winnerIdx = ordered[0];
+    rembourserAchatsNets(room, winnerIdx); // les perdants récupèrent leurs pièces
     doBuy(room, winnerIdx);
     ordered.slice(1).forEach((i) => {
       const so = room.players[i].socketId;
       if (so) io.to(so).emit("info", room.players[winnerIdx].name + " était mieux placé dans le sens du jeu — achat manqué.");
     });
+  } else {
+    rembourserAchatsNets(room, -1); // personne n'achète : tout est rendu
   }
   g.botBuyer = null;
   advanceTurn(room, g.lastDiscarderIdx);
@@ -2291,7 +2321,7 @@ io.on("connection", (socket) => {
     else if (a.type === "pose") err = handlePose(myRoom, me.idx, a.melds);
     else if (a.type === "complete") err = handleComplete(myRoom, me.idx, a.meldId, a.cardId);
     else if (a.type === "discard") err = handleDiscard(myRoom, me.idx, a.cardId);
-    else if (a.type === "buy") { err = handleBuyRequest(myRoom, me.idx); if (!err) socket.emit("info", "Demande d'achat enregistrée…"); }
+    else if (a.type === "buy") { err = handleBuyRequest(myRoom, me.idx, a.net); if (!err) socket.emit("info", a.net ? "Achat net demandé (15 🪙)…" : "Demande d'achat enregistrée…"); }
     else if (a.type === "resume") { me.p.absent = false; me.p.timeouts = 0; log(myRoom, `${me.p.name} reprend la main`); broadcast(myRoom); }
     if (err) socket.emit("info", err);
   });

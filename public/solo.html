@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2299-M">
+<meta name="version" content="v2300-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2299-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2300-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -264,6 +264,12 @@ function flushParties() {
 // L'Aide est offerte 3 fois par partie, puis coûte des pièces
 const AIDES_GRATUITES = 3;
 const COUT_AIDE = 5;
+// Achat « net » : la carte de la défausse SANS la carte de pénalité (consomme un jeton 🛒)
+const COUT_ACHAT_NET = 15;
+// Le joueur a-t-il les moyens de l'achat net ? (compte requis)
+function peutAchatNet() {
+  try { const a = JSON.parse(store.get("rami-account")) || {}; return Boolean(a.code) && (a.pieces || 0) >= COUT_ACHAT_NET; } catch (_) { return false; }
+}
 // Débite des pièces (optimiste : l'interface bouge tout de suite, le serveur confirme)
 function depenserPieces(montant, motif) {
   let acc = {};
@@ -1798,19 +1804,21 @@ function RamiRoyal() {
   }
 
   // ----- Actions du joueur -----
-  function requestBuy(insertAt) {
+  function requestBuy(insertAt, net) {
     ensureAudio();
-    setG((s) => resolveBuyNow(s, "buy", insertAt));
+    if (net && !peutAchatNet()) { setMsg("Achat net : il te faut un compte et " + COUT_ACHAT_NET + " pièces."); return; }
+    setG((s) => resolveBuyNow(s, "buy", insertAt, net));
   }
 
   function passBuy() {
     setG((s) => resolveBuyNow(s, "pass"));
   }
 
-  function execBuy(state, idx, insertAt) {
+  function execBuy(state, idx, insertAt, net) {
     if (state.discard.length === 0) return state;
     const bought = takeCard(state.stock, state.discard, "discard");
-    const penalty = takeCard(bought.stock, bought.discard, "stock");
+    // Achat net (payé en pièces) : pas de carte de pénalité
+    const penalty = net ? { card: null, stock: bought.stock, discard: bought.discard } : takeCard(bought.stock, bought.discard, "stock");
     const buyerName = state.players[idx].name;
     const takenCards = [...(state.takenCards || []), { idx, card: bought.card }];
     const players = state.players.map((q, i) => {
@@ -1832,12 +1840,12 @@ function RamiRoyal() {
     };
     if (idx === 0) {
       ns = { ...ns, lastDrawn: [bought.card, penalty.card].filter(Boolean).map((c) => c.id) };
-      setMsg("Achat : " + cardName(bought.card) + " + 1 carte de pénalité.");
+      setMsg(net ? "Achat net 🪙 : " + cardName(bought.card) + " — sans carte de pénalité !" : "Achat : " + cardName(bought.card) + " + 1 carte de pénalité.");
     } else {
       ns = { ...ns, toast: { id: ++ANIM_SEQ, name: buyerName, card: bought.card, kind: "buy" } };
     }
     sfx("take");
-    return addLog(ns, (idx === 0 ? "Tu achètes " : buyerName + " achète ") + cardName(bought.card) + " (+1 pénalité)");
+    return addLog(ns, (idx === 0 ? "Tu achètes " : buyerName + " achète ") + cardName(bought.card) + (net ? " (achat net 🪙)" : " (+1 pénalité)"));
   }
 
   function afterDiscard(state, discarderIdx) {
@@ -1873,13 +1881,13 @@ function RamiRoyal() {
     return { ...state, phase: "buyWindow", buyWindow: { discarderIdx, nextIdx, aiBuyer, until: Date.now() + BUY_WINDOW_MS } };
   }
 
-  function resolveBuyNow(s, humanChoice, insertAt) {
+  function resolveBuyNow(s, humanChoice, insertAt, net) {
     if (!s || !s.buyWindow || s.roundOver) return s;
     const bw = s.buyWindow;
     const n = s.players.length;
     // Mode priorité : ton tour arrive, un bot voulait acheter — à toi de décider
     if (bw.priority) {
-      let ns = { ...s, buyWindow: null };
+      let ns = { ...s, buyWindow: null }; // priorité : la carte est prise gratuitement, rien à payer
       if (humanChoice === "buy" && ns.discard.length > 0) {
         const taken = takeCard(ns.stock, ns.discard, "discard");
         const players = ns.players.map((p, i) => {
@@ -1915,7 +1923,9 @@ function RamiRoyal() {
     if (wants.length > 0 && ns.discard.length > 0) {
       wants.sort((a, b) => ((a.idx - bw.discarderIdx + n) % n) - ((b.idx - bw.discarderIdx + n) % n));
       const w = wants[0];
-      ns = execBuy(ns, w.idx, w.insertAt);
+      const netOk = Boolean(net) && w.idx === 0;
+      if (netOk) depenserPieces(COUT_ACHAT_NET, "achat-net"); // débité seulement si l'achat aboutit
+      ns = execBuy(ns, w.idx, w.insertAt, netOk);
       if (humanChoice === "buy" && w.idx !== 0 && wants.some((x) => x.idx === 0)) {
         setMsg(ns.players[w.idx].name + " était mieux placé dans le sens du jeu — achat manqué.");
       }
@@ -3627,6 +3637,11 @@ function tapCard(id) {
             <div className="flex gap-2 mt-1 justify-center">
               <button onClick={() => requestBuy()} disabled={me.buysLeft <= 0}
                 className="btn-gold px-3 py-1.5 rounded-xl text-xs font-bold disabled:opacity-40">💰 Acheter (+1 pénalité)</button>
+              {peutAchatNet() && (
+                <button onClick={() => requestBuy(null, true)} disabled={me.buysLeft <= 0}
+                  title={"Achat net : la carte sans la carte de pénalité, pour " + COUT_ACHAT_NET + " pièces"}
+                  className="btn-green px-3 py-1.5 rounded-xl text-xs font-bold disabled:opacity-40">✨ Achat net · {COUT_ACHAT_NET} 🪙</button>
+              )}
               <button onClick={passBuy} className="btn-dark px-3 py-1.5 rounded-xl text-xs font-bold">Passer</button>
             </div>
           </div>
@@ -3894,6 +3909,7 @@ function tapCard(id) {
             <ol className="list-decimal ml-4 space-y-2 text-emerald-100 text-xs">
               <li><b>Pioche</b> une carte (ou prends celle de la défausse, gratuite à ton tour).</li>
               <li><b>Prépare le contrat</b> de la manche : touche 3+ cartes de même valeur (tri) ou qui se suivent dans la même enseigne (escalier), puis valide. Le bouton 💡 Aide classe ta main selon le contrat — 3 aides offertes par partie (les points ● du bouton), ensuite 5 🪙 pièces chacune. 🪄 prépare la pose quand elle est possible !</li>
+              <li><b>Achat net</b> : pendant une fenêtre d'achat, le bouton ✨ prend la carte <b>sans la carte de pénalité</b> pour 15 🪙 pièces (il consomme quand même un jeton 🛒). Il n'apparaît que si ton compte a assez de pièces.</li>
               <li><b>Pose</b> quand le contrat est complet (bouton doré), en une seule fois.</li>
               <li><b>Jette</b> une carte pour finir ton tour : glisse-la sur la défausse, puis <b>touche la défausse pour confirmer</b> 🔒 (touche une carte de ta main pour annuler). Premier à vider sa main = gagnant de la manche !</li>
             </ol>
