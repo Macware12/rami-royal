@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2314-M">
+<meta name="version" content="v2315-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2314-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2315-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -1260,6 +1260,109 @@ function AnnonceDiamants() {
   );
 }
 
+// ---------- Missions du jour ----------
+// Le serveur choisit 3 missions quotidiennes ; la progression est comptée ici via
+// l'événement "rami-mission" (type, n) émis aux moments-clés du jeu, puis les missions
+// terminées sont validées auprès du serveur (récompense en diamants + toast).
+function missionsCle() { return "rami-missions-" + new Date().toISOString().slice(0, 10); }
+function missionsEtat() {
+  try { return JSON.parse(store.get(missionsCle())) || { prog: {}, valide: [] }; } catch (_) { return { prog: {}, valide: [] }; }
+}
+function missionsCatalogue() {
+  try { return JSON.parse(store.get("rami-missions-cat")) || null; } catch (_) { return null; }
+}
+function chargerMissions() {
+  const cat = missionsCatalogue();
+  const auj = new Date().toISOString().slice(0, 10);
+  if (cat && cat.date === auj) return Promise.resolve(cat);
+  return fetch(API_BASE + "/missions/jour").then((r) => r.json())
+    .then((d) => { store.set("rami-missions-cat", JSON.stringify(d)); try { window.dispatchEvent(new CustomEvent("rami-mission-maj")); } catch (_) {} return d; })
+    .catch(() => cat);
+}
+function signalerMission(type, n) {
+  try { window.dispatchEvent(new CustomEvent("rami-mission", { detail: { type, n: n || 1 } })); } catch (_) {}
+}
+// Compte la progression et valide auprès du serveur ce qui est terminé
+function brancherMissions() {
+  window.addEventListener("rami-mission", (e) => {
+    const cat = missionsCatalogue();
+    if (!cat || !e.detail) return;
+    const etat = missionsEtat();
+    etat.prog[e.detail.type] = (etat.prog[e.detail.type] || 0) + (e.detail.n || 1);
+    store.set(missionsCle(), JSON.stringify(etat));
+    try { window.dispatchEvent(new CustomEvent("rami-mission-maj")); } catch (_) {}
+    flushMissions();
+  });
+}
+let missionsEnCours = false;
+function flushMissions() {
+  if (missionsEnCours) return;
+  const cat = missionsCatalogue();
+  if (!cat || cat.date !== new Date().toISOString().slice(0, 10)) return;
+  let acc = {};
+  try { acc = JSON.parse(store.get("rami-account")) || {}; } catch (_) {}
+  if (!acc.code) return; // invité : la progression attend une connexion pour être encaissée
+  const etat = missionsEtat();
+  const aValider = cat.missions.find((m) => (etat.prog[m.type] || 0) >= m.cible && !etat.valide.includes(m.id));
+  if (!aValider) return;
+  missionsEnCours = true;
+  fetch(API_BASE + "/missions/valider", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code: acc.code, date: cat.date, id: aValider.id }),
+  }).then((r) => (r.ok ? r.json() : null))
+    .then((d) => {
+      missionsEnCours = false;
+      if (!d || !d.ok) return;
+      const e2 = missionsEtat();
+      if (!e2.valide.includes(aValider.id)) e2.valide.push(aValider.id);
+      store.set(missionsCle(), JSON.stringify(e2));
+      try { window.dispatchEvent(new CustomEvent("rami-mission-maj")); } catch (_) {}
+      if (d.gains && d.gains.total) signalerGains(d);
+      flushMissions(); // il peut y en avoir une autre de prête
+    })
+    .catch(() => { missionsEnCours = false; });
+}
+brancherMissions();
+chargerMissions();
+
+// Carte « Missions du jour » : progression + récompenses (partagée accueil/solo)
+function MissionsDuJour() {
+  const [, maj] = React.useState(0);
+  React.useEffect(() => {
+    const h = () => maj((x) => x + 1);
+    window.addEventListener("rami-mission-maj", h);
+    window.addEventListener("rami-gains", h);
+    return () => { window.removeEventListener("rami-mission-maj", h); window.removeEventListener("rami-gains", h); };
+  }, []);
+  React.useEffect(() => { chargerMissions(); flushMissions(); }, []);
+  const cat = missionsCatalogue();
+  if (!cat || cat.date !== new Date().toISOString().slice(0, 10)) return null;
+  const etat = missionsEtat();
+  let connecte = false;
+  try { connecte = Boolean((JSON.parse(store.get("rami-account")) || {}).code); } catch (_) {}
+  const faites = cat.missions.filter((m) => etat.valide.includes(m.id) || (etat.prog[m.type] || 0) >= m.cible).length;
+  return (
+    <div className="panel rounded-2xl px-4 py-3 w-full max-w-xs text-left">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-sm font-bold text-amber-300">🎯 Missions du jour</span>
+        <span className="text-[10px] text-emerald-400 font-bold">{faites}/3{faites === 3 ? " ✓" : ""}</span>
+      </div>
+      {cat.missions.map((m) => {
+        const p = Math.min(etat.prog[m.type] || 0, m.cible);
+        const ok = etat.valide.includes(m.id) || p >= m.cible;
+        return (
+          <div key={m.id} className="flex items-center gap-2 py-0.5">
+            <span className={"text-[11px] font-bold w-9 text-center rounded-md " + (ok ? "bg-emerald-500/25 text-emerald-300" : "bg-emerald-950/60 text-emerald-400")}>{ok ? "✓" : p + "/" + m.cible}</span>
+            <span className={"flex-1 text-[11px] " + (ok ? "text-emerald-400 line-through opacity-70" : "text-emerald-200")}>{m.label}</span>
+            <span className="text-[10px] font-bold text-yellow-300">+{m.recompense} 💎</span>
+          </div>
+        );
+      })}
+      <div className="text-[10px] text-emerald-400 mt-1">{connecte ? "Les 3 terminées : +" + cat.bonus + " 💎 de bonus !" : "🔒 Connecte-toi pour encaisser les récompenses (la progression compte déjà)."}</div>
+    </div>
+  );
+}
+
 // Toast des diamants gagnées : écoute l'événement "rami-gains" émis après chaque
 // partie ou défi enregistré côté serveur, et affiche le détail quelques secondes.
 function GainsToast() {
@@ -2216,6 +2319,39 @@ function tapCard(id) {
     if (!el) { setTableOverflow(false); return; }
     setTableOverflow(el.scrollHeight > el.clientHeight + 4);
   }, [g]);
+
+  // Missions : compte mes combinaisons posées (types) et mes actions du journal.
+  // Les clés par partie/manche évitent tout recomptage à la reprise d'une sauvegarde.
+  const missionMeldsRef = useRef({ cle: null, ids: new Set() });
+  useEffect(() => {
+    if (!g || tuto) return;
+    const cle = (g.startedAt || "?") + ":" + g.mancheIdx;
+    const miens = g.melds.filter((m) => m.owner === 0);
+    const st2 = missionMeldsRef.current;
+    if (st2.cle === cle) {
+      const nouveaux = miens.filter((m) => !st2.ids.has(m.id));
+      const esc = nouveaux.filter((m) => m.type === "esc").length;
+      const tri = nouveaux.filter((m) => m.type === "tri").length;
+      if (esc) signalerMission("poser_escaliers", esc);
+      if (tri) signalerMission("poser_tris", tri);
+    }
+    missionMeldsRef.current = { cle, ids: new Set(miens.map((m) => m.id)) };
+  }, [g && g.melds, tuto]);
+  const missionLogRef = useRef({ cle: null, n: 0 });
+  useEffect(() => {
+    if (!g || tuto) return;
+    const cle = String(g.startedAt || "?");
+    const lg = g.log || [];
+    const st2 = missionLogRef.current;
+    if (st2.cle === cle && lg.length > st2.n) {
+      for (const ligne of lg.slice(st2.n)) {
+        if (typeof ligne !== "string") continue;
+        if (ligne.indexOf("Tu achètes ") === 0) signalerMission("acheter_cartes", 1);
+        else if (ligne.indexOf("Tu complètes ") === 0) signalerMission("completer", 1);
+      }
+    }
+    missionLogRef.current = { cle, n: lg.length };
+  }, [g && g.log && g.log.length, tuto]);
 
   // Filet de sécurité : signale toute duplication de carte entre les zones de jeu
   // (mains, pioche, défausse, table, « Prêt ») — pour attraper une régression au plus tôt.
@@ -3228,6 +3364,11 @@ function tapCard(id) {
         });
       }
       setStats(st);
+      if (!tuto) {
+        signalerMission("jouer_parties", 1);
+        if (won) signalerMission("gagner_partie", 1);
+        if (g.defi) signalerMission("defi_jour", 1);
+      }
       if (won) award("premiere_victoire");
       if (won && g.level === "difficile") award("dompteur");
       if (won && st.wins >= 10) award("maitre");
@@ -3410,6 +3551,7 @@ function tapCard(id) {
           </label>
           </div>
           )}
+          <MissionsDuJour />
           {(() => {
             const tuile = "btn-dark rounded-xl px-3 py-2.5 flex items-center justify-center gap-2 no-underline text-center transition-transform duration-100 active:scale-95";
             const lbl = "text-xs font-bold leading-tight";

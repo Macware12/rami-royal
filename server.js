@@ -889,6 +889,62 @@ app.post("/compte/partie", (req, res) => {
   res.json({ stats: c.stats, succes: c.succes || {}, pieces: c.pieces || 0, gains });
 });
 
+// ---------- Missions du jour ----------
+// Trois objectifs qui changent chaque jour (les mêmes pour tous, choisis par la date).
+// La progression est suivie côté client ; la validation est déclarative comme les parties
+// (montants modestes + une seule validation par mission/compte/jour + anti-flood).
+const MISSIONS_CATALOGUE = [
+  { id: "gagner", type: "gagner_partie", label: "Gagne une partie", cible: 1 },
+  { id: "jouer", type: "jouer_parties", label: "Termine 2 parties", cible: 2 },
+  { id: "escaliers", type: "poser_escaliers", label: "Pose 2 escaliers", cible: 2 },
+  { id: "tris", type: "poser_tris", label: "Pose 3 tris", cible: 3 },
+  { id: "achats", type: "acheter_cartes", label: "Achète 2 cartes", cible: 2 },
+  { id: "completer", type: "completer", label: "Complète 2 combinaisons", cible: 2 },
+  { id: "defi", type: "defi_jour", label: "Joue le défi du jour", cible: 1 },
+];
+const MISSION_RECOMPENSE = 15;
+const MISSIONS_BONUS = 25;
+function missionsDuJour(date) {
+  // Choix déterministe : hachage simple de la date → 3 missions distinctes
+  let h = 2166136261;
+  for (const ch of date) { h ^= ch.charCodeAt(0); h = (h * 16777619) >>> 0; }
+  const idx = [];
+  while (idx.length < 3) {
+    h = (h * 1103515245 + 12345) >>> 0;
+    const i = h % MISSIONS_CATALOGUE.length;
+    if (!idx.includes(i)) idx.push(i);
+  }
+  return idx.map((i) => MISSIONS_CATALOGUE[i]);
+}
+app.get("/missions/jour", (req, res) => {
+  const date = dateDuJour();
+  res.json({ date, missions: missionsDuJour(date).map((m) => ({ ...m, recompense: MISSION_RECOMPENSE })), bonus: MISSIONS_BONUS });
+});
+app.use("/missions", express.json({ limit: "4kb" }));
+app.post("/missions/valider", (req, res) => {
+  if (tropDEssais(req, res)) return;
+  const { code, date, id } = req.body || {};
+  const c = typeof code === "string" && /^[0-9]{6}$/.test(code.trim()) ? comptes.get(code.trim()) : null;
+  if (!c) return res.status(404).json({ erreur: "Compte requis." });
+  if (c.banni) return res.status(403).json({ erreur: MESSAGE_BANNI });
+  const auj = dateDuJour();
+  if (date !== auj) return res.status(400).json({ erreur: "Cette mission n'est plus d'actualité." });
+  const mission = missionsDuJour(auj).find((m) => m.id === id);
+  if (!mission) return res.status(400).json({ erreur: "Mission inconnue." });
+  const mj = c.missions && c.missions.d === auj ? c.missions : { d: auj, faites: [] };
+  if (mj.faites.includes(id)) return res.json({ ok: true, deja: true, pieces: c.pieces || 0, faites: mj.faites });
+  mj.faites.push(id);
+  c.missions = mj;
+  const gains = { mission: MISSION_RECOMPENSE, missionLabel: mission.label };
+  let total = MISSION_RECOMPENSE;
+  if (mj.faites.length === 3) { gains.bonus = MISSIONS_BONUS; total += MISSIONS_BONUS; }
+  gains.total = total;
+  crediterPieces(c, total);
+  c.lastSeen = Date.now();
+  saveComptes();
+  res.json({ ok: true, pieces: c.pieces || 0, gains, faites: mj.faites });
+});
+
 // ---------- Boutique : obtenir des diamants ----------
 // Socle préparé mais DÉSACTIVÉ : tout s'activera côté serveur (variables d'environnement),
 // sans nouvelle version des clients. ACTIVER_PUBS=1 pour les pubs récompensées (AdMob),
