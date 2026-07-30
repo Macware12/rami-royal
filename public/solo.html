@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2348-M">
+<meta name="version" content="v2349-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2348-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2349-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -4084,7 +4084,7 @@ function tapCard(id) {
           📤 Partager le score
         </button>
         <button onClick={quitToHome} className="btn-gold font-bold py-3 px-8 rounded-xl">
-          Rejouer
+          🔁 Rejouer
         </button>
         <a href="/" className="btn-dark font-bold py-2 px-5 rounded-xl text-sm no-underline">🏠 Retour à l'accueil</a>
       </div>
@@ -4531,7 +4531,7 @@ function tapCard(id) {
             <p className="text-xs text-emerald-300 mb-4">La partie en cours sera perdue.</p>
             <div className="flex gap-2">
               <button onClick={() => setShowQuit(false)} className="flex-1 btn-green py-2.5 rounded-xl font-bold text-sm">Rester</button>
-              <button onClick={quitToHome} className="flex-1 btn-red py-2.5 rounded-xl font-bold text-sm">Sortir</button>
+              <button onClick={() => { quitToHome(); window.location.href = "/"; }} className="flex-1 btn-red py-2.5 rounded-xl font-bold text-sm">Sortir</button>
             </div>
           </div>
         </div>
@@ -4673,7 +4673,7 @@ function tapCard(id) {
               <div className="mt-4 flex flex-col gap-2">
                 <button onClick={() => { setLevel("facile"); setShortMode(true); startGame({ level: "facile", shortMode: true }); }}
                   className="w-full btn-gold font-bold py-2.5 rounded-xl">🎉 Ta première vraie partie (facile · ~10 min)</button>
-                <button onClick={() => { setTuto(false); quitToHome(); }} className="w-full btn-dark font-bold py-2 rounded-xl text-sm">🏠 Retour à l'accueil</button>
+                <button onClick={() => { setTuto(false); quitToHome(); window.location.href = "/"; }} className="w-full btn-dark font-bold py-2 rounded-xl text-sm">🏠 Retour à l'accueil</button>
               </div>
             ) : (
               <button onClick={nextManche} className="mt-4 w-full btn-gold font-bold py-2.5 rounded-xl">
