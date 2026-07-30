@@ -2885,10 +2885,30 @@ io.on("connection", (socket) => {
     if (err) socket.emit("info", err);
   });
 
-  socket.on("leaveGame", () => {
+  socket.on("leaveGame", (opts) => {
     if (!myRoom) return;
     const me = findMe();
     if (!me) return;
+    // Fermeture définitive : possible s'il ne reste que des bots, ou si l'hôte le décide
+    const autresHumains = myRoom.players.filter((p, i) => i !== me.idx && !p.isBot && p.connected && !p.absent);
+    if (opts && opts.fermer && (autresHumains.length === 0 || me.idx === 0)) {
+      const codeS = myRoom.code;
+      log(myRoom, me.p.name + " a fermé le salon");
+      myRoom.players.forEach((p) => {
+        if (p.compte) { const cf = comptes.get(p.compte); if (cf && cf.salonEnCours === codeS) { delete cf.salonEnCours; saveComptes(); } }
+        if (p.socketId && p.socketId !== socket.id) {
+          const ts = io.sockets.sockets.get(p.socketId);
+          if (ts) { ts.emit("kicked", me.p.name + " a fermé le salon — merci d'avoir joué !"); ts.leave(codeS); }
+        }
+      });
+      clearTimers(myRoom);
+      rooms.delete(codeS);
+      saveRooms();
+      socket.leave(codeS);
+      myRoom = null; myToken = null;
+      socket.emit("roomClosed");
+      return;
+    }
     if (me.p.compte) { const cptL = comptes.get(me.p.compte); if (cptL && cptL.salonEnCours === myRoom.code) { delete cptL.salonEnCours; saveComptes(); } }
     me.p.connected = false;
     me.p.absent = true;

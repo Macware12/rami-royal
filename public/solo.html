@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2338-M">
+<meta name="version" content="v2340-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2338-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2340-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -2229,7 +2229,7 @@ function RamiRoyal() {
         .catch(() => {}); // hors ligne : on garde la session locale telle quelle
     }
     const savedLevel = store.get("rami-level"); if (savedLevel) setLevel(savedLevel);
-    const savedAI = parseInt(store.get("rami-ai"), 10); if ([1, 2, 3].includes(savedAI)) setNbAI(savedAI);
+    const savedAI = parseInt(store.get("rami-ai"), 10); if ([2, 3, 4, 5].includes(savedAI)) setNbAI(savedAI);
     const savedCourt = store.get("rami-court"); if (savedCourt != null) setShortMode(savedCourt === "1");
   }, []);
 
@@ -3762,7 +3762,7 @@ function tapCard(id) {
             Adversaires (IA)
             <div className="flex gap-2">
               {[2, 3, 4, 5].map((n) => (
-                <button key={n} onClick={() => setNbAI(n)}
+                <button key={n} onClick={() => { setNbAI(n); store.set("rami-ai", String(n)); }}
                   className={`flex-1 py-2 rounded-xl font-bold ${nbAI === n ? "btn-gold" : "btn-dark"}`}>
                   {n}
                 </button>
@@ -3773,7 +3773,7 @@ function tapCard(id) {
             Niveau des adversaires
             <div className="flex gap-2">
               {LEVELS.map((l) => (
-                <button key={l.id} onClick={() => setLevel(l.id)}
+                <button key={l.id} onClick={() => { setLevel(l.id); store.set("rami-level", l.id); }}
                   className={`flex-1 py-2 rounded-xl text-xs font-bold ${level === l.id ? "btn-gold" : "btn-dark"}`}>
                   {l.label}
                 </button>
@@ -3783,12 +3783,12 @@ function tapCard(id) {
           <label className="flex flex-col gap-1 text-xs">
             Mode
             <div className="flex gap-2">
-              <button onClick={() => setShortMode(false)}
+              <button onClick={() => { setShortMode(false); store.set("rami-court", "0"); }}
                 className={`flex-1 py-1.5 rounded-xl text-xs font-bold flex flex-col items-center ${!shortMode ? "btn-gold" : "btn-dark"}`}>
                 <span>Normal (8 manches)</span>
                 <span className="text-[10px] opacity-75">~30 min</span>
               </button>
-              <button onClick={() => setShortMode(true)}
+              <button onClick={() => { setShortMode(true); store.set("rami-court", "1"); }}
                 className={`flex-1 py-1.5 rounded-xl text-xs font-bold flex flex-col items-center ${shortMode ? "btn-gold" : "btn-dark"}`}>
                 <span>⚡ Court (3 aléatoires)</span>
                 <span className="text-[10px] opacity-75">~10 min</span>
@@ -3821,13 +3821,7 @@ function tapCard(id) {
                   <span className="text-xl leading-none" style={ico}>🏆</span>
                   <span className={lbl}>Succès <span className="text-[10px] font-bold text-amber-300">{nbSucces}/{SUCCES_LIST.length}</span></span>
                 </button>
-                {account.code ? (
-                  <button onClick={() => { setLoginErr(""); setNewCode(null); setShowLogin(true); }}
-                    className={tuile}>
-                    <PhotoCompte t={24} />
-                    <span className="text-xs font-bold text-amber-300 leading-tight truncate">{account.pseudo}</span>
-                  </button>
-                ) : (
+                {!account.code && (
                   <button onClick={() => { setLoginErr(""); setNewCode(null); setShowLogin(true); }} className={tuile}>
                     <span className="text-xl leading-none" style={ico}>👤</span>
                     <span className={lbl}>Compte</span>

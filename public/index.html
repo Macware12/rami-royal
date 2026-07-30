@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2338-M">
+<meta name="version" content="v2340-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2338-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2340-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -1807,6 +1807,7 @@ function App() {
   const [level, setLevel] = useState(() => ["facile", "moyen", "difficile"].includes(store.get("ramimp-level")) ? store.get("ramimp-level") : "moyen");
   const [shortMode, setShortMode] = useState(() => store.get("ramimp-court") === "1"); // Mode court : 3 manches
   const [pouvoirs, setPouvoirs] = useState(() => store.get("ramimp-pouvoirs") !== "0"); // pouvoirs 💎 autorisés
+  const [showCfgMp, setShowCfgMp] = useState(!store.get("ramimp-turn")); // réglages repliés pour les habitués
   const [msg, setMsg] = useState("");
   const [selected, setSelected] = useState([]);
   const [staged, setStaged] = useState([]);
@@ -2359,8 +2360,8 @@ function App() {
       if (!res.ok) { setMsg(res.error || "Reprise impossible."); store.del("ramimp-save"); setSaved(null); }
     });
   }
-  function quitRoom() {
-    socket.emit("leaveGame");
+  function quitRoom(fermer) {
+    socket.emit("leaveGame", fermer ? { fermer: true } : undefined);
     store.del("ramimp-save");
     setSrv(null); setStaged([]); setSelected([]); setShowQuit(false); setMsg("");
     if (socket.isLocal) closeLocal(); // partie locale : on coupe aussi le Bluetooth
@@ -2902,7 +2903,7 @@ function App() {
               <a href="/contact.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">💬 Nous contacter</a>
               <a href="/signaler.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🚩 Signaler un joueur</a>
               <a href="/confidentialite.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🔒 Confidentialité</a>
-              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2338-M</div>
+              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2340-M</div>
             </div>
           </div>
         )}
@@ -3436,43 +3437,52 @@ function App() {
           )}
           <div className="border-t border-emerald-800 pt-3 flex flex-col gap-2">
             <span className="text-xs text-amber-200 font-bold">1 · Crée un salon et partage le code</span>
-            <span className="text-[11px] text-emerald-400">⏱ Temps de réflexion par tour :</span>
-            <div className="flex gap-2 text-xs">
-              {[45, 60, 90].map((t) => (
-                <button key={t} onClick={() => setTurnSeconds(t)} className={`flex-1 py-1.5 rounded-xl font-bold ${turnSeconds === t ? "btn-gold" : "btn-dark"}`}>{t}s/tour</button>
-              ))}
-            </div>
-            <div className="flex gap-2 text-xs">
-              {["facile", "moyen", "difficile"].map((l) => (
-                <button key={l} onClick={() => setLevel(l)} className={`flex-1 py-1.5 rounded-xl font-bold ${level === l ? "btn-gold" : "btn-dark"}`}>{l}</button>
-              ))}
-            </div>
-            <div className="flex gap-2 text-xs">
-              <button onClick={() => setShortMode(false)}
-                className={`flex-1 py-1.5 rounded-xl font-bold flex flex-col items-center gap-0.5 ${!shortMode ? "btn-gold" : "btn-dark"}`}>
-                <span>Normal (8)</span>
-                <span className="text-[10px] opacity-75">~30 min</span>
-              </button>
-              <button onClick={() => setShortMode(true)}
-                className={`flex-1 py-1.5 rounded-xl font-bold flex flex-col items-center gap-0.5 ${shortMode ? "btn-gold" : "btn-dark"}`}>
-                <span>⚡ Court (3)</span>
-                <span className="text-[10px] opacity-75">~10 min</span>
-              </button>
-            </div>
-            <div className="flex gap-2 text-xs">
-              <button onClick={() => setPouvoirs(true)}
-                className={`flex-1 py-1.5 rounded-xl font-bold flex flex-col items-center gap-0.5 ${pouvoirs ? "btn-gold" : "btn-dark"}`}>
-                <span>💎 Pouvoirs autorisés</span>
-                <span className="text-[10px] opacity-75">achat sans pénalité, 4e achat, joker</span>
-              </button>
-              <button onClick={() => setPouvoirs(false)}
-                className={`flex-1 py-1.5 rounded-xl font-bold flex flex-col items-center gap-0.5 ${!pouvoirs ? "btn-gold" : "btn-dark"}`}>
-                <span>⚖️ Sans pouvoirs</span>
-                <span className="text-[10px] opacity-75">tout le monde à égalité</span>
-              </button>
-            </div>
-            <span className="text-[10px] text-emerald-400">Le niveau s'applique aux bots ajoutés pour compléter la table.</span>
             <button onClick={createRoom} className="btn-gold font-bold py-3 rounded-xl">Créer un salon 🎴</button>
+            <button onClick={() => setShowCfgMp((v) => !v)} className="btn-dark font-bold py-2 rounded-xl text-xs">
+              ⚙️ Personnaliser — {turnSeconds}s · {level} · {shortMode ? "court" : "normal"} · {pouvoirs ? "💎" : "⚖️"} {showCfgMp ? "▲" : "▼"}
+            </button>
+            {showCfgMp && (
+              <div className="flex flex-col gap-2">
+                <span className="text-[11px] text-emerald-400">⏱ Temps de réflexion par tour :</span>
+                <div className="flex gap-2 text-xs">
+                  {[45, 60, 90].map((t) => (
+                    <button key={t} onClick={() => { setTurnSeconds(t); store.set("ramimp-turn", String(t)); }} className={`flex-1 py-1.5 rounded-xl font-bold ${turnSeconds === t ? "btn-gold" : "btn-dark"}`}>{t}s/tour</button>
+                  ))}
+                </div>
+                <span className="text-[11px] text-emerald-400">🤖 Niveau des bots ajoutés :</span>
+                <div className="flex gap-2 text-xs">
+                  {["facile", "moyen", "difficile"].map((l) => (
+                    <button key={l} onClick={() => { setLevel(l); store.set("ramimp-level", l); }} className={`flex-1 py-1.5 rounded-xl font-bold ${level === l ? "btn-gold" : "btn-dark"}`}>{l}</button>
+                  ))}
+                </div>
+                <span className="text-[11px] text-emerald-400">⏳ Durée de la partie :</span>
+                <div className="flex gap-2 text-xs">
+                  <button onClick={() => { setShortMode(false); store.set("ramimp-court", "0"); }}
+                    className={`flex-1 py-1.5 rounded-xl font-bold flex flex-col items-center gap-0.5 ${!shortMode ? "btn-gold" : "btn-dark"}`}>
+                    <span>Normal (8)</span>
+                    <span className="text-[10px] opacity-75">~30 min</span>
+                  </button>
+                  <button onClick={() => { setShortMode(true); store.set("ramimp-court", "1"); }}
+                    className={`flex-1 py-1.5 rounded-xl font-bold flex flex-col items-center gap-0.5 ${shortMode ? "btn-gold" : "btn-dark"}`}>
+                    <span>⚡ Court (3)</span>
+                    <span className="text-[10px] opacity-75">~10 min</span>
+                  </button>
+                </div>
+                <span className="text-[11px] text-emerald-400">💎 Pouvoirs payants :</span>
+                <div className="flex gap-2 text-xs">
+                  <button onClick={() => { setPouvoirs(true); store.set("ramimp-pouvoirs", "1"); }}
+                    className={`flex-1 py-1.5 rounded-xl font-bold flex flex-col items-center gap-0.5 ${pouvoirs ? "btn-gold" : "btn-dark"}`}>
+                    <span>💎 Autorisés</span>
+                    <span className="text-[10px] opacity-75">achat sans pénalité, 4e achat, joker</span>
+                  </button>
+                  <button onClick={() => { setPouvoirs(false); store.set("ramimp-pouvoirs", "0"); }}
+                    className={`flex-1 py-1.5 rounded-xl font-bold flex flex-col items-center gap-0.5 ${!pouvoirs ? "btn-gold" : "btn-dark"}`}>
+                    <span>⚖️ Sans pouvoirs</span>
+                    <span className="text-[10px] opacity-75">tout le monde à égalité</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
           <div className="border-t border-emerald-800 pt-3 flex flex-col gap-2">
             <span className="text-xs text-amber-200 font-bold">2 · Ou rejoins avec le code d'un ami</span>
@@ -3527,7 +3537,7 @@ function App() {
           </div>
         )}
         <div className="flex gap-2 text-[11px] text-emerald-400 flex-wrap justify-center items-center pb-4">
-          <span className="opacity-60 self-center">v2338-M</span>
+          <span className="opacity-60 self-center">v2340-M</span>
         </div>
       </div>
     );
@@ -4120,11 +4130,35 @@ function App() {
           <div className="panel rounded-2xl p-5 w-full max-w-xs text-center">
             <div className="text-3xl mb-2">🏠</div>
             <h2 className="text-amber-300 font-bold text-lg mb-1">Quitter la partie ?</h2>
-            <p className="text-xs text-emerald-300 mb-4">L'IA te remplacera pour ne pas bloquer tes amis. Tu pourras revenir avec le code {srv.code}.</p>
-            <div className="flex gap-2">
-              <button onClick={() => setShowQuit(false)} className="flex-1 btn-green py-2.5 rounded-xl font-bold text-sm">Rester</button>
-              <button onClick={quitRoom} className="flex-1 btn-red py-2.5 rounded-xl font-bold text-sm">Sortir</button>
-            </div>
+            {(() => {
+              const humains = srv.players.filter((p) => !p.isBot && p.connected && !p.absent && p.idx !== youIdx);
+              const hote = youIdx === 0;
+              return (
+                <React.Fragment>
+                  <p className="text-xs text-emerald-300 mb-3">
+                    {humains.length === 0
+                      ? "Il n'y a que des bots à la table — inutile de garder le salon ouvert."
+                      : "L'IA te remplacera pour ne pas bloquer " + (humains.length > 1 ? "tes amis" : humains[0].name) + ". Tu pourras revenir avec le code " + srv.code + "."}
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    <button onClick={() => setShowQuit(false)} className="btn-green py-2.5 rounded-xl font-bold text-sm">Rester</button>
+                    {humains.length > 0 && (
+                      <button onClick={() => quitRoom(false)} className="btn-dark py-2.5 rounded-xl font-bold text-sm">
+                        Sortir — {humains.length > 1 ? "ils continuent" : humains[0].name + " continue"}
+                      </button>
+                    )}
+                    {(humains.length === 0 || hote) && (
+                      <button onClick={() => quitRoom(true)} className="btn-red py-2.5 rounded-xl font-bold text-sm">
+                        {humains.length === 0 ? "Fermer la partie" : "Fermer le salon pour tout le monde"}
+                      </button>
+                    )}
+                    {humains.length > 0 && !hote && (
+                      <span className="text-[10px] text-emerald-400">Seul l'hôte peut fermer le salon pour tout le monde.</span>
+                    )}
+                  </div>
+                </React.Fragment>
+              );
+            })()}
           </div>
         </div>
       )}
