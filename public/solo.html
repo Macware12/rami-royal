@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2319-M">
+<meta name="version" content="v2320-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2319-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2320-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -4183,10 +4183,17 @@ function tapCard(id) {
                   return <span className="text-[10px] font-normal"> {rest > 0 ? "●".repeat(rest) + "○".repeat(AIDES_GRATUITES - rest) : COUT_AIDE + " 💎"}</span>;
                 })()}
               </button>
-              {!tuto && !g.defi && !g.defiAmi && !me.jokerNetUsed && g.stock.some((c) => c.joker) && (
-                <button onClick={invoquerJoker} title="Sort un joker de la pioche — à tout moment, une seule fois par manche"
-                  className={(peutPayer(COUT_JOKER) ? (Date.now() - jokerArme.current <= 3500 ? "btn-gold pulse-gold" : "btn-diamant") : "btn-dark opacity-70") + " px-4 py-2 rounded-xl text-sm font-bold"}>{Date.now() - jokerArme.current <= 3500 ? "✔ Confirmer · " + COUT_JOKER + " 💎" : (peutPayer(COUT_JOKER) ? "🤡" : "🔒") + " Joker · " + COUT_JOKER + " 💎"}</button>
-              )}
+              {!tuto && !g.defi && !g.defiAmi && !me.jokerNetUsed && (() => {
+                const enPioche = g.stock.some((c) => c.joker);
+                if (!enPioche) return (
+                  <button onClick={() => setMsg("🤡 Plus aucun joker dans la pioche — ils sont déjà en main ou posés !")}
+                    className="btn-dark opacity-60 px-4 py-2 rounded-xl text-sm font-bold">🤡 Épuisé</button>
+                );
+                return (
+                  <button onClick={invoquerJoker} title="Sort un joker de la pioche — à tout moment, une seule fois par manche"
+                    className={(peutPayer(COUT_JOKER) ? (Date.now() - jokerArme.current <= 3500 ? "btn-gold pulse-gold" : "btn-diamant") : "btn-dark opacity-70") + " px-4 py-2 rounded-xl text-sm font-bold"}>{Date.now() - jokerArme.current <= 3500 ? "✔ Confirmer · " + COUT_JOKER + " 💎" : (peutPayer(COUT_JOKER) ? "🤡" : "🔒") + " Joker · " + COUT_JOKER + " 💎"}</button>
+                );
+              })()}
               {!contract.poseTout && (
                 <button onClick={autoStage} className="btn-dark px-4 py-2 rounded-xl text-sm font-bold">
                   ✨ Classer mes cartes
