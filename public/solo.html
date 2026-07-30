@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2313-M">
+<meta name="version" content="v2314-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2313-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2314-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -1300,9 +1300,18 @@ function GainsToast() {
       style={{ top: "calc(env(safe-area-inset-top, 0px) + 10px)", background: "linear-gradient(180deg, rgba(6,58,42,.97), rgba(4,40,28,.97))", border: "1px solid #f59e0b88", boxShadow: "0 6px 18px rgba(0,0,0,.45)" }}
       onClick={() => setInfo(null)}>
       💎 +{g.total} diamants
-      <span className="block text-[10px] font-normal text-emerald-300">{det.join(" · ")}{typeof info.pieces === "number" ? " — solde : " + info.pieces : ""}</span>
+      <span className="block text-[10px] font-normal text-emerald-300">{det.join(" · ")}{typeof info.pieces === "number" ? " — solde : " + fmtSolde(info.pieces) : ""}</span>
     </div>
   );
+}
+
+// Solde compact pour les espaces étroits (badge, chip) : 12 400 → « 12 k », 1 500 000 → « 1,5 M »
+function fmtSolde(n) {
+  n = n || 0;
+  if (n >= 1e9) return (Math.round(n / 1e8) / 10).toLocaleString("fr-FR") + " Md";
+  if (n >= 1e6) return (Math.round(n / 1e5) / 10).toLocaleString("fr-FR") + " M";
+  if (n >= 1e4) return Math.round(n / 1e3).toLocaleString("fr-FR") + " k";
+  return String(n);
 }
 
 function PhotoCompte({ t }) {
@@ -3340,7 +3349,7 @@ function tapCard(id) {
               <PhotoCompte t={30} />
               <div className="flex-1">
                 <div className="text-sm font-bold text-amber-300">{account.pseudo}</div>
-                <div className="text-[10px] text-emerald-400">Connecté · <span className="font-bold text-yellow-300">💎 {lireSolde().pieces}</span> — tu joues sous ton pseudo de compte</div>
+                <div className="text-[10px] text-emerald-400">Connecté · <span className="font-bold text-yellow-300">💎 {fmtSolde(lireSolde().pieces)}</span> — tu joues sous ton pseudo de compte</div>
               </div>
             </div>
           ) : (
@@ -3907,7 +3916,7 @@ function tapCard(id) {
           <div className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col items-center gap-1 bg-emerald-950/60 border border-amber-500/40 rounded-xl px-2.5 py-1.5"
             title={"Toi : " + me.total + " points au total" + (!me.posed ? " · tes achats restants cette manche" : "")}>
             <span className="text-[10px] font-bold text-amber-300">{me.avatar || "🙂"} Toi · {me.total} pts</span>
-            {(() => { try { const a = JSON.parse(store.get("rami-account")) || {}; return a.code ? <span onClick={() => { try { window.dispatchEvent(new CustomEvent("rami-tarifs")); } catch (_) {} }} className="text-[10px] font-bold text-yellow-300 cursor-pointer underline decoration-dotted" title="Tarifs des diamants">💎 {a.pieces || 0}</span> : null; } catch (_) { return null; } })()}
+            {(() => { try { const a = JSON.parse(store.get("rami-account")) || {}; return a.code ? <span onClick={() => { try { window.dispatchEvent(new CustomEvent("rami-tarifs")); } catch (_) {} }} className="text-[10px] font-bold text-yellow-300 cursor-pointer underline decoration-dotted" title="Tarifs des diamants">💎 {fmtSolde(a.pieces)}</span> : null; } catch (_) { return null; } })()}
             {!me.posed && (
               <span className="flex items-center gap-1">
                 <span className="text-[10px]">🛒</span>
@@ -3939,7 +3948,7 @@ function tapCard(id) {
               : topDiscard ? <Card card={topDiscard} /> : <div style={{ height: 58, width: 40 }} className="rounded-lg border-2 border-dashed border-emerald-600" />}
           </div>
           <span className={`text-[10px] font-bold ${pendingDiscard ? "text-red-300" : "text-emerald-300"}`}>
-            {pendingDiscard ? "Confirmer 🔒" : g.buyWindow ? `Acheter (${me.buysLeft})` : g.discardLocked && myTurn && g.phase === "draw" ? "Bloquée (achat) 🚫" : myTurn && g.phase === "draw" && topDiscard && topDiscard.joker ? "Joker — bloqué 🚫" : myTurn && g.phase === "draw" ? "Prendre (gratuit)" : `Défausse · ${g.discard.length}`}
+            {pendingDiscard ? "Confirmer 🔒" : g.buyWindow ? `Acheter (${me.buysLeft})` : g.discardLocked && myTurn && g.phase === "draw" ? "Bloquée 🚫" : myTurn && g.phase === "draw" && topDiscard && topDiscard.joker ? "Joker — bloqué 🚫" : myTurn && g.phase === "draw" ? "Prendre (gratuit)" : `Défausse · ${g.discard.length}`}
           </span>
         </button>
       </div>
