@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2306-M">
+<meta name="version" content="v2307-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2306-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2307-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -812,6 +812,56 @@ function LigneMelds({ children }) {
 }
 
 // Vignette du compte : photo ronde si définie, sinon avatar de profil, sinon 👤
+// Boutique « Obtenir des diamants » : catalogue servi par le serveur, qui décide
+// aussi de ce qui est actif — l'activation future ne demandera aucune mise à jour ici.
+function ObtenirDiamants() {
+  const [ouvert, setOuvert] = React.useState(false);
+  const [cat, setCat] = React.useState(null);
+  React.useEffect(() => {
+    const h = () => {
+      setOuvert(true);
+      fetch(API_BASE + "/boutique/catalogue").then((r) => r.json()).then(setCat).catch(() => setCat(null));
+    };
+    window.addEventListener("rami-boutique", h);
+    return () => window.removeEventListener("rami-boutique", h);
+  }, []);
+  if (!ouvert) return null;
+  const pub = (cat && cat.pub) || { recompense: 20, maxJour: 5 };
+  const packs = (cat && cat.packs) || [];
+  const bientot = <span className="text-[9px] font-bold uppercase tracking-wide bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full px-2 py-0.5">Bientôt</span>;
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setOuvert(false)}>
+      <div className="panel rounded-2xl p-5 w-full max-w-sm flex flex-col gap-3 relative" onClick={(e) => e.stopPropagation()}>
+        <button onClick={() => setOuvert(false)} className="absolute top-1 right-1 p-2.5 text-emerald-400 text-xl leading-none">✕</button>
+        <h3 className="text-amber-300 font-bold text-center" style={{ fontFamily: "Georgia, serif" }}>➕ Obtenir des diamants</h3>
+        <div className="bg-emerald-950/50 border border-emerald-800/60 rounded-xl px-3 py-2.5 flex items-center gap-3">
+          <span className="text-2xl">📺</span>
+          <span className="flex-1 text-left">
+            <span className="block text-sm font-bold text-emerald-100">Regarder une pub</span>
+            <span className="block text-[10px] text-emerald-400">+{pub.recompense} 💎 · jusqu'à {pub.maxJour} fois par jour</span>
+          </span>
+          {cat && cat.pubsActives ? (
+            <button className="btn-diamant px-3 py-1.5 rounded-xl text-xs font-bold">▶ Regarder</button>
+          ) : bientot}
+        </div>
+        {packs.map((p) => (
+          <div key={p.id} className="bg-emerald-950/50 border rounded-xl px-3 py-2.5 flex items-center gap-3" style={{ borderColor: p.populaire ? "#f59e0b88" : "#065f4699" }}>
+            <span className="text-2xl">💎</span>
+            <span className="flex-1 text-left">
+              <span className="block text-sm font-bold text-emerald-100">{p.nom} — {p.diamants.toLocaleString("fr-FR")} 💎{p.populaire ? <span className="text-[9px] text-amber-300 font-bold"> · populaire</span> : null}</span>
+              <span className="block text-[10px] text-emerald-400">{p.prix}</span>
+            </span>
+            {cat && cat.achatsActifs ? (
+              <button className="btn-gold px-3 py-1.5 rounded-xl text-xs font-bold">{p.prix}</button>
+            ) : bientot}
+          </div>
+        ))}
+        <p className="text-[10px] text-emerald-400 text-center">En attendant, chaque partie, défi et jour de série 🔥 te rapporte des 💎 !</p>
+      </div>
+    </div>
+  );
+}
+
 // Récap des tarifs 💎, ouvert d'un tap sur le solde (événement "rami-tarifs")
 function TarifsDiamants() {
   const [ouvert, setOuvert] = React.useState(false);
@@ -844,6 +894,8 @@ function TarifsDiamants() {
         <L n="🛒 4e jeton d'achat (1/manche)" v="20" />
         <L n="🤡 Joker invoqué (1/manche)" v="30" />
         <div className="text-[10px] text-emerald-400">⚖️ Pouvoirs désactivés pendant les défis, et dans les salons où l'hôte les a coupés.</div>
+        <button onClick={() => { setOuvert(false); try { window.dispatchEvent(new CustomEvent("rami-boutique")); } catch (_) {} }}
+          className="btn-diamant font-bold py-2.5 rounded-xl text-sm mt-1">➕ Obtenir des diamants</button>
       </div>
     </div>
   );
@@ -2363,7 +2415,7 @@ function App() {
               <a href="/contact.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">💬 Nous contacter</a>
               <a href="/signaler.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🚩 Signaler un joueur</a>
               <a href="/confidentialite.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🔒 Confidentialité</a>
-              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2306-M</div>
+              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2307-M</div>
             </div>
           </div>
         )}
@@ -2922,7 +2974,7 @@ function App() {
           </div>
         )}
         <div className="flex gap-2 text-[11px] text-emerald-400 flex-wrap justify-center items-center pb-4">
-          <span className="opacity-60 self-center">v2306-M</span>
+          <span className="opacity-60 self-center">v2307-M</span>
         </div>
       </div>
     );
@@ -3639,7 +3691,7 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<React.Fragment><App /><GainsToast /><AnnonceDiamants /><TarifsDiamants /></React.Fragment>);
+ReactDOM.createRoot(document.getElementById('root')).render(<React.Fragment><App /><GainsToast /><AnnonceDiamants /><TarifsDiamants /><ObtenirDiamants /></React.Fragment>);
 </script>
 </body>
 </html>

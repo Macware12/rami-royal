@@ -889,6 +889,51 @@ app.post("/compte/partie", (req, res) => {
   res.json({ stats: c.stats, succes: c.succes || {}, pieces: c.pieces || 0, gains });
 });
 
+// ---------- Boutique : obtenir des diamants ----------
+// Socle préparé mais DÉSACTIVÉ : tout s'activera côté serveur (variables d'environnement),
+// sans nouvelle version des clients. ACTIVER_PUBS=1 pour les pubs récompensées (AdMob),
+// ACTIVER_ACHATS=1 pour les achats (IAP Apple / Stripe web) — avec leur validation à brancher ici.
+const BOUTIQUE = {
+  pub: { recompense: 20, maxJour: 5 }, // +20 💎 par pub, 5 par jour
+  packs: [
+    { id: "poignee", nom: "Une poignée", diamants: 500, prix: "0,99 €" },
+    { id: "sac", nom: "Un sac", diamants: 2000, prix: "2,99 €", populaire: true },
+    { id: "coffre", nom: "Un coffre", diamants: 8000, prix: "9,99 €" },
+  ],
+};
+app.get("/boutique/catalogue", (req, res) => {
+  res.json({
+    pubsActives: process.env.ACTIVER_PUBS === "1",
+    achatsActifs: process.env.ACTIVER_ACHATS === "1",
+    pub: BOUTIQUE.pub,
+    packs: BOUTIQUE.packs,
+  });
+});
+
+app.use("/boutique", express.json({ limit: "4kb" }));
+// Pub récompensée : créditée ici après visionnage. Quand AdMob sera branché, la validation
+// SSV (Server-Side Verification) de Google devra être vérifiée avant de créditer.
+app.post("/boutique/pub", (req, res) => {
+  if (tropDEssais(req, res)) return;
+  if (process.env.ACTIVER_PUBS !== "1") return res.status(503).json({ erreur: "Les pubs récompensées arrivent bientôt !" });
+  const c = typeof (req.body || {}).code === "string" && /^[0-9]{6}$/.test(req.body.code.trim()) ? comptes.get(req.body.code.trim()) : null;
+  if (!c) return res.status(404).json({ erreur: "Compte requis." });
+  if (c.banni) return res.status(403).json({ erreur: MESSAGE_BANNI });
+  const auj = dateDuJour();
+  const pj = c.pubsJour && c.pubsJour.d === auj ? c.pubsJour : { d: auj, n: 0 };
+  if (pj.n >= BOUTIQUE.pub.maxJour) return res.status(429).json({ erreur: "Limite de " + BOUTIQUE.pub.maxJour + " pubs par jour atteinte — reviens demain !" });
+  pj.n += 1;
+  c.pubsJour = pj;
+  crediterPieces(c, BOUTIQUE.pub.recompense);
+  saveComptes();
+  res.json({ pieces: c.pieces || 0, gains: { pub: BOUTIQUE.pub.recompense, total: BOUTIQUE.pub.recompense }, restantes: BOUTIQUE.pub.maxJour - pj.n });
+});
+// Achat de packs : la validation du reçu (App Store Server API ou webhook Stripe) sera
+// branchée ici — JAMAIS de crédit sur simple parole du client.
+app.post("/boutique/achat", (req, res) => {
+  res.status(503).json({ erreur: "La boutique arrive bientôt !" });
+});
+
 // ---------- Dépense de diamants (aide payante, boutique à venir) ----------
 app.post("/compte/depenser", (req, res) => {
   if (tropDEssais(req, res)) return;
