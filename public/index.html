@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2333-M">
+<meta name="version" content="v2334-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2333-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2334-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -1192,6 +1192,8 @@ function GainsToast() {
   if (g.victoire) det.push("victoire +" + g.victoire);
   if (g.succes) det.push("succès +" + g.succes);
   if (g.serie) det.push("série " + g.serieJours + " j +" + g.serie);
+  if (g.serieDefi7) det.push("🎉 7 défis d'affilée +" + g.serieDefi7);
+  else if (g.serieDefiJours > 1) det.push("défis " + g.serieDefiJours + " j d'affilée");
   if (g.bienvenue) det.push("🎁 cadeau de bienvenue");
   return (
     <div className="fixed left-1/2 -translate-x-1/2 z-40 px-4 py-2.5 rounded-2xl text-sm font-bold text-amber-200 text-center cursor-pointer"
@@ -1455,6 +1457,7 @@ function App() {
   const [cptBusy, setCptBusy] = useState(false);
   const [cptNouveau, setCptNouveau] = useState(null); // code affiché après création
   const [choixBots, setChoixBots] = useState(null); // { code, bots } : choisir quel bot remplacer
+  const [hebdo, setHebdo] = useState(null); // classement de la semaine (null | "chargement" | données)
   const [, cptMaj] = useState(0); // forcer le re-rendu après connexion/déconnexion
   useEffect(() => { // le solde du chip suit les gains de diamants
     const h = () => cptMaj((x) => x + 1);
@@ -2633,6 +2636,21 @@ function App() {
             {dejaJoue ? carteSolo : carteTuto}
             {dejaJoue ? carteTuto : carteSolo}
             <MissionsDuJour />
+            <button onClick={() => {
+                setHebdo("chargement");
+                const accH = readJSONls("rami-account");
+                fetch(API_BASE + "/hebdo/classement" + (accH.code ? "?code=" + accH.code : ""))
+                  .then((r) => r.json()).then(setHebdo)
+                  .catch(() => setHebdo({ erreur: "Serveur injoignable — réessaie." }));
+              }}
+              className="panel rounded-2xl p-4 w-full max-w-xs flex items-center gap-3 text-emerald-100 text-left" style={{ borderColor: "#fbbf2466" }}>
+              <span className="text-3xl">🏆</span>
+              <span className="flex-1">
+                <span className="block font-bold text-base text-amber-200">Classement de la semaine</span>
+                <span className="block text-xs text-emerald-300">Le top 3 des victoires gagne des 💎 dimanche</span>
+              </span>
+              <span className="text-amber-300 text-xl font-bold">→</span>
+            </button>
             <button onClick={() => { setDefiAmi("menu"); setDefiAmiData(null); setDefiAmiCode(""); }}
               className="panel rounded-2xl p-4 w-full max-w-xs flex items-center gap-3 text-emerald-100 text-left" style={{ borderColor: "#f8717166" }}>
               <span className="text-3xl">⚔️</span>
@@ -2744,7 +2762,48 @@ function App() {
               <a href="/contact.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">💬 Nous contacter</a>
               <a href="/signaler.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🚩 Signaler un joueur</a>
               <a href="/confidentialite.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🔒 Confidentialité</a>
-              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2333-M</div>
+              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2334-M</div>
+            </div>
+          </div>
+        )}
+
+        {/* Classement de la semaine */}
+        {hebdo && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 flex items-center justify-center p-4" onClick={() => setHebdo(null)}>
+            <div className="panel rounded-2xl p-5 w-full max-w-sm flex flex-col gap-2.5 relative max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+              <button onClick={() => setHebdo(null)} className="absolute top-1 right-1 p-2.5 text-emerald-400 text-xl leading-none">✕</button>
+              <h3 className="text-amber-300 font-bold text-center" style={{ fontFamily: "Georgia, serif" }}>🏆 Classement de la semaine</h3>
+              {hebdo === "chargement" ? (
+                <p className="text-sm text-emerald-300 text-center py-4">Chargement…</p>
+              ) : hebdo.erreur ? (
+                <p className="text-sm text-red-300 text-center py-4">{hebdo.erreur}</p>
+              ) : (
+                <React.Fragment>
+                  <div className="text-[11px] text-emerald-400 text-center -mt-1">
+                    Victoires du lundi au dimanche · fin dans {Math.max(1, Math.ceil(hebdo.finDans / 3600000)) >= 48 ? Math.ceil(hebdo.finDans / 86400000) + " j" : Math.max(1, Math.ceil(hebdo.finDans / 3600000)) + " h"} · top 3 : {(hebdo.recompenses || []).join("/")} 💎
+                  </div>
+                  {(!hebdo.top || hebdo.top.length === 0) ? (
+                    <p className="text-sm text-emerald-300 text-center py-3">Personne n'a encore gagné cette semaine — sois le premier !</p>
+                  ) : (
+                    <div>
+                      {hebdo.top.map((e) => (
+                        <div key={e.rang} className={`flex items-center gap-2 py-1.5 border-b border-emerald-900 last:border-0 ${e.rang <= 3 ? "text-amber-200 font-bold" : "text-emerald-100"}`}>
+                          <span className="w-8 text-center">{e.rang === 1 ? "🥇" : e.rang === 2 ? "🥈" : e.rang === 3 ? "🥉" : e.rang + "."}</span>
+                          <span className="flex-1 truncate text-sm">{e.pseudo}</span>
+                          <span className="text-sm">{e.victoires} victoire{e.victoires > 1 ? "s" : ""} <span className="text-[10px] text-emerald-400">/ {e.parties}</span></span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {hebdo.rang ? (
+                    <div className="text-[11px] text-emerald-300 text-center">Ta place : <b className="text-amber-300">{hebdo.rang}ᵉ</b> — {hebdo.victoires} victoire{hebdo.victoires > 1 ? "s" : ""} sur {hebdo.parties} partie{hebdo.parties > 1 ? "s" : ""}</div>
+                  ) : (
+                    <div className="text-[11px] text-emerald-300 text-center">{readJSONls("rami-account").code ? "Gagne une partie pour entrer au classement !" : "Crée un compte (pastille 👤) pour concourir !"}</div>
+                  )}
+                  <div className="text-[10px] text-emerald-400 text-center">Remise à zéro chaque lundi — nouvelle chance pour tout le monde.</div>
+                </React.Fragment>
+              )}
+              <button onClick={() => setHebdo(null)} className="btn-gold font-bold py-2.5 rounded-xl text-sm">Fermer</button>
             </div>
           </div>
         )}
@@ -3014,7 +3073,20 @@ function App() {
                   {!readJSONls("rami-account").code && (
                     <div className="text-[11px] text-emerald-300 text-center">Crée un compte (pastille 👤 en haut) pour entrer au classement !</div>
                   )}
-                  <div className="text-[10px] text-emerald-400 text-center">Seul le premier essai du jour compte — même donne pour tout le monde.</div>
+                  {defiClassement.podiumHier && defiClassement.podiumHier.length > 0 && (
+                    <div className="bg-emerald-950/60 border border-amber-500/30 rounded-xl px-3 py-2">
+                      <div className="text-[11px] font-bold text-amber-300 mb-1">🏆 Podium d'hier — récompensé en 💎</div>
+                      {defiClassement.podiumHier.map((e) => (
+                        <div key={e.rang} className="flex items-center gap-2 text-[11px] text-emerald-200">
+                          <span>{e.rang === 1 ? "🥇" : e.rang === 2 ? "🥈" : "🥉"}</span>
+                          <span className="flex-1 truncate">{e.pseudo}</span>
+                          <span>{e.total} pts</span>
+                          <span className="font-bold text-yellow-300">+{e.gain} 💎</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="text-[10px] text-emerald-400 text-center">Seul le premier essai du jour compte — le top 3 gagne {(defiClassement.recompensesPodium || [50, 30, 20]).join("/")} 💎 le lendemain. Joue chaque jour : 7 défis d'affilée = +100 💎 !</div>
                   <a href="/solo.html?defi=1" className="btn-dark font-bold py-2 rounded-xl text-xs text-center no-underline">🔁 Rejouer pour le plaisir (hors classement)</a>
                   <button onClick={() => setDefiClassement(null)} className="btn-gold font-bold py-2.5 rounded-xl text-sm">Fermer</button>
                 </React.Fragment>
@@ -3314,7 +3386,7 @@ function App() {
           </div>
         )}
         <div className="flex gap-2 text-[11px] text-emerald-400 flex-wrap justify-center items-center pb-4">
-          <span className="opacity-60 self-center">v2333-M</span>
+          <span className="opacity-60 self-center">v2334-M</span>
         </div>
       </div>
     );

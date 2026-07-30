@@ -357,6 +357,9 @@ const COUT_ACHAT_NET = 15;   // achat « net » : la carte sans la carte de pén
 const COUT_ACHAT_EXTRA = 20; // 4e jeton d'achat de la manche
 const COUT_JOKER = 30;       // un joker sorti de la pioche (1 fois par manche)
 const PIECES_BIENVENUE = 100; // offert à la création du compte
+const PODIUM_DEFI = [50, 30, 20];      // top 3 du défi du jour, crédité le lendemain
+const SERIE_DEFI_BONUS = 100;          // tous les 7 jours de défis consécutifs
+const PODIUM_HEBDO = [100, 60, 40];    // top 3 du classement de la semaine (victoires)
 const SERIE_RECOMPENSES = [10, 15, 20, 25, 30, 40, 50];
 const PARTIES_PAYEES_MAX = 15;
 const dateDuJour = () => new Date().toISOString().slice(0, 10);
@@ -386,7 +389,7 @@ const nbSucces = (s) => (s && typeof s === "object" ? Object.keys(s).length : 0)
 // Réponse standard des routes compte (avatar et photo de profil inclus)
 const compteJson = (c) => ({ code: c.code, pseudo: c.pseudo, stats: c.stats || {}, succes: c.succes || {},
   avatar: c.avatar || null, photo: c.photo || null, renamedAt: c.renamedAt || null,
-  pieces: c.pieces || 0, serie: (c.serie && c.serie.jours) || 0 });
+  pieces: c.pieces || 0, serie: (c.serie && c.serie.jours) || 0, serieDefi: (c.serieDefi && c.serieDefi.jours) || 0 });
 
 // Changer de pseudo sans perdre sa progression (le compte reste identifié par son code).
 // Limite anti-abus : 1 changement par semaine (le premier est libre — faute de frappe pardonnée).
@@ -928,6 +931,7 @@ app.post("/compte/partie", (req, res) => {
   gains.serie = serie.gain;
   gains.serieJours = serie.jours;
   gains.total = gains.partie + gains.victoire + gains.succes + gains.serie;
+  pointHebdo(c, w); // classement de la semaine (victoires)
   crediterPieces(c, gains.total - gains.serie); // la série est déjà créditée par majSerie
   c.lastSeen = Date.now();
   saveComptes();
@@ -1054,6 +1058,104 @@ app.post("/compte/depenser", (req, res) => {
   res.json({ pieces: c.pieces });
 });
 
+// ---------- Classement hebdomadaire (victoires) ----------
+// Semaine du lundi au dimanche ; clé = date du lundi. Alimenté par /compte/partie.
+const HEBDO_FILE = process.env.HEBDO_FILE || path.join(__dirname, "hebdo-save.json");
+const hebdo = new Map(); // cléLundi → Map(code → { pseudo, v, p })
+let hebdoTimer = null;
+function semaineCle(t) {
+  const d = t ? new Date(t) : new Date();
+  const j = (d.getUTCDay() + 6) % 7; // 0 = lundi
+  const lundi = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - j));
+  return lundi.toISOString().slice(0, 10);
+}
+function saveHebdo() {
+  clearTimeout(hebdoTimer);
+  hebdoTimer = setTimeout(() => {
+    // On garde 3 semaines maximum
+    const cles = [...hebdo.keys()].sort();
+    while (cles.length > 3) hebdo.delete(cles.shift());
+    const out = {};
+    for (const [k, m] of hebdo) out[k] = Object.fromEntries(m);
+    storage.save("hebdo", out, HEBDO_FILE).catch((e) => console.error("Sauvegarde hebdo impossible:", e.message));
+  }, 1000);
+}
+function pointHebdo(c, win) {
+  const cle = semaineCle();
+  let sem = hebdo.get(cle);
+  if (!sem) { sem = new Map(); hebdo.set(cle, sem); }
+  const e = sem.get(c.code) || { pseudo: c.pseudo, v: 0, p: 0 };
+  e.pseudo = c.pseudo;
+  e.p += 1;
+  if (win) e.v += 1;
+  sem.set(c.code, e);
+  saveHebdo();
+}
+function classementHebdo(cle) {
+  const sem = hebdo.get(cle);
+  const entries = sem ? [...sem.entries()].map(([code, e]) => ({ code, ...e })) : [];
+  entries.sort((a, b) => (b.v - a.v) || (a.p - b.p) || a.pseudo.localeCompare(b.pseudo));
+  return entries;
+}
+app.get("/hebdo/classement", (req, res) => {
+  const cle = semaineCle();
+  const entries = classementHebdo(cle);
+  const moiCode = String(req.query.code || "").trim();
+  const rang = moiCode ? entries.findIndex((e) => e.code === moiCode) + 1 : 0;
+  const moi = moiCode ? entries.find((e) => e.code === moiCode) : null;
+  // Fin de semaine : dimanche 23:59:59 UTC (le lundi suivant à minuit)
+  const fin = new Date(cle + "T00:00:00Z").getTime() + 7 * 86400000;
+  res.json({
+    semaine: cle, finDans: Math.max(0, fin - Date.now()),
+    recompenses: PODIUM_HEBDO,
+    top: entries.slice(0, 20).map((e, i) => ({ rang: i + 1, pseudo: e.pseudo, victoires: e.v, parties: e.p })),
+    rang: rang || null, victoires: (moi && moi.v) || 0, parties: (moi && moi.p) || 0,
+  });
+});
+
+// ---------- Récompenses de cycle (podium défi d'hier, podium hebdo) ----------
+// Créditées « paresseusement » : une vérification au démarrage puis toutes les 30 minutes.
+const CYCLES_FILE = process.env.CYCLES_FILE || path.join(__dirname, "cycles-save.json");
+let cyclesFaits = { podiumDefi: [], podiumHebdo: [] };
+function saveCycles() {
+  storage.save("cycles", cyclesFaits, CYCLES_FILE).catch((e) => console.error("Sauvegarde cycles impossible:", e.message));
+}
+function crediterPodium(codes, montants, motif) {
+  codes.forEach((entry, i) => {
+    if (i >= montants.length) return;
+    const c = comptes.get(entry.code);
+    if (!c) return;
+    crediterPieces(c, montants[i]);
+    console.log("🏆 " + motif + " : " + c.pseudo + " (" + (i + 1) + "e) +" + montants[i] + " 💎");
+  });
+  if (codes.length) saveComptes();
+}
+function distribuerRecompensesCycles() {
+  // Podium du défi d'HIER
+  const hier = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  if (!cyclesFaits.podiumDefi.includes(hier)) {
+    const jour = defiScores.get(hier);
+    if (jour && jour.size > 0) {
+      const entries = [...jour.entries()].map(([code, e]) => ({ code, ...e }));
+      entries.sort((a, b) => ((b.won ? 1 : 0) - (a.won ? 1 : 0)) || (a.total - b.total) || (a.at - b.at));
+      crediterPodium(entries.slice(0, 3), PODIUM_DEFI, "Podium défi " + hier);
+    }
+    cyclesFaits.podiumDefi.push(hier);
+    cyclesFaits.podiumDefi = cyclesFaits.podiumDefi.slice(-10);
+    saveCycles();
+  }
+  // Podium de la SEMAINE PASSÉE
+  const semainePassee = semaineCle(new Date(Date.now() - 7 * 86400000));
+  if (semainePassee !== semaineCle() && !cyclesFaits.podiumHebdo.includes(semainePassee)) {
+    const entries = classementHebdo(semainePassee).filter((e) => e.v > 0);
+    if (entries.length > 0) crediterPodium(entries.slice(0, 3), PODIUM_HEBDO, "Podium hebdo " + semainePassee);
+    cyclesFaits.podiumHebdo.push(semainePassee);
+    cyclesFaits.podiumHebdo = cyclesFaits.podiumHebdo.slice(-6);
+    saveCycles();
+  }
+}
+setInterval(() => { try { distribuerRecompensesCycles(); } catch (e) { console.error("Cycles:", e.message); } }, 30 * 60000);
+
 // ---------- Défi du jour : classement mondial ----------
 // Un score par compte et par jour (le PREMIER essai seul compte — même donne pour tous,
 // rejouer pour améliorer serait tricher). Classement : victoires d'abord, puis petit total.
@@ -1139,8 +1241,18 @@ app.post("/defi/score", (req, res) => {
   const serie = majSerie(c);
   gains.serie = serie.gain;
   gains.serieJours = serie.jours;
-  gains.total = gains.defi + gains.victoire + gains.serie;
-  crediterPieces(c, gains.defi + gains.victoire);
+  // Série de DÉFIS distincte : un défi joué chaque jour, +100 💎 tous les 7 jours d'affilée
+  const sd = c.serieDefi && typeof c.serieDefi === "object" ? c.serieDefi : { jours: 0, dernier: null };
+  if (sd.dernier !== date) {
+    const veille = new Date(new Date(date + "T12:00:00Z").getTime() - 86400000).toISOString().slice(0, 10);
+    sd.jours = sd.dernier === veille ? (sd.jours || 0) + 1 : 1;
+    sd.dernier = date;
+    c.serieDefi = sd;
+  }
+  gains.serieDefiJours = sd.jours;
+  if (sd.jours > 0 && sd.jours % 7 === 0) gains.serieDefi7 = SERIE_DEFI_BONUS;
+  gains.total = gains.defi + gains.victoire + gains.serie + (gains.serieDefi7 || 0);
+  crediterPieces(c, gains.defi + gains.victoire + (gains.serieDefi7 || 0));
   saveComptes();
   res.json({ ok: true, pieces: c.pieces || 0, gains });
 });
@@ -1152,10 +1264,20 @@ app.get("/defi/classement", (req, res) => {
   entries.sort((a, b) => ((b.won ? 1 : 0) - (a.won ? 1 : 0)) || (a.total - b.total) || (a.at - b.at));
   const moiCode = String(req.query.code || "").trim();
   const rang = moiCode ? entries.findIndex((e) => e.code === moiCode) + 1 : 0;
+  // Podium d'hier (récompensé le lendemain : PODIUM_DEFI diamants)
+  const hier = new Date(new Date(date + "T12:00:00Z").getTime() - 86400000).toISOString().slice(0, 10);
+  const jourHier = defiScores.get(hier);
+  let podiumHier = [];
+  if (jourHier && jourHier.size > 0) {
+    const eh = [...jourHier.values()];
+    eh.sort((a, b) => ((b.won ? 1 : 0) - (a.won ? 1 : 0)) || (a.total - b.total) || (a.at - b.at));
+    podiumHier = eh.slice(0, 3).map((e, i) => ({ rang: i + 1, pseudo: e.pseudo, total: e.total, won: e.won, gain: PODIUM_DEFI[i] }));
+  }
   res.json({
     date, participants: entries.length,
     top: entries.slice(0, 20).map((e, i) => ({ rang: i + 1, pseudo: e.pseudo, total: e.total, won: e.won })),
     rang: rang || null,
+    podiumHier, recompensesPodium: PODIUM_DEFI,
   });
 });
 
@@ -2837,6 +2959,13 @@ process.on("SIGINT", () => { saveRooms(); Promise.resolve(flushComptes()).finall
     if (dataPrives && typeof dataPrives === "object")
       Object.keys(dataPrives).forEach((id) => defisPrives.set(id, dataPrives[id]));
     if (defisPrives.size) console.log(defisPrives.size + " défi(s) privé(s) chargé(s)");
+    const dataHebdo = await storage.load("hebdo", HEBDO_FILE);
+    if (dataHebdo && typeof dataHebdo === "object") {
+      for (const [k, v] of Object.entries(dataHebdo)) hebdo.set(k, new Map(Object.entries(v)));
+    }
+    const dataCycles = await storage.load("cycles", CYCLES_FILE);
+    if (dataCycles && dataCycles.podiumDefi) cyclesFaits = dataCycles;
+    setTimeout(() => { try { distribuerRecompensesCycles(); } catch (e) { console.error("Cycles:", e.message); } }, 5000);
     const dataErr = await storage.load("erreurs", ERREURS_FILE);
     if (Array.isArray(dataErr)) dataErr.forEach((e) => e && e.cle && erreursClients.push(e));
     const dataSignal = await storage.load("signalements", SIGNALEMENTS_FILE);
