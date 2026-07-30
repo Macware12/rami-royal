@@ -94,8 +94,7 @@
     <div class="carte">
       <div style="font-size:13px; font-weight:bold; color:#fbbf24;">Raccourcis</div>
       <a class="btn sombre" id="lien-mod2" href="#">🚩 Modération</a>
-      <a class="btn sombre" id="lien-stats" href="#">📊 Stats détaillées</a>
-      <a class="btn sombre" href="https://dashboard.render.com" target="_blank">🖥️ Render</a>
+          <a class="btn sombre" href="https://dashboard.render.com" target="_blank">🖥️ Render</a>
       <a class="btn sombre" href="https://console.neon.tech" target="_blank">🗄️ Neon (base)</a>
       <div class="err" id="email-info" style="display:none;">✉️ Envoi d'email non configuré — l'alerte ci-dessus reste ton radar (ou configure BREVO_API_KEY plus tard).</div>
     </div>
@@ -113,7 +112,6 @@ function montre() {
   document.getElementById("tableau").style.display = "";
   document.getElementById("lien-moderation").href = "/moderation.html";
   document.getElementById("lien-mod2").href = "/moderation.html";
-  document.getElementById("lien-stats").href = "/stats.html";
 }
 
 var joueurs = [];

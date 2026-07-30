@@ -71,7 +71,7 @@ app.get("/ping", (req, res) => res.send("ok"));
 
 // ---------- Statistiques temps réel ----------
 const presence = new Map(); // id → { t: dernier signal, m: mode, p: pseudo }
-// Clé pour voir les pseudos sur /stats.html — à définir dans les variables d'environnement Render.
+// Clé d'administration (tableau de bord, modération, stats) — à définir dans les variables Render.
 // Pas de valeur par défaut : un secret en dur dans un dépôt GitHub public n'est pas un secret.
 const STATS_KEY = process.env.STATS_KEY || null;
 // Aperçu d'un salon pour l'écran d'invitation : qui invite, combien de joueurs (rien de sensible)
