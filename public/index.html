@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2346-M">
+<meta name="version" content="v2347-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2346-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2347-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -103,10 +103,6 @@ const STYLE = (
     .table-pad { padding-right: 84px; }
     .accueil-cartes { display: flex; flex-direction: column; align-items: center; gap: 16px; width: 100%; }
     .ecran-accueil { height: 100vh; height: 100dvh; overflow: hidden; }
-    @media (min-width: 760px) {
-      .accueil-cartes { display: grid; grid-template-columns: repeat(2, 380px); gap: 14px 18px; justify-content: center; align-items: stretch; }
-      .accueil-cartes > * { width: 380px; max-width: 380px; }
-    }
     @media (max-width: 759px) {
       .table-pad { padding-right: 12px; }
       .table-grille { gap: 5px; }
@@ -1853,6 +1849,14 @@ function App() {
   const [pouvoirs, setPouvoirs] = useState(() => store.get("ramimp-pouvoirs") !== "0"); // pouvoirs 💎 autorisés
   const [showCfgMp, setShowCfgMp] = useState(!store.get("ramimp-turn")); // réglages repliés pour les habitués
   const [missionsOuvert, setMissionsOuvert] = useState(false); // détail des missions du jour
+  // Grand écran : on montre tout, rangé en deux colonnes (les portails n'ont de sens que sur mobile)
+  const [grandEcran, setGrandEcran] = useState(() => (typeof window !== "undefined" ? window.innerWidth >= 860 && window.innerHeight >= 520 : false));
+  useEffect(() => {
+    const h = () => setGrandEcran(window.innerWidth >= 860 && window.innerHeight >= 520);
+    window.addEventListener("resize", h);
+    window.addEventListener("orientationchange", h);
+    return () => { window.removeEventListener("resize", h); window.removeEventListener("orientationchange", h); };
+  }, []);
   const [msg, setMsg] = useState("");
   const [selected, setSelected] = useState([]);
   const [staged, setStaged] = useState([]);
@@ -2806,7 +2810,7 @@ function App() {
           const local = Boolean(window.RamyLocalNet && window.RamyLocalNet.available());
           // Élément de sous-menu (même allure que les anciennes cartes)
           const item = (props) => (
-            <div key={props.k} onClick={props.go} className="panel rounded-2xl p-4 w-full flex items-center gap-3 text-emerald-100 text-left cursor-pointer"
+            <div key={props.k} onClick={props.go} className="panel rounded-2xl p-4 w-full flex items-center gap-3 text-emerald-100 text-left cursor-pointer transition-transform hover:scale-[1.02]"
               style={{ borderColor: props.bord }}>
               <span className="text-3xl">{props.ico}</span>
               <span className="flex-1">
@@ -2816,37 +2820,96 @@ function App() {
               <span className="text-amber-300 text-xl font-bold">→</span>
             </div>
           );
-          return (<TenirEcran><div className="accueil-cartes">
-            {/* Ce qui est « vivant » reste toujours visible : reprise en cours et missions du jour */}
-            {salonEnCours && compteActif && (
-              <button onClick={reprendreSalonCompte}
-                className="panel rounded-2xl p-4 w-full max-w-md flex items-center gap-3 text-emerald-100 text-left" style={{ borderColor: "#34d39988" }}>
-                <span className="text-3xl">🌐</span>
-                <span className="flex-1">
-                  <span className="block font-bold text-base text-emerald-200">Reprendre ta partie multijoueur</span>
-                  <span className="block text-xs text-emerald-300">
-                    Salon {salonEnCours.salon} · {salonEnCours.joueurs} joueur{salonEnCours.joueurs > 1 ? "s" : ""}{salonEnCours.enPartie ? " · en cours" : " · en attente"}
+          // Les modes de jeu et les défis, décrits une seule fois pour les deux mises en page
+          const modesJeu = [
+            { k: "solo", ico: "🎮", titre: "Jouer en solo", sous: "Contre l'ordinateur, tout de suite", couleur: "#d1fae5", bord: "#14705266", go: () => { window.location.href = "/solo.html"; } },
+            { k: "mp", ico: "🌐", titre: "Multijoueur en ligne", sous: "Avec tes amis, chacun sur son téléphone", couleur: "#fcd34d", bord: "#f59e0b66", go: () => setShowMp(true) },
+            ...(local ? [{ k: "loc", ico: "📡", titre: "Multijoueur local", sous: "Sans internet — téléphones proches ✈️", couleur: "#7dd3fc", bord: "#38bdf866", go: openLocal }] : []),
+            { k: "tuto", ico: "🎓", titre: "Apprendre à jouer", sous: "Partie guidée avec Maki 🐒 — 5 minutes", couleur: "#a5f3fc", bord: "#67e8f966", go: () => { window.location.href = "/solo.html?tuto=1"; } },
+          ];
+          const lesDefis = [
+            defiFait
+              ? { k: "defi", ico: "🏆", titre: "Défi du jour · classement", sous: "✓ Fait — " + defiFait.total + " pts" + (defiFait.won ? " 🏆" : "") + " · voir le monde entier", couleur: "#e9d5ff", bord: "#c084fc66", go: ouvrirClassement }
+              : { k: "defi", ico: "🗓️", titre: "Défi du jour", sous: "La même donne pour tous, chaque jour", couleur: "#e9d5ff", bord: "#c084fc66", go: () => { window.location.href = "/solo.html?defi=1"; } },
+            { k: "amis", ico: "⚔️", titre: "Défier tes amis", sous: "La même donne que toi — que le meilleur gagne", couleur: "#fecaca", bord: "#f8717166", go: () => { setDefiAmi("menu"); setDefiAmiData(null); setDefiAmiCode(""); } },
+          ];
+          const ouvrirHebdo = () => {
+            setHebdo("chargement");
+            const accH = readJSONls("rami-account");
+            fetch(API_BASE + "/hebdo/classement" + (accH.code ? "?code=" + accH.code : ""))
+              .then((r) => r.json()).then(setHebdo)
+              .catch(() => setHebdo({ erreur: "Serveur injoignable — réessaie." }));
+          };
+          const reprises = (
+            <React.Fragment>
+              {salonEnCours && compteActif && (
+                <button onClick={reprendreSalonCompte}
+                  className="panel rounded-2xl p-4 w-full flex items-center gap-3 text-emerald-100 text-left" style={{ borderColor: "#34d39988" }}>
+                  <span className="text-3xl">🌐</span>
+                  <span className="flex-1">
+                    <span className="block font-bold text-base text-emerald-200">Reprendre ta partie multijoueur</span>
+                    <span className="block text-xs text-emerald-300">
+                      Salon {salonEnCours.salon} · {salonEnCours.joueurs} joueur{salonEnCours.joueurs > 1 ? "s" : ""}{salonEnCours.enPartie ? " · en cours" : " · en attente"}
+                    </span>
                   </span>
-                </span>
-                <span className="text-amber-300 text-xl font-bold">→</span>
-              </button>
-            )}
-            {soloSave && (
-              <a href="/solo.html?reprendre=1" className="panel rounded-2xl p-4 w-full max-w-md flex items-center gap-3 text-emerald-100 no-underline" style={{ borderColor: "#34d39988" }}>
-                <span className="text-3xl">🎮</span>
-                <span className="flex-1">
-                  <span className="block font-bold text-base text-emerald-200">Reprendre ta partie solo</span>
-                  <span className="block text-xs text-emerald-300">▶ Elle t'attend là où tu l'as laissée</span>
-                </span>
-                <span className="text-amber-300 text-xl font-bold">→</span>
-              </a>
-            )}
+                  <span className="text-amber-300 text-xl font-bold">→</span>
+                </button>
+              )}
+              {soloSave && (
+                <a href="/solo.html?reprendre=1" className="panel rounded-2xl p-4 w-full flex items-center gap-3 text-emerald-100 no-underline" style={{ borderColor: "#34d39988" }}>
+                  <span className="text-3xl">🎮</span>
+                  <span className="flex-1">
+                    <span className="block font-bold text-base text-emerald-200">Reprendre ta partie solo</span>
+                    <span className="block text-xs text-emerald-300">▶ Elle t'attend là où tu l'as laissée</span>
+                  </span>
+                  <span className="text-amber-300 text-xl font-bold">→</span>
+                </a>
+              )}
+            </React.Fragment>
+          );
+          const bandeauStatut = (
+            <button onClick={ouvrirHebdo} className="panel rounded-2xl px-4 py-2 w-full flex items-center justify-between gap-2" style={{ borderColor: "#14705266" }}>
+              <span className="text-[11px] text-orange-300 font-bold">🔥 {(compteActif && compteActif.serie) || 0} j</span>
+              <span className="text-[11px] text-emerald-300">🏆 Classement de la semaine →</span>
+              <span className="text-[11px] font-bold text-yellow-300">💎 {fmtSolde(compteActif && compteActif.pieces)}</span>
+            </button>
+          );
 
-            {/* Toujours visible : la progression du jour (détail d'un tap) */}
+          // GRAND ÉCRAN : tout est montré, rangé en deux colonnes (actions | ce qui vit aujourd'hui)
+          if (grandEcran) {
+            return (
+              <TenirEcran>
+                <div className="w-full flex flex-col gap-3" style={{ maxWidth: 900 }}>
+                  {reprises}
+                  <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr", alignItems: "start" }}>
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center gap-2 px-1">
+                        <img src="/icon-192.png" alt="" style={{ width: 22, height: 22, borderRadius: 6 }} />
+                        <span className="text-xs font-bold uppercase tracking-wider text-amber-300">Jouer</span>
+                      </div>
+                      {modesJeu.map((m) => item(m))}
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center gap-2 px-1">
+                        <span className="text-base">🏆</span>
+                        <span className="text-xs font-bold uppercase tracking-wider text-purple-200">Aujourd'hui</span>
+                      </div>
+                      <MissionsDuJour />
+                      {lesDefis.map((d) => item(d))}
+                      {bandeauStatut}
+                    </div>
+                  </div>
+                </div>
+              </TenirEcran>
+            );
+          }
+
+          // MOBILE : portails repliables, pour tenir dans la hauteur sans défilement
+          return (<TenirEcran><div className="accueil-cartes">
+            {reprises}
             <MissionsDuJour compact onClick={() => setMissionsOuvert((v) => !v)} />
             {missionsOuvert && <MissionsDuJour />}
 
-            {/* Portail 1 : jouer — masqué quand l'autre portail est ouvert */}
             {menu !== "defis" && <button onClick={() => setMenu(menu === "jouer" ? null : "jouer")}
               className={`rounded-2xl px-4 py-4 w-full max-w-md flex items-center gap-3 text-left ${menu === "jouer" ? "btn-gold" : "panel text-emerald-100"}`}
               style={menu === "jouer" ? {} : { borderColor: "#f59e0b88" }}>
@@ -2859,50 +2922,28 @@ function App() {
             </button>}
             {menu === "jouer" && (
               <div className="flex flex-col gap-2 w-full max-w-md pl-2" style={{ borderLeft: "2px solid #f59e0b44" }}>
-                {item({ k: "solo", ico: "🎮", titre: "Jouer en solo", sous: "Contre l'ordinateur, tout de suite", couleur: "#d1fae5", bord: "#14705266", go: () => { window.location.href = "/solo.html"; } })}
-                {item({ k: "mp", ico: "🌐", titre: "Multijoueur en ligne", sous: "Avec tes amis, chacun sur son téléphone", couleur: "#fcd34d", bord: "#f59e0b66", go: () => setShowMp(true) })}
-                {local && item({ k: "loc", ico: "📡", titre: "Multijoueur local", sous: "Sans internet — téléphones proches ✈️", couleur: "#7dd3fc", bord: "#38bdf866", go: openLocal })}
-                {item({ k: "tuto", ico: "🎓", titre: "Apprendre à jouer", sous: "Partie guidée avec Maki 🐒 — 5 minutes", couleur: "#a5f3fc", bord: "#67e8f966", go: () => { window.location.href = "/solo.html?tuto=1"; } })}
+                {modesJeu.map((m) => item(m))}
               </div>
             )}
 
-            {/* Portail 2 : défis et classements — masqué quand l'autre portail est ouvert */}
             {menu !== "jouer" && <button onClick={() => setMenu(menu === "defis" ? null : "defis")}
               className={`rounded-2xl px-4 py-4 w-full max-w-md flex items-center gap-3 text-left relative ${menu === "defis" ? "btn-gold" : "panel text-emerald-100"}`}
               style={menu === "defis" ? {} : { borderColor: "#c084fc88" }}>
               <span className="text-3xl">🏆</span>
               <span className="flex-1">
                 <span className={`block font-bold text-lg ${menu === "defis" ? "" : "text-purple-200"}`}>Défis</span>
-                <span className={`block text-xs ${menu === "defis" ? "opacity-80" : "text-emerald-300"}`}>{defiFait ? "Défi du jour fait ✓ · classements" : "Défi du jour à faire · amis · classements"}</span>
+                <span className={`block text-xs ${menu === "defis" ? "opacity-80" : "text-emerald-300"}`}>{defiFait ? "Défi du jour fait ✓ · entre amis" : "Défi du jour à faire · entre amis"}</span>
               </span>
               <span className="text-xl font-bold">{menu === "defis" ? "✕" : "→"}</span>
               {!defiFait && menu !== "defis" && <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-amber-400 border border-amber-600" title="Défi du jour pas encore joué" />}
             </button>}
             {menu === "defis" && (
               <div className="flex flex-col gap-2 w-full max-w-md pl-2" style={{ borderLeft: "2px solid #c084fc44" }}>
-                {defiFait
-                  ? item({ k: "defi", ico: "🏆", titre: "Défi du jour · classement", sous: "✓ Fait — " + defiFait.total + " pts" + (defiFait.won ? " 🏆" : "") + " · voir le monde entier", couleur: "#e9d5ff", bord: "#c084fc66", go: ouvrirClassement })
-                  : item({ k: "defi", ico: "🗓️", titre: "Défi du jour", sous: "La même donne pour tous, chaque jour", couleur: "#e9d5ff", bord: "#c084fc66", go: () => { window.location.href = "/solo.html?defi=1"; } })}
-                {item({ k: "amis", ico: "⚔️", titre: "Défier tes amis", sous: "La même donne que toi — que le meilleur gagne", couleur: "#fecaca", bord: "#f8717166", go: () => { setDefiAmi("menu"); setDefiAmiData(null); setDefiAmiCode(""); } })}
+                {lesDefis.map((d) => item(d))}
               </div>
             )}
 
-            {/* Bandeau de statut : ce que tu as à perdre, et l'accès au classement */}
-            {!menu && (
-              <button onClick={() => {
-                  setHebdo("chargement");
-                  const accH = readJSONls("rami-account");
-                  fetch(API_BASE + "/hebdo/classement" + (accH.code ? "?code=" + accH.code : ""))
-                    .then((r) => r.json()).then(setHebdo)
-                    .catch(() => setHebdo({ erreur: "Serveur injoignable — réessaie." }));
-                }}
-                className="panel rounded-2xl px-4 py-2 w-full max-w-md flex items-center justify-between gap-2"
-                style={{ borderColor: "#14705266" }}>
-                <span className="text-[11px] text-orange-300 font-bold">🔥 {(compteActif && compteActif.serie) || 0} j</span>
-                <span className="text-[11px] text-emerald-300">🏆 Classement de la semaine →</span>
-                <span className="text-[11px] font-bold text-yellow-300">💎 {fmtSolde(compteActif && compteActif.pieces)}</span>
-              </button>
-            )}
+            {!menu && <div className="w-full max-w-md">{bandeauStatut}</div>}
           </div></TenirEcran>);
         })()}
 
@@ -2965,7 +3006,7 @@ function App() {
               <a href="/contact.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">💬 Nous contacter</a>
               <a href="/signaler.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🚩 Signaler un joueur</a>
               <a href="/confidentialite.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🔒 Confidentialité</a>
-              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2346-M</div>
+              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2347-M</div>
             </div>
           </div>
         )}
@@ -3599,7 +3640,7 @@ function App() {
           </div>
         )}
         <div className="flex gap-2 text-[11px] text-emerald-400 flex-wrap justify-center items-center pb-4">
-          <span className="opacity-60 self-center">v2346-M</span>
+          <span className="opacity-60 self-center">v2347-M</span>
         </div>
       </div>
     );
