@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2342-M">
+<meta name="version" content="v2343-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2342-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2343-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -1350,6 +1350,11 @@ function BoutiqueCosmetique() {
               className={`flex-1 py-1.5 rounded-xl text-[11px] font-bold ${onglet === k ? "btn-gold" : "btn-dark"}`}>{lbl}</button>
           ))}
         </div>
+        <p className="text-[11px] text-center text-emerald-300 leading-snug">
+          {onglet === "dos" ? "🎴 Le dos de tes cartes — 👀 les autres joueurs le voient en multijoueur !"
+            : onglet === "tapis" ? "🟩 Le fond de ton écran de jeu — pour toi seul, sur tous tes appareils."
+            : "🏷️ Une étiquette affichée sous ton pseudo — 👀 visible par tous en multijoueur."}
+        </p>
         {msg && <div className="text-[11px] text-center text-amber-200">{msg}</div>}
         {(cat[onglet] || []).map((it) => {
           const possede = possedes.includes(it.id);
@@ -1374,7 +1379,7 @@ function BoutiqueCosmetique() {
             </div>
           );
         })}
-        <p className="text-[10px] text-emerald-400 text-center mt-1">Purement décoratif : aucun avantage en jeu.</p>
+        <p className="text-[10px] text-emerald-400 text-center mt-1">Purement décoratif : aucun avantage en jeu — juste le plaisir de se distinguer.</p>
       </div>
     </div>
   );

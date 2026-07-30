@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2342-M">
+<meta name="version" content="v2343-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2342-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2343-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -707,13 +707,14 @@ const Card = React.memo(function Card({ card, selected, isNew, onClick, small, t
   );
 });
 
-function CardFan({ count }) {
+function CardFan({ count, dos }) {
   const n = Math.min(count, 7);
+  const d = dos || dosActuel();
   return (
     <div className="relative flex items-end" style={{ height: 26 }}>
       {Array.from({ length: n }).map((_, i) => (
-        <div key={i} className="rounded-[3px] border border-red-950"
-          style={{ width: 13, height: 19, marginLeft: i === 0 ? 0 : -8, transform: `rotate(${(i - (n - 1) / 2) * 7}deg)`, background: dosActuel().motif, boxShadow: "0 1px 2px rgba(0,0,0,.4)" }} />
+        <div key={i} className="rounded-[3px]"
+          style={{ width: 13, height: 19, marginLeft: i === 0 ? 0 : -8, transform: `rotate(${(i - (n - 1) / 2) * 7}deg)`, background: d.motif, border: "1px solid " + (d.bord || "#450a0a"), boxShadow: "0 1px 2px rgba(0,0,0,.4)" }} />
       ))}
       <span className="ml-1 text-[10px] font-bold text-emerald-200">{count}</span>
     </div>
@@ -739,7 +740,7 @@ const OpponentCard = React.memo(function OpponentCard({ p, active, seconds, emot
           style={{ width: 26, height: 26, background: color + "33", border: `2px solid ${active ? "#fbbf24" : color}`, boxShadow: "0 2px 5px rgba(0,0,0,.4)" }}>
           {emoji}
         </span>
-        <CardFan count={p.handCount} />
+        <CardFan count={p.handCount} dos={p.dos} />
       </div>
       <span className="text-[10px] font-bold leading-tight">{p.name}{!p.connected && !p.isBot ? " 📴" : p.absent && !p.isBot ? " 💤" : ""}</span>
       {p.titre ? <span className="text-[8px] text-amber-300 leading-tight truncate max-w-[80px]">{p.titre}</span> : null}
@@ -1078,6 +1079,11 @@ function BoutiqueCosmetique() {
               className={`flex-1 py-1.5 rounded-xl text-[11px] font-bold ${onglet === k ? "btn-gold" : "btn-dark"}`}>{lbl}</button>
           ))}
         </div>
+        <p className="text-[11px] text-center text-emerald-300 leading-snug">
+          {onglet === "dos" ? "🎴 Le dos de tes cartes — 👀 les autres joueurs le voient en multijoueur !"
+            : onglet === "tapis" ? "🟩 Le fond de ton écran de jeu — pour toi seul, sur tous tes appareils."
+            : "🏷️ Une étiquette affichée sous ton pseudo — 👀 visible par tous en multijoueur."}
+        </p>
         {msg && <div className="text-[11px] text-center text-amber-200">{msg}</div>}
         {(cat[onglet] || []).map((it) => {
           const possede = possedes.includes(it.id);
@@ -1102,7 +1108,7 @@ function BoutiqueCosmetique() {
             </div>
           );
         })}
-        <p className="text-[10px] text-emerald-400 text-center mt-1">Purement décoratif : aucun avantage en jeu.</p>
+        <p className="text-[10px] text-emerald-400 text-center mt-1">Purement décoratif : aucun avantage en jeu — juste le plaisir de se distinguer.</p>
       </div>
     </div>
   );
@@ -2905,7 +2911,7 @@ function App() {
               <a href="/contact.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">💬 Nous contacter</a>
               <a href="/signaler.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🚩 Signaler un joueur</a>
               <a href="/confidentialite.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🔒 Confidentialité</a>
-              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2342-M</div>
+              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2343-M</div>
             </div>
           </div>
         )}
@@ -3539,7 +3545,7 @@ function App() {
           </div>
         )}
         <div className="flex gap-2 text-[11px] text-emerald-400 flex-wrap justify-center items-center pb-4">
-          <span className="opacity-60 self-center">v2342-M</span>
+          <span className="opacity-60 self-center">v2343-M</span>
         </div>
       </div>
     );

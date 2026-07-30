@@ -1065,7 +1065,7 @@ app.post("/cosmetiques/acheter", (req, res) => {
   c.equipes = { ...(c.equipes || {}), [cat]: item.id }; // équipé aussitôt acheté
   c.lastSeen = Date.now();
   saveComptes();
-  res.json({ ok: true, pieces: c.pieces, ...cosmetiquesDe(c), gains: { depense: -item.prix, motif: item.nom } });
+  res.json({ ok: true, pieces: c.pieces, ...cosmetiquesDe(c), gains: { montant: -item.prix, motif: item.nom } });
 });
 app.post("/cosmetiques/equiper", (req, res) => {
   if (tropDEssais(req, res)) return;
@@ -1680,7 +1680,7 @@ function log(room, text) {
 function publicPlayer(p, idx) {
   return {
     idx, name: p.name, isBot: p.isBot, connected: p.connected, absent: p.absent,
-    handCount: p.hand.length, posed: p.posed, buysLeft: p.buysLeft, titre: p.titre || "",
+    handCount: p.hand.length, posed: p.posed, buysLeft: p.buysLeft, titre: p.titre || "", dos: p.dos || null,
     extraBuyUsed: Boolean(p.extraBuyUsed), jokerNetUsed: Boolean(p.jokerNetUsed),
     lastTaken: p.lastTaken, total: p.total, wins: p.wins || 0, avatar: p.avatar,
   };
@@ -2534,8 +2534,11 @@ io.on("connection", (socket) => {
     const player = addPlayer(room, name, false, avatar);
     if (cptC) {
       player.compte = cptC.code; cptC.salonEnCours = room.code; saveComptes();
-      const t = trouverCosmetique(cosmetiquesDe(cptC).equipes.titres);
+      const eq = cosmetiquesDe(cptC).equipes;
+      const t = trouverCosmetique(eq.titres);
       player.titre = (t && t.item.texte) || "";
+      const d = trouverCosmetique(eq.dos);
+      player.dos = d ? { motif: d.item.motif, bord: d.item.bord } : null;
     } // le code compte n'est jamais diffusé (publicPlayer ne l'expose pas)
     player.socketId = socket.id;
     player.connected = true;
@@ -2610,8 +2613,11 @@ io.on("connection", (socket) => {
       bot.timeouts = 0;
       if (cptJ) {
         bot.compte = cptJ.code; cptJ.salonEnCours = room.code; saveComptes();
-        const tb = trouverCosmetique(cosmetiquesDe(cptJ).equipes.titres);
+        const eqB = cosmetiquesDe(cptJ).equipes;
+        const tb = trouverCosmetique(eqB.titres);
         bot.titre = (tb && tb.item.texte) || "";
+        const db = trouverCosmetique(eqB.dos);
+        bot.dos = db ? { motif: db.item.motif, bord: db.item.bord } : null;
       }
       myRoom = room; myToken = bot.token;
       socket.join(room.code);
@@ -2633,8 +2639,11 @@ io.on("connection", (socket) => {
     const player = addPlayer(room, name, false, avatar);
     if (cptJ) {
       player.compte = cptJ.code; cptJ.salonEnCours = room.code; saveComptes();
-      const tj = trouverCosmetique(cosmetiquesDe(cptJ).equipes.titres);
+      const eqJ = cosmetiquesDe(cptJ).equipes;
+      const tj = trouverCosmetique(eqJ.titres);
       player.titre = (tj && tj.item.texte) || "";
+      const dj = trouverCosmetique(eqJ.dos);
+      player.dos = dj ? { motif: dj.item.motif, bord: dj.item.bord } : null;
     }
     player.socketId = socket.id;
     player.connected = true;
