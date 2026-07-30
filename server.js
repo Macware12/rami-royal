@@ -1245,6 +1245,14 @@ const engineNavigateur = "// Version navigateur (portée isolée) — générée
 app.get("/lib/engine.js", (req, res) => { res.type("application/javascript").send(engineNavigateur); });
 app.get("/lib/gamehost.js", (req, res) => res.sendFile(path.join(__dirname, "gamehost.js")));
 
+// Version du client embarquée dans les pages : les clients la comparent à la leur
+// pour proposer un rechargement quand un déploiement est passé entre-temps.
+const VERSION_CLIENT = (() => {
+  try { return (require("fs").readFileSync(path.join(__dirname, "public", "index.html"), "utf8").match(/v\d+-M/) || [""])[0]; }
+  catch (_) { return ""; }
+})();
+app.get("/version", (req, res) => res.json({ version: VERSION_CLIENT }));
+
 app.use(express.static(path.join(__dirname, "public"), {
   setHeaders: (res, filePath) => {
     if (filePath.endsWith(".html")) res.setHeader("Cache-Control", "no-cache, must-revalidate");
@@ -2243,7 +2251,7 @@ io.on("connection", (socket) => {
     broadcast(room);
   });
 
-  socket.on("joinRoom", ({ code, name, avatar, compte, botIdx } = {}, cb) => {
+  socket.on("joinRoom", ({ code, name, avatar, compte, botIdx, supporteChoix } = {}, cb) => {
     if (typeof cb !== "function") cb = () => {};
     const room = rooms.get(String(code || "").toUpperCase());
     if (!room) return cb({ ok: false, error: "Salon introuvable. Vérifie le code." });
@@ -2281,12 +2289,14 @@ io.on("connection", (socket) => {
         const vise = room.players[parseInt(botIdx, 10)];
         if (!vise || !vise.isBot) return cb({ ok: false, error: "Ce bot n'est plus remplaçable — quelqu'un t'a devancé ?" });
         bot = vise;
-      } else if (bots.length === 1) {
-        bot = bots[0]; // un seul bot : pas besoin de choisir
+      } else if (bots.length === 1 || !supporteChoix) {
+        bot = bots[0]; // un seul bot, ou client ancien (pas de fenêtre de choix) : premier bot
       } else {
-        // Plusieurs bots : le client affiche le choix et rappellera avec botIdx
+        // Plusieurs bots : le client affiche le choix et rappellera avec botIdx.
+        // Le champ error sert de filet aux clients qui ignoreraient choixBots.
         return cb({
-          ok: false, choixBots: bots.map((b) => ({
+          ok: false, error: "Plusieurs bots sont remplaçables — choisis lequel dans la fenêtre.",
+          choixBots: bots.map((b) => ({
             idx: room.players.indexOf(b), name: b.name, avatar: b.avatar,
             total: b.total, handCount: b.hand.length, posed: b.posed,
           })),

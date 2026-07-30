@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2325-M">
+<meta name="version" content="v2327-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2325-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2327-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -1368,6 +1368,35 @@ function MissionsDuJour() {
         );
       })}
       <div className="text-[10px] text-emerald-400 mt-1">{connecte ? "Les 3 terminées : +" + cat.bonus + " 💎 de bonus !" : "🔒 Connecte-toi pour encaisser les récompenses (la progression compte déjà)."}</div>
+    </div>
+  );
+}
+
+// Veille de version : si le serveur a été déployé depuis le chargement de la page,
+// un bandeau propose de recharger (jamais automatique : on ne coupe pas une partie).
+function VeilleVersion() {
+  const [dispo, setDispo] = React.useState(false);
+  React.useEffect(() => {
+    if (window.Capacitor) return; // app native : fichiers embarqués, un reload ne changerait rien
+    const meta = document.querySelector('meta[name="version"]');
+    const mienne = meta && meta.content;
+    if (!mienne) return;
+    let arret = false;
+    const verifier = () => fetch(API_BASE + "/version").then((r) => r.json())
+      .then((d) => { if (!arret && d.version && d.version !== mienne) setDispo(true); })
+      .catch(() => {});
+    const t = setInterval(verifier, 5 * 60000);
+    const onVis = () => { if (document.visibilityState === "visible") verifier(); };
+    document.addEventListener("visibilitychange", onVis);
+    const t0 = setTimeout(verifier, 3000);
+    return () => { arret = true; clearInterval(t); clearTimeout(t0); document.removeEventListener("visibilitychange", onVis); };
+  }, []);
+  if (!dispo) return null;
+  return (
+    <div className="fixed left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-2.5 rounded-2xl"
+      style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)", background: "linear-gradient(180deg, rgba(6,58,42,.97), rgba(4,40,28,.97))", border: "1px solid #f59e0b88", boxShadow: "0 6px 18px rgba(0,0,0,.5)" }}>
+      <span className="text-xs font-bold text-amber-200">🔄 Nouvelle version disponible</span>
+      <button onClick={() => window.location.reload()} className="btn-gold px-3 py-1.5 rounded-xl text-xs font-bold">Recharger</button>
     </div>
   );
 }
@@ -4453,7 +4482,7 @@ function tapCard(id) {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<React.Fragment><RamiRoyal /><GainsToast /><AnnonceDiamants /><TarifsDiamants /><ObtenirDiamants /></React.Fragment>);
+ReactDOM.createRoot(document.getElementById('root')).render(<React.Fragment><RamiRoyal /><GainsToast /><AnnonceDiamants /><TarifsDiamants /><ObtenirDiamants /><VeilleVersion /></React.Fragment>);
 </script>
 </body>
 </html>
