@@ -2299,6 +2299,7 @@ io.on("connection", (socket) => {
         room.turnTimer = setTimeout(() => safeRun(() => onTurnTimeout(room)), room.options.turnSeconds * 1000);
       }
       log(room, "🎉 " + bot.name + " rejoint la partie et remplace " + ancienNom);
+      io.to(room.code).emit("annonce", { emoji: "🎉", titre: bot.name + " rejoint la partie !", sous: "Un joueur en chair et en os remplace " + ancienNom });
       cb({ ok: true, code: room.code, token: bot.token });
       broadcast(room);
       return;

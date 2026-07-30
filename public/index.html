@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2323-M">
+<meta name="version" content="v2324-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2323-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2324-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -894,6 +894,33 @@ function ObtenirDiamants() {
   );
 }
 
+// Grand bandeau d'événement de table (ex. « X rejoint la partie ! »), poussé par le serveur
+function AnnonceTable() {
+  const [a, setA] = React.useState(null);
+  React.useEffect(() => {
+    const h = (e) => setA(e.detail);
+    window.addEventListener("rami-annonce", h);
+    return () => window.removeEventListener("rami-annonce", h);
+  }, []);
+  React.useEffect(() => {
+    if (!a) return;
+    const t = setTimeout(() => setA(null), 5000);
+    return () => clearTimeout(t);
+  }, [a]);
+  if (!a) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-6 pointer-events-none">
+      <div className="panel rounded-2xl px-6 py-5 text-center pointer-events-auto cursor-pointer"
+        style={{ borderColor: "#fbbf24", boxShadow: "0 0 40px rgba(251,191,36,.35), 0 10px 30px rgba(0,0,0,.5)", animation: "floaty 1.2s ease-in-out infinite" }}
+        onClick={() => setA(null)}>
+        <div className="text-5xl mb-1">{a.emoji || "🎉"}</div>
+        <div className="text-lg font-bold text-amber-300" style={{ fontFamily: "Georgia, serif" }}>{a.titre}</div>
+        {a.sous && <div className="text-xs text-emerald-300 mt-1">{a.sous}</div>}
+      </div>
+    </div>
+  );
+}
+
 // Récap des tarifs 💎, ouvert d'un tap sur le solde (événement "rami-tarifs")
 function TarifsDiamants() {
   const [ouvert, setOuvert] = React.useState(false);
@@ -1741,6 +1768,10 @@ function App() {
     socket.on("state", (st) => { if (st && st.serverNow) CLOCK_OFFSET = st.serverNow - Date.now(); setSrv(st); setConnErr(""); setConnLost(false); });
     socket.on("disconnect", () => setConnLost(true));
     socket.on("info", (m) => setMsg(m));
+    socket.on("annonce", (a) => { // grand bandeau pour toute la table (ex. un joueur remplace un bot)
+      if (!a || !a.titre) return;
+      try { window.dispatchEvent(new CustomEvent("rami-annonce", { detail: a })); } catch (_) {}
+    });
     socket.on("pieces", (d) => { // solde poussé par le serveur après un débit/remboursement
       if (!d || typeof d.pieces !== "number") return;
       try {
@@ -2611,7 +2642,7 @@ function App() {
               <a href="/contact.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">💬 Nous contacter</a>
               <a href="/signaler.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🚩 Signaler un joueur</a>
               <a href="/confidentialite.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🔒 Confidentialité</a>
-              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2323-M</div>
+              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2324-M</div>
             </div>
           </div>
         )}
@@ -3170,7 +3201,7 @@ function App() {
           </div>
         )}
         <div className="flex gap-2 text-[11px] text-emerald-400 flex-wrap justify-center items-center pb-4">
-          <span className="opacity-60 self-center">v2323-M</span>
+          <span className="opacity-60 self-center">v2324-M</span>
         </div>
       </div>
     );
@@ -3888,7 +3919,7 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<React.Fragment><App /><GainsToast /><AnnonceDiamants /><TarifsDiamants /><ObtenirDiamants /></React.Fragment>);
+ReactDOM.createRoot(document.getElementById('root')).render(<React.Fragment><App /><GainsToast /><AnnonceDiamants /><TarifsDiamants /><ObtenirDiamants /><AnnonceTable /></React.Fragment>);
 </script>
 </body>
 </html>
