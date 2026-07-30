@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2318-M">
+<meta name="version" content="v2319-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2318-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2319-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -1588,7 +1588,6 @@ function App() {
   const [connErr, setConnErr] = useState("");
   const [connLost, setConnLost] = useState(false);
   const [pendingDiscard, setPendingDiscard] = useState(null);
-  const [tableOverflow, setTableOverflow] = useState(false);
   const tableScrollRef = useRef(null);
   const [anims, setAnims] = useState([]);
   const stockRef = useRef(null);
@@ -1899,13 +1898,6 @@ function App() {
     const iv = setInterval(() => setTick((x) => x + 1), 300);
     return () => clearInterval(iv);
   }, []);
-
-  // La table déborde-t-elle ? (pour afficher l'indice « tout voir »)
-  useEffect(() => {
-    const el = tableScrollRef.current;
-    if (!el) { setTableOverflow(false); return; }
-    setTableOverflow(el.scrollHeight > el.clientHeight + 4);
-  }, [srv, tick]);
 
   // Ton tour : signal
   useEffect(() => {
@@ -2617,7 +2609,7 @@ function App() {
               <a href="/contact.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">💬 Nous contacter</a>
               <a href="/signaler.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🚩 Signaler un joueur</a>
               <a href="/confidentialite.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🔒 Confidentialité</a>
-              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2318-M</div>
+              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2319-M</div>
             </div>
           </div>
         )}
@@ -3176,7 +3168,7 @@ function App() {
           </div>
         )}
         <div className="flex gap-2 text-[11px] text-emerald-400 flex-wrap justify-center items-center pb-4">
-          <span className="opacity-60 self-center">v2318-M</span>
+          <span className="opacity-60 self-center">v2319-M</span>
         </div>
       </div>
     );
@@ -3462,11 +3454,7 @@ function App() {
         </div>
         {g.melds.length > 0 && (
           <button onClick={() => setShowTable(true)}
-            className="absolute top-0.5 right-2 z-10 btn-dark rounded-xl px-2 py-1 text-[11px] font-bold">⛶ Agrandir</button>
-        )}
-        {tableOverflow && (
-          <button onClick={() => setShowTable(true)}
-            className="absolute bottom-1 right-2 z-10 btn-gold rounded-xl px-2 py-1 text-[11px] font-bold shadow-xl">⬇ tout voir</button>
+            className="absolute top-0.5 right-2 z-10 btn-gold rounded-xl px-2 py-1 text-[11px] font-bold shadow-xl">⛶ Tout voir</button>
         )}
       </div>
 
