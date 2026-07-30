@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2303-M">
+<meta name="version" content="v2304-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2303-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2304-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -810,6 +810,31 @@ function LigneMelds({ children }) {
 }
 
 // Vignette du compte : photo ronde si définie, sinon avatar de profil, sinon 👤
+// Annonce unique de l'arrivée des diamants (ne s'affiche qu'une fois par appareil)
+function AnnonceDiamants() {
+  const [visible, setVisible] = React.useState(() => {
+    try { return !store.get("rami-annonce-diamants") && Boolean(store.get("rami-accueil-vu") || store.get("rami-account")); } catch (_) { return false; }
+  });
+  if (!visible) return null;
+  const fermer = () => { store.set("rami-annonce-diamants", "1"); setVisible(false); };
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={fermer}>
+      <div className="panel rounded-2xl p-5 w-full max-w-sm flex flex-col gap-3 text-center" onClick={(e) => e.stopPropagation()}>
+        <div className="text-4xl">💎</div>
+        <h3 className="text-amber-300 font-bold text-lg" style={{ fontFamily: "Georgia, serif" }}>Nouveau : les diamants !</h3>
+        <p className="text-xs text-emerald-200 leading-relaxed">
+          Gagne des 💎 en <b className="text-amber-300">terminant des parties</b>, en <b className="text-amber-300">jouant chaque jour</b> (série 🔥) et via les <b className="text-amber-300">défis et succès</b>.
+        </p>
+        <p className="text-xs text-emerald-200 leading-relaxed">
+          Dépense-les en pouvoirs : <b className="text-amber-300">✨ achat net</b> (sans carte de pénalité), <b className="text-amber-300">🛒 4e achat</b>, <b className="text-amber-300">🤡 joker invoqué</b>, aides supplémentaires.
+        </p>
+        <p className="text-[11px] text-yellow-300 font-bold">🎁 100 💎 offerts à la création d'un compte !</p>
+        <button onClick={fermer} className="btn-gold font-bold py-2.5 rounded-xl text-sm">C'est parti !</button>
+      </div>
+    </div>
+  );
+}
+
 // Toast des diamants gagnées : écoute l'événement "rami-gains" émis après chaque
 // partie ou défi enregistré côté serveur, et affiche le détail quelques secondes.
 function GainsToast() {
@@ -1296,6 +1321,7 @@ function App() {
   const [turnSeconds, setTurnSeconds] = useState(45);
   const [level, setLevel] = useState("moyen");
   const [shortMode, setShortMode] = useState(false); // Mode court : 3 manches
+  const [pouvoirs, setPouvoirs] = useState(true); // pouvoirs 💎 autorisés dans le salon
   const [msg, setMsg] = useState("");
   const [selected, setSelected] = useState([]);
   const [staged, setStaged] = useState([]);
@@ -1347,6 +1373,7 @@ function App() {
   const introTimer = useRef(null);
   const helpCount = useRef(0);
   const aidesRef = useRef({ cle: null, n: 0 }); // aides utilisées dans la partie en cours
+  const jokerArme = useRef(0); // double-tap du joker : le 1er tap arme la confirmation
   function aidesInfo() {
     const cle = ((srv && srv.code) || "?") + ":" + ((g && g.startedAt) || "");
     if (aidesRef.current.cle !== cle) aidesRef.current = { cle, n: 0 };
@@ -1723,7 +1750,7 @@ function App() {
     const n = nomJoueur();
     store.set("ramimp-name", n);
     store.set("ramimp-avatar", avatar);
-    socket.emit("createRoom", { name: n, options: { turnSeconds, level, shortMode }, avatar, compte: (compteActif && compteActif.code) || undefined }, (res) => {
+    socket.emit("createRoom", { name: n, options: { turnSeconds, level, shortMode, pouvoirs }, avatar, compte: (compteActif && compteActif.code) || undefined }, (res) => {
       if (!res.ok) return setMsg(res.error || "Erreur.");
       store.set("rami-played", "1");
       if (res.code !== "LOCAL") store.set("ramimp-save", JSON.stringify({ code: res.code, token: res.token, name: n })); // pas de reprise en partie locale
@@ -2292,7 +2319,7 @@ function App() {
               <a href="/contact.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">💬 Nous contacter</a>
               <a href="/signaler.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🚩 Signaler un joueur</a>
               <a href="/confidentialite.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🔒 Confidentialité</a>
-              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2303-M</div>
+              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2304-M</div>
             </div>
           </div>
         )}
@@ -2783,6 +2810,18 @@ function App() {
                 <span className="text-[10px] opacity-75">~10 min</span>
               </button>
             </div>
+            <div className="flex gap-2 text-xs">
+              <button onClick={() => setPouvoirs(true)}
+                className={`flex-1 py-1.5 rounded-xl font-bold flex flex-col items-center gap-0.5 ${pouvoirs ? "btn-gold" : "btn-dark"}`}>
+                <span>💎 Pouvoirs autorisés</span>
+                <span className="text-[10px] opacity-75">achat net, 4e achat, joker</span>
+              </button>
+              <button onClick={() => setPouvoirs(false)}
+                className={`flex-1 py-1.5 rounded-xl font-bold flex flex-col items-center gap-0.5 ${!pouvoirs ? "btn-gold" : "btn-dark"}`}>
+                <span>⚖️ Sans pouvoirs</span>
+                <span className="text-[10px] opacity-75">tout le monde à égalité</span>
+              </button>
+            </div>
             <span className="text-[10px] text-emerald-400">Le niveau s'applique aux bots ajoutés pour compléter la table.</span>
             <button onClick={createRoom} className="btn-gold font-bold py-3 rounded-xl">Créer un salon 🎴</button>
           </div>
@@ -2839,7 +2878,7 @@ function App() {
           </div>
         )}
         <div className="flex gap-2 text-[11px] text-emerald-400 flex-wrap justify-center items-center pb-4">
-          <span className="opacity-60 self-center">v2303-M</span>
+          <span className="opacity-60 self-center">v2304-M</span>
         </div>
       </div>
     );
@@ -2881,7 +2920,7 @@ function App() {
             });
             else window.prompt("Copie le code du salon :", srv.code);
           }} className="btn-dark font-bold py-2 px-4 rounded-xl text-sm mt-1 ml-2">📋 Copier le code</button>
-          <div className="text-[10px] text-emerald-400 mt-1">{srv.options.turnSeconds}s par tour · bots {srv.options.level}</div>
+          <div className="text-[10px] text-emerald-400 mt-1">{srv.options.turnSeconds}s par tour · bots {srv.options.level} · {srv.options.pouvoirs === false ? "⚖️ sans pouvoirs 💎" : "💎 pouvoirs autorisés"}</div>
         </div>
         )}
         <div className="panel rounded-2xl p-4 w-full max-w-xs">
@@ -2950,7 +2989,7 @@ function App() {
             <span className="text-2xl">👤</span>
             <span className="flex-1">
               <span className="block text-sm font-bold text-amber-300">{ranking[0].idx === youIdx ? "Belle victoire ! Garde-la précieusement" : "Ne perds pas ta progression"}</span>
-              <span className="block text-[11px] text-emerald-300">Avec un compte, cette partie t'aurait rapporté des diamants 💎 — stats et succès gardés partout</span>
+              <span className="block text-[11px] text-emerald-300">Cette partie t'aurait rapporté <b className="text-yellow-300">+{10 + (ranking[0].idx === youIdx ? 25 : 0) + 10} 💎</b> avec un compte (partie, {ranking[0].idx === youIdx ? "victoire, " : ""}série du jour) — et 🎁 100 💎 offerts à l'inscription</span>
             </span>
             <span className="text-amber-300 font-bold">→</span>
           </button>
@@ -3168,10 +3207,10 @@ function App() {
             <div className="flex gap-2 mt-1 justify-center">
               <button onClick={() => act({ type: "buy" })} disabled={me.buysLeft <= 0}
                 className="btn-gold px-3 py-1.5 rounded-xl text-xs font-bold disabled:opacity-40">💰 Acheter (+1 pénalité)</button>
-              <button onClick={() => peutAchatNet() ? act({ type: "buy", net: true }) : setMsg(messageVerrou(COUT_ACHAT_NET))} disabled={me.buysLeft <= 0}
+              {srv.options.pouvoirs !== false && <button onClick={() => peutAchatNet() ? act({ type: "buy", net: true }) : setMsg(messageVerrou(COUT_ACHAT_NET))} disabled={me.buysLeft <= 0}
                 title={"Achat net : la carte sans la carte de pénalité, pour " + COUT_ACHAT_NET + " diamants"}
-                className={(peutAchatNet() ? "btn-green" : "btn-dark opacity-70") + " px-3 py-1.5 rounded-xl text-xs font-bold disabled:opacity-40"}>{peutAchatNet() ? "✨" : "🔒"} Achat net · {COUT_ACHAT_NET} 💎</button>
-              {me.buysLeft <= 0 && !me.extraBuyUsed && (
+                className={(peutAchatNet() ? "btn-green" : "btn-dark opacity-70") + " px-3 py-1.5 rounded-xl text-xs font-bold disabled:opacity-40"}>{peutAchatNet() ? "✨" : "🔒"} Achat net · {COUT_ACHAT_NET} 💎</button>}
+              {srv.options.pouvoirs !== false && me.buysLeft <= 0 && !me.extraBuyUsed && (
                 <button onClick={() => peutPayer(COUT_ACHAT_EXTRA) ? act({ type: "rechargeAchat" }) : setMsg(messageVerrou(COUT_ACHAT_EXTRA))}
                   title="Un 4e jeton d'achat pour cette manche (1 recharge max)"
                   className={(peutPayer(COUT_ACHAT_EXTRA) ? "btn-green" : "btn-dark opacity-70") + " px-3 py-1.5 rounded-xl text-xs font-bold"}>{peutPayer(COUT_ACHAT_EXTRA) ? "🛒" : "🔒"} +1 achat · {COUT_ACHAT_EXTRA} 💎</button>
@@ -3302,9 +3341,14 @@ function App() {
           )}
           {!me.posed && selected.length < 3 && (
             <>
-              {myTurn && g.phase === "play" && me && !me.jokerNetUsed && (
-                <button onClick={() => peutPayer(COUT_JOKER) ? act({ type: "jokerNet" }) : setMsg(messageVerrou(COUT_JOKER))} title="Sort un joker de la pioche — une seule fois par manche"
-                  className={(peutPayer(COUT_JOKER) ? "btn-green" : "btn-dark opacity-70") + " px-4 py-2 rounded-xl text-sm font-bold"}>{peutPayer(COUT_JOKER) ? "🤡" : "🔒"} Joker · {COUT_JOKER} 💎</button>
+              {srv.options.pouvoirs !== false && myTurn && g.phase === "play" && me && !me.jokerNetUsed && (
+                <button onClick={() => {
+                    if (!peutPayer(COUT_JOKER)) { setMsg(messageVerrou(COUT_JOKER)); return; }
+                    if (Date.now() - jokerArme.current > 3500) { jokerArme.current = Date.now(); setMsg("🤡 Invoquer un joker pour " + COUT_JOKER + " 💎 ? Touche à nouveau le bouton pour confirmer."); return; }
+                    jokerArme.current = 0;
+                    act({ type: "jokerNet" });
+                  }} title="Sort un joker de la pioche — une seule fois par manche"
+                  className={(peutPayer(COUT_JOKER) ? (Date.now() - jokerArme.current <= 3500 ? "btn-gold pulse-gold" : "btn-green") : "btn-dark opacity-70") + " px-4 py-2 rounded-xl text-sm font-bold"}>{Date.now() - jokerArme.current <= 3500 ? "✔ Confirmer · " + COUT_JOKER + " 💎" : (peutPayer(COUT_JOKER) ? "🤡" : "🔒") + " Joker · " + COUT_JOKER + " 💎"}</button>
               )}
               <button onClick={helpSort} className="btn-dark px-4 py-2 rounded-xl text-sm font-bold">💡 Aide{(() => {
                 const rest = Math.max(0, AIDES_GRATUITES - aidesInfo().n);
@@ -3547,7 +3591,7 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<React.Fragment><App /><GainsToast /></React.Fragment>);
+ReactDOM.createRoot(document.getElementById('root')).render(<React.Fragment><App /><GainsToast /><AnnonceDiamants /></React.Fragment>);
 </script>
 </body>
 </html>

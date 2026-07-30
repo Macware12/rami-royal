@@ -34,6 +34,7 @@
       turnSeconds: [45, 60, 90].includes(deps.options && deps.options.turnSeconds) ? deps.options.turnSeconds : 45,
       level: ["facile", "moyen", "difficile"].includes(deps.options && deps.options.level) ? deps.options.level : "moyen",
       shortMode: Boolean(deps.options && deps.options.shortMode),
+      pouvoirs: false, // pas de serveur de comptes en local : les pouvoirs 💎 sont coupés
     };
     // Rythmes surchargeables (les tests passent 0/1 ms pour jouer des parties en un éclair)
     const AI_DELAY_MS = deps.aiDelayMs != null ? deps.aiDelayMs : 1400;

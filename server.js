@@ -1201,6 +1201,7 @@ function createRoom(hostName, options) {
       turnSeconds: [45, 60, 90].includes(options?.turnSeconds) ? options.turnSeconds : 45,
       level: ["facile", "moyen", "difficile"].includes(options?.level) ? options.level : "moyen",
       shortMode: options?.shortMode === true, // Mode court : 3 manches au lieu de 8
+      pouvoirs: options?.pouvoirs !== false, // pouvoirs 💎 (achat net, 4e achat, joker) — l'hôte peut les couper
     },
     players: [], // {token, name, isBot, socketId, connected, absent, timeouts, hand, posed, buysLeft, lastTaken, total, justPosed}
     game: null,
@@ -1713,6 +1714,7 @@ function handleBuyRequest(room, idx, net) {
   if (idx === g.lastDiscarderIdx) return "Tu ne peux pas racheter ta propre défausse.";
   if (idx === (g.lastDiscarderIdx + 1) % room.players.length) return "Tu es le joueur suivant : tu prendras la carte gratuitement à ton tour.";
   if (p.buysLeft <= 0) return "Plus d'achats disponibles (3 max par manche).";
+  if (net && !room.options.pouvoirs) return "L'hôte a désactivé les pouvoirs 💎 dans ce salon.";
   if (net) {
     // Achat « net » : payé en diamants, la carte de pénalité est évitée. Les diamants sont
     // débitées tout de suite ; si un autre joueur remporte l'enchère, elles sont rendues.
@@ -1752,6 +1754,7 @@ function pousserSolde(p, delta, motif) {
 function handleRechargeAchat(room, idx) {
   const g = room.game;
   if (!g || room.state !== "playing") return "Pas de partie en cours.";
+  if (!room.options.pouvoirs) return "L'hôte a désactivé les pouvoirs 💎 dans ce salon.";
   const p = room.players[idx];
   if (p.buysLeft > 0) return "Il te reste des jetons d'achat (🛒) — la recharge attendra.";
   if (p.extraBuyUsed) return "Recharge déjà utilisée cette manche (1 max).";
@@ -1772,6 +1775,7 @@ function handleRechargeAchat(room, idx) {
 function handleJokerNet(room, idx) {
   const g = room.game;
   if (!g || room.state !== "playing") return "Pas de partie en cours.";
+  if (!room.options.pouvoirs) return "L'hôte a désactivé les pouvoirs 💎 dans ce salon.";
   if (g.turn !== idx || g.phase !== "play") return "Le joker s'invoque pendant ton tour, après avoir pioché.";
   const p = room.players[idx];
   if (p.jokerNetUsed) return "Joker déjà invoqué cette manche (1 max).";

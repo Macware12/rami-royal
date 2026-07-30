@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2303-M">
+<meta name="version" content="v2304-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2303-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2304-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -1119,6 +1119,31 @@ function LigneMelds({ children }) {
 }
 
 // Vignette du compte : photo ronde si définie, sinon avatar de profil, sinon 👤
+// Annonce unique de l'arrivée des diamants (ne s'affiche qu'une fois par appareil)
+function AnnonceDiamants() {
+  const [visible, setVisible] = React.useState(() => {
+    try { return !store.get("rami-annonce-diamants") && Boolean(store.get("rami-accueil-vu") || store.get("rami-account")); } catch (_) { return false; }
+  });
+  if (!visible) return null;
+  const fermer = () => { store.set("rami-annonce-diamants", "1"); setVisible(false); };
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={fermer}>
+      <div className="panel rounded-2xl p-5 w-full max-w-sm flex flex-col gap-3 text-center" onClick={(e) => e.stopPropagation()}>
+        <div className="text-4xl">💎</div>
+        <h3 className="text-amber-300 font-bold text-lg" style={{ fontFamily: "Georgia, serif" }}>Nouveau : les diamants !</h3>
+        <p className="text-xs text-emerald-200 leading-relaxed">
+          Gagne des 💎 en <b className="text-amber-300">terminant des parties</b>, en <b className="text-amber-300">jouant chaque jour</b> (série 🔥) et via les <b className="text-amber-300">défis et succès</b>.
+        </p>
+        <p className="text-xs text-emerald-200 leading-relaxed">
+          Dépense-les en pouvoirs : <b className="text-amber-300">✨ achat net</b> (sans carte de pénalité), <b className="text-amber-300">🛒 4e achat</b>, <b className="text-amber-300">🤡 joker invoqué</b>, aides supplémentaires.
+        </p>
+        <p className="text-[11px] text-yellow-300 font-bold">🎁 100 💎 offerts à la création d'un compte !</p>
+        <button onClick={fermer} className="btn-gold font-bold py-2.5 rounded-xl text-sm">C'est parti !</button>
+      </div>
+    </div>
+  );
+}
+
 // Toast des diamants gagnées : écoute l'événement "rami-gains" émis après chaque
 // partie ou défi enregistré côté serveur, et affiche le détail quelques secondes.
 function GainsToast() {
@@ -1854,10 +1879,13 @@ function RamiRoyal() {
     });
   }
 
+  const jokerArme = useRef(0); // double-tap : le 1er tap arme la confirmation quelques secondes
   // Un joker sorti de la pioche, payé en diamants (1 fois par manche, pendant ton tour)
   function invoquerJoker() {
     if (g && (g.defi || g.defiAmi)) { setMsg("⚖️ Pouvoirs 💎 désactivés pendant les défis — même donne, mêmes armes pour tous."); return; }
     if (!peutPayer(COUT_JOKER)) { setMsg(messageVerrou(COUT_JOKER)); return; }
+    if (Date.now() - jokerArme.current > 3500) { jokerArme.current = Date.now(); setMsg("🤡 Invoquer un joker pour " + COUT_JOKER + " 💎 ? Touche à nouveau le bouton pour confirmer."); return; }
+    jokerArme.current = 0;
     setG((s) => {
       if (!s || s.roundOver || s.turn !== 0 || s.phase !== "play") return s;
       const p = s.players[0];
@@ -3496,7 +3524,7 @@ function tapCard(id) {
             <span className="text-2xl">👤</span>
             <span className="flex-1">
               <span className="block text-sm font-bold text-amber-300">{ranking[0].name === g.players[0].name ? "Belle victoire ! Garde-la précieusement" : "Ne perds pas ta progression"}</span>
-              <span className="block text-[11px] text-emerald-300">Avec un compte, cette partie t'aurait rapporté des diamants 💎 — stats et succès gardés partout</span>
+              <span className="block text-[11px] text-emerald-300">Cette partie t'aurait rapporté <b className="text-yellow-300">+{10 + (ranking[0].name === g.players[0].name ? 25 : 0) + 10} 💎</b> avec un compte (partie, {ranking[0].name === g.players[0].name ? "victoire, " : ""}série du jour) — et 🎁 100 💎 offerts à l'inscription</span>
             </span>
             <span className="text-amber-300 font-bold">→</span>
           </button>
@@ -3855,7 +3883,7 @@ function tapCard(id) {
               </button>
               {!tuto && !g.defi && !g.defiAmi && myTurn && g.phase === "play" && !me.jokerNetUsed && g.stock.some((c) => c.joker) && (
                 <button onClick={invoquerJoker} title="Sort un joker de la pioche — une seule fois par manche"
-                  className={(peutPayer(COUT_JOKER) ? "btn-green" : "btn-dark opacity-70") + " px-4 py-2 rounded-xl text-sm font-bold"}>{peutPayer(COUT_JOKER) ? "🤡" : "🔒"} Joker · {COUT_JOKER} 💎</button>
+                  className={(peutPayer(COUT_JOKER) ? (Date.now() - jokerArme.current <= 3500 ? "btn-gold pulse-gold" : "btn-green") : "btn-dark opacity-70") + " px-4 py-2 rounded-xl text-sm font-bold"}>{Date.now() - jokerArme.current <= 3500 ? "✔ Confirmer · " + COUT_JOKER + " 💎" : (peutPayer(COUT_JOKER) ? "🤡" : "🔒") + " Joker · " + COUT_JOKER + " 💎"}</button>
               )}
               {!contract.poseTout && (
                 <button onClick={autoStage} className="btn-dark px-4 py-2 rounded-xl text-sm font-bold">
@@ -4113,7 +4141,7 @@ function tapCard(id) {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<React.Fragment><RamiRoyal /><GainsToast /></React.Fragment>);
+ReactDOM.createRoot(document.getElementById('root')).render(<React.Fragment><RamiRoyal /><GainsToast /><AnnonceDiamants /></React.Fragment>);
 </script>
 </body>
 </html>
