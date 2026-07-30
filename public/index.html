@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2327-M">
+<meta name="version" content="v2328-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2327-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2328-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -632,7 +632,7 @@ function planFullHand(hand) {
 }
 
 // ---------- Composants visuels ----------
-function Card({ card, selected, isNew, onClick, small, tiny, faceDown, flat }) {
+const Card = React.memo(function Card({ card, selected, isNew, onClick, small, tiny, faceDown, flat }) {
   if (faceDown) {
     return (
       <div className="rounded-lg border border-red-950"
@@ -664,7 +664,7 @@ function Card({ card, selected, isNew, onClick, small, tiny, faceDown, flat }) {
       <span style={{ fontSize: f2 }}>{card.joker ? (card.magique ? "🪄" : "🤡") : card.suit}</span>
     </button>
   );
-}
+});
 
 function CardFan({ count }) {
   const n = Math.min(count, 7);
@@ -738,7 +738,7 @@ function StackCard({ card, overlap, small }) {
   );
 }
 
-function MeldChip({ meld, ownerName, onClick, highlight, mid, small, onLongPress }) {
+const MeldChip = React.memo(function MeldChip({ meld, ownerName, onClick, highlight, mid, small, onLongPress }) {
   // Maintien (250 ms) → ouvre l'éventail ; le relâchement le ferme (géré par le parent via window).
   // Le clic court garde son rôle (compléter) ; s'il y a eu maintien, on annule le clic.
   const lp = React.useRef({ t: null, fired: false, x: 0, y: 0 });
@@ -770,7 +770,7 @@ function MeldChip({ meld, ownerName, onClick, highlight, mid, small, onLongPress
       </div>
     </button>
   );
-}
+});
 
 function FlyingCard({ from, to, card, faceDown, delay, emphasis, onDone }) {
   const [moved, setMoved] = useState(false);
@@ -1659,6 +1659,8 @@ function App() {
   const pendingInsertRef = useRef(null);
   const newIdsRef = useRef([]);
   const dragInfo = useRef(null);
+  const dragRaf = useRef(null); // dernière position du glissement (throttlé par requestAnimationFrame)
+  const dragRafId = useRef(0);
   const discardDragInfo = useRef(null);
   const lastTargetRef = useRef(-1);
   const handRef = useRef(null);
@@ -2328,7 +2330,13 @@ function App() {
       const doigtDansMain = hrG && e.clientY >= hrG.top && e.clientX >= hrG.left && e.clientX <= hrG.right;
       const overD = aD > 0 && aD >= aireCommune(gR, hrG) && !(multiL && doigtDansMain);
       if (overD) overStickyRef.current = Date.now();
-      setDrag({ id: d.id, card: d.card, x: e.clientX, y: e.clientY, over: overD ? "discard" : null });
+      dragRaf.current = { id: d.id, card: d.card, x: e.clientX, y: e.clientY, over: overD ? "discard" : null };
+      if (!dragRafId.current) {
+        dragRafId.current = requestAnimationFrame(() => {
+          dragRafId.current = 0;
+          if (dragRaf.current) setDrag(dragRaf.current);
+        });
+      }
       const hr = handRef.current && handRef.current.getBoundingClientRect();
       if (!(hr && e.clientY >= hr.top - 10 && e.clientY <= hr.bottom + 10)) return;
       // Anti-oscillation : on attend que le doigt ait bougé un peu depuis le dernier reclassement
@@ -2688,7 +2696,7 @@ function App() {
               <a href="/contact.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">💬 Nous contacter</a>
               <a href="/signaler.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🚩 Signaler un joueur</a>
               <a href="/confidentialite.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🔒 Confidentialité</a>
-              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2327-M</div>
+              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2328-M</div>
             </div>
           </div>
         )}
@@ -3269,7 +3277,7 @@ function App() {
           </div>
         )}
         <div className="flex gap-2 text-[11px] text-emerald-400 flex-wrap justify-center items-center pb-4">
-          <span className="opacity-60 self-center">v2327-M</span>
+          <span className="opacity-60 self-center">v2328-M</span>
         </div>
       </div>
     );
@@ -3490,8 +3498,29 @@ function App() {
           <button onClick={() => setShowHelp(true)} className="btn-dark rounded-xl px-2.5 py-1.5 text-xs font-bold">?</button>
           <button onClick={() => setShowScores(true)} className="btn-dark rounded-xl px-2 py-1.5 text-[10px] font-bold">Scores</button>
           <button onClick={() => setShowLog(true)} className="btn-dark rounded-xl px-2 py-1.5 text-[10px] font-bold">Journal</button>
+          {srv.state === "playing" && !g.roundOver && !srv.voteStop && (
+            <button onClick={() => { if (window.confirm("Proposer à toute la table de stopper la manche ? (la main la plus légère l'emporte)")) socket.emit("voteStop", "proposer"); }}
+              title="Stopper la manche si tout le monde est d'accord"
+              className="btn-dark rounded-xl px-2 py-1.5 text-[10px] font-bold">🏳️</button>
+          )}
         </div>
       </div>
+
+      {/* Vote en cours : stopper la manche ? */}
+      {srv.state === "playing" && srv.voteStop && !g.roundOver && (
+        <div className="fixed left-1/2 -translate-x-1/2 z-40 px-4 py-2.5 rounded-2xl text-center"
+          style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 86px)", background: "linear-gradient(180deg, rgba(6,58,42,.97), rgba(4,40,28,.97))", border: "1px solid #f59e0b88", boxShadow: "0 6px 18px rgba(0,0,0,.5)" }}>
+          <div className="text-xs font-bold text-amber-200 mb-1">🏳️ Stopper la manche ? <span className="text-emerald-300 font-normal">({srv.voteStop.accepted.length}/{srv.players.length} d'accord)</span></div>
+          {srv.voteStop.accepted.includes(youIdx) || srv.voteStop.declined.includes(youIdx) ? (
+            <div className="text-[11px] text-emerald-300">Ton vote est pris — en attente des autres…</div>
+          ) : (
+            <div className="flex gap-2 justify-center">
+              <button onClick={() => socket.emit("voteStop", "oui")} className="btn-gold px-4 py-1.5 rounded-xl text-xs font-bold">✔ Oui, on arrête</button>
+              <button onClick={() => socket.emit("voteStop", "non")} className="btn-dark px-4 py-1.5 rounded-xl text-xs font-bold">✖ Non, on continue</button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Contrat — une seule ligne compacte */}
       <div className="shrink-0 flex justify-center px-3 pt-1.5 relative">
@@ -3712,7 +3741,7 @@ function App() {
               ))}
             </div>
             <div className="flex flex-wrap gap-1.5 justify-center mt-2">
-              {["Bien joué !", "Tu me l'as volée !", "Aïe aïe aïe…", "Trop lent !", "Chance de débutant !", "On se calme 😄"].map((t) => (
+              {["Bien joué !", "Je vais poser au prochain tour 😏", "Tu me l'as volée !", "Aïe aïe aïe…", "Trop lent !", "Chance de débutant !", "On se calme 😄"].map((t) => (
                 <button key={t} onClick={() => sendEmote(t)} className="btn-dark rounded-xl px-2 py-1 text-[11px] font-bold">{t}</button>
               ))}
             </div>
@@ -3958,9 +3987,16 @@ function App() {
             <h2 className="text-amber-300 font-bold text-lg mb-1" style={{ fontFamily: "Georgia, serif" }}>
               {(srv.players[g.roundOver.winnerIdx] || {}).name} gagne la manche !
             </h2>
-{g.roundOver.epuise && (
+{g.roundOver.vote && (
               <p className="text-[11px] text-amber-200 mb-2 leading-relaxed bg-emerald-950/60 border border-amber-500/30 rounded-xl px-3 py-2">
-                ⚖️ <b>Manche insolvable</b> — la pioche a été rebattue 3 fois sans vainqueur : les cartes restantes ne permettaient plus à personne de finir. Dans ce cas, la règle donne la manche au joueur avec la <b>main la plus légère</b> (le moins de points en main), même s'il lui reste des cartes.
+                🏳️ <b>Manche stoppée d'un commun accord</b> — toute la table a voté pour arrêter. La main la plus légère l'emporte, les autres comptent leurs points.
+              </p>
+            )}
+            {(g.roundOver.epuise || g.roundOver.bloque) && (
+              <p className="text-[11px] text-amber-200 mb-2 leading-relaxed bg-emerald-950/60 border border-amber-500/30 rounded-xl px-3 py-2">
+                ⚖️ <b>Manche insolvable</b> — {g.roundOver.bloque
+                  ? "tout le monde a posé et plus aucune carte du jeu ne peut compléter quoi que ce soit : continuer ne servirait à rien."
+                  : "la pioche a été rebattue 3 fois sans vainqueur : les cartes restantes ne permettaient plus à personne de finir."} Dans ce cas, la règle donne la manche au joueur avec la <b>main la plus légère</b> (le moins de points en main), même s'il lui reste des cartes.
               </p>
             )}
             {g.roundOver.bonusType === "anticipe" && <p className="text-xs text-amber-200 mb-2">Pose-tout anticipé : bonus −{10 * srv.players.length} pts</p>}

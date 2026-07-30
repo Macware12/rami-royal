@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2327-M">
+<meta name="version" content="v2328-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2327-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2328-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -1040,7 +1040,7 @@ function pickAiBuyer(state, discarderIdx, nextIdx) {
 
 
 // ---------- Composants visuels ----------
-function Card({ card, selected, isNew, onClick, small, tiny, faceDown, flat }) {
+const Card = React.memo(function Card({ card, selected, isNew, onClick, small, tiny, faceDown, flat }) {
   if (faceDown) {
     return (
       <div className="rounded-lg border border-red-950"
@@ -1079,7 +1079,7 @@ function Card({ card, selected, isNew, onClick, small, tiny, faceDown, flat }) {
       <span style={{ fontSize: f2 }}>{card.joker ? (card.magique ? "🪄" : "🤡") : card.suit}</span>
     </button>
   );
-}
+});
 
 function FlyingCard({ from, to, card, faceDown, delay, emphasis, onDone }) {
   const [moved, setMoved] = useState(false);
@@ -1568,7 +1568,7 @@ function StackCard({ card, overlap, small }) {
   );
 }
 
-function MeldChip({ meld, ownerName, onClick, highlight, mid, small, onLongPress }) {
+const MeldChip = React.memo(function MeldChip({ meld, ownerName, onClick, highlight, mid, small, onLongPress }) {
   // Maintien (250 ms) → ouvre l'éventail ; le relâchement le ferme (géré par le parent via window).
   // Le clic court garde son rôle (compléter) ; s'il y a eu maintien, on annule le clic.
   const lp = React.useRef({ t: null, fired: false, x: 0, y: 0 });
@@ -1600,7 +1600,7 @@ function MeldChip({ meld, ownerName, onClick, highlight, mid, small, onLongPress
       </div>
     </button>
   );
-}
+});
 
 // ---------- Application ----------
 // Solde de diamants du compte (localStorage, mis à jour par signalerGains)
@@ -2214,7 +2214,11 @@ function RamiRoyal() {
     if (state.roundOver) return state;
     // Manche insolvable : pioche recyclée 3 fois sans vainqueur (les cartes restantes ne
     // complètent plus rien). Règle « pioche épuisée » : la main la plus légère gagne la manche.
-    if ((state.recycles || 0) >= 3) {
+    // Manche bloquée : tout le monde a posé et aucune carte du jeu ne complète plus rien
+    const bloquee = state.melds.length > 0 && state.players.every((q) => q.posed) &&
+      ![...state.players.flatMap((q) => q.hand), ...state.stock, ...state.discard]
+        .some((c) => state.melds.some((m) => validGroup(m.type, [...m.cards, c])));
+    if ((state.recycles || 0) >= 3 || bloquee) {
       let winnerIdx = 0, bestPts = Infinity;
       const tousPosesEp = state.players.every((q) => q.posed);
       state.players.forEach((p, i) => {
@@ -2223,9 +2227,10 @@ function RamiRoyal() {
         if (pts < bestPts) { bestPts = pts; winnerIdx = i; }
       });
       let fin = finishRound(state, winnerIdx, null);
-      fin = { ...fin, roundOver: { ...fin.roundOver, epuise: true } };
-      return addLog(fin,
-        "🔚 Pioche épuisée 3 fois : fin de manche — la main la plus légère (" + state.players[winnerIdx].name + ") l'emporte");
+      fin = { ...fin, roundOver: { ...fin.roundOver, epuise: !bloquee, bloque: bloquee } };
+      return addLog(fin, bloquee
+        ? "🔚 Plus aucun coup possible : fin de manche — la main la plus légère (" + state.players[winnerIdx].name + ") l'emporte"
+        : "🔚 Pioche épuisée 3 fois : fin de manche — la main la plus légère (" + state.players[winnerIdx].name + ") l'emporte");
     }
     const n = state.players.length;
     const nextIdx = (discarderIdx + 1) % n;
@@ -2350,6 +2355,8 @@ function tapCard(id) {
 
   // ----- Glisser-déposer des cartes de la main -----
   const dragInfo = useRef(null);
+  const dragRaf = useRef(null); // dernière position du glissement (throttlé par requestAnimationFrame)
+  const dragRafId = useRef(0);
   const lastTargetRef = useRef(-1);
   const [drag, setDrag] = useState(null);
   const [pendingDiscard, setPendingDiscard] = useState(null);
@@ -2447,7 +2454,13 @@ function tapCard(id) {
       const doigtDansMain = hrG && e.clientY >= hrG.top && e.clientX >= hrG.left && e.clientX <= hrG.right;
       const overD = aD > 0 && aD >= aireCommune(gR, hrG) && !(multiL && doigtDansMain);
       if (overD) overStickyRef.current = Date.now();
-      setDrag({ id: d.id, card: d.card, x: e.clientX, y: e.clientY, over: overD ? "discard" : null });
+      dragRaf.current = { id: d.id, card: d.card, x: e.clientX, y: e.clientY, over: overD ? "discard" : null };
+      if (!dragRafId.current) {
+        dragRafId.current = requestAnimationFrame(() => {
+          dragRafId.current = 0;
+          if (dragRaf.current) setDrag(dragRaf.current);
+        });
+      }
       const hr = handRef.current && handRef.current.getBoundingClientRect();
       if (hr && e.clientY >= hr.top - 10 && e.clientY <= hr.bottom + 10) {
         // Anti-oscillation : on attend que le doigt ait bougé un peu depuis le dernier reclassement
@@ -4449,9 +4462,11 @@ function tapCard(id) {
             <h2 className="text-amber-300 font-bold text-lg mb-1" style={{ fontFamily: "Georgia, serif" }}>
               {g.players[g.roundOver.winnerIdx].avatar} {g.players[g.roundOver.winnerIdx].name} gagne la manche !
             </h2>
-{g.roundOver.epuise && (
+{(g.roundOver.epuise || g.roundOver.bloque) && (
               <p className="text-[11px] text-amber-200 mb-2 leading-relaxed bg-emerald-950/60 border border-amber-500/30 rounded-xl px-3 py-2">
-                ⚖️ <b>Manche insolvable</b> — la pioche a été rebattue 3 fois sans vainqueur : les cartes restantes ne permettaient plus à personne de finir. Dans ce cas, la règle donne la manche au joueur avec la <b>main la plus légère</b> (le moins de points en main), même s'il lui reste des cartes.
+                ⚖️ <b>Manche insolvable</b> — {g.roundOver.bloque
+                  ? "tout le monde a posé et plus aucune carte du jeu ne peut compléter quoi que ce soit : continuer ne servirait à rien."
+                  : "la pioche a été rebattue 3 fois sans vainqueur : les cartes restantes ne permettaient plus à personne de finir."} Dans ce cas, la règle donne la manche au joueur avec la <b>main la plus légère</b> (le moins de points en main), même s'il lui reste des cartes.
               </p>
             )}
             {g.roundOver.bonusType === "anticipe" && <p className="text-xs text-amber-200 mb-2">Pose-tout anticipé : bonus −{10 * g.players.length} pts</p>}

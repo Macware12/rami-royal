@@ -1440,6 +1440,7 @@ function broadcast(room) {
       state: room.state,
       options: room.options,
       rematch: room.rematch ? { accepted: room.rematch.accepted, declined: room.rematch.declined } : null,
+      voteStop: room.voteStop ? { accepted: room.voteStop.accepted, declined: room.voteStop.declined } : null,
       youIdx: idx,
       yourHand: p.hand,
       players: room.players.map(publicPlayer),
@@ -1471,9 +1472,20 @@ function broadcast(room) {
 // Manche insolvable : la pioche a été recyclée 3 fois sans vainqueur (les cartes restantes
 // ne complètent plus rien — tous posés, mains bloquées). Règle « pioche épuisée » :
 // la main la plus légère gagne la manche. Sans cela, la manche serait mathématiquement infinie.
-function endStalemate(room) {
+// Manche bloquée : tout le monde a posé et AUCUNE carte du jeu (mains, pioche, défausse)
+// ne peut compléter la moindre combinaison → chaque tour est pioche+défausse pour rien.
+function mancheBloquee(room) {
+  const g = room.game;
+  if (!g || !g.melds.length || !room.players.every((p) => p.posed)) return false;
+  const toutes = [...room.players.flatMap((p) => p.hand), ...g.stock, ...g.discard];
+  return !toutes.some((c) => g.melds.some((m) => E.validGroup(m.type, [...m.cards, c])));
+}
+
+function endStalemate(room, bloque, vote) {
   const g = room.game;
   if (!g || g.roundOver) return;
+  clearTimeout(room.voteStopTimer);
+  room.voteStop = null;
   clearTimers(room);
   let winnerIdx = 0, bestPts = Infinity;
   const tousPosesEp = room.players.every((p2) => p2.posed);
@@ -1489,10 +1501,11 @@ function endStalemate(room) {
     return { name: q.name, pts, bonus: 0, total: q.total };
   });
   g.history.push({ mancheIdx: g.mancheIdx, label: contratCourant(g).label, summary, durMs: g.mancheDebut ? Date.now() - g.mancheDebut : null });
-  g.roundOver = { winnerIdx, bonusType: null, epuise: true, summary };
+  g.roundOver = { winnerIdx, bonusType: null, epuise: !bloque && !vote, bloque: Boolean(bloque), vote: Boolean(vote), summary };
   const manches = g.manches || E.MANCHES;
   room.state = g.mancheIdx + 1 >= manches.length ? "over" : "roundEnd";
-  log(room, "🔚 Pioche épuisée 3 fois : fin de manche — la main la plus légère (" + room.players[winnerIdx].name + ") l'emporte");
+  log(room, (vote ? "🏳️ Manche stoppée d'un commun accord" : bloque ? "🔚 Plus aucun coup possible : fin de manche" : "🔚 Pioche épuisée 3 fois : fin de manche") +
+    " — la main la plus légère (" + room.players[winnerIdx].name + ") l'emporte");
   if (room.state === "over") {
     const champ = room.players.reduce((a, b) => (b.total < a.total ? b : a));
     champ.wins = (champ.wins || 0) + 1;
@@ -1906,6 +1919,27 @@ function handleJokerNet(room, idx) {
   return null;
 }
 
+function resoudreVoteStop(room, delaiDepasse) {
+  const v = room.voteStop;
+  if (!v || !room.game) return;
+  const n = room.players.length;
+  if (v.declined.length > 0 || (delaiDepasse && v.accepted.length < n)) {
+    clearTimeout(room.voteStopTimer);
+    room.voteStop = null;
+    const refus = v.declined.length ? room.players[v.declined[0]].name : "le temps est écoulé";
+    log(room, "🏳️ Vote annulé — " + (v.declined.length ? refus + " veut continuer" : "délai dépassé"));
+    io.to(room.code).emit("annonce", { emoji: "▶️", titre: "La manche continue !", sous: v.declined.length ? refus + " a voté contre" : "Tout le monde n'a pas répondu à temps" });
+    broadcast(room);
+    return;
+  }
+  if (v.accepted.length >= n) {
+    clearTimeout(room.voteStopTimer);
+    room.voteStop = null;
+    log(room, "🏳️ Vote unanime : la manche s'arrête");
+    endStalemate(room, false, true);
+  }
+}
+
 function maybeResolveRematch(room) {
   const r = room.rematch;
   if (!r) return;
@@ -1975,6 +2009,7 @@ function resolveBuyWindow(room) {
 
 function advanceTurn(room, fromIdx) {
   const g = room.game;
+  if (mancheBloquee(room)) { endStalemate(room, true); return; }
   g.buyRequests = [];
   g.turn = (fromIdx + 1) % room.players.length;
   room.players.forEach((p) => { p.justPosed = false; });
@@ -2432,6 +2467,36 @@ io.on("connection", (socket) => {
     io.to(myRoom.code).emit("emote", { idx: me.idx, text, id: ++EMOTE_SEQ });
   });
 
+  // Vote pour stopper la manche en cours : tous les humains connectés doivent accepter
+  // (bots et absents d'accord d'office). Unanimité → règle de la main la plus légère.
+  socket.on("voteStop", (reponse) => {
+    if (!myRoom || myRoom.state !== "playing" || !myRoom.game || myRoom.game.roundOver) return;
+    const me = findMe();
+    if (!me) return;
+    const v = myRoom.voteStop;
+    if (!v) {
+      if (reponse !== "proposer") return;
+      const accepted = [me.idx];
+      myRoom.players.forEach((p, i) => { if (i !== me.idx && (p.isBot || !p.connected || p.absent)) accepted.push(i); });
+      myRoom.voteStop = { accepted, declined: [] };
+      log(myRoom, "🏳️ " + me.p.name + " propose de stopper la manche");
+      io.to(myRoom.code).emit("annonce", { emoji: "🏳️", titre: me.p.name + " propose de stopper la manche", sous: "Vote en cours — chacun répond dans le bandeau en bas" });
+      clearTimeout(myRoom.voteStopTimer);
+      myRoom.voteStopTimer = setTimeout(() => safeRun(() => resoudreVoteStop(myRoom, true)), 30000);
+      touch(myRoom);
+      broadcast(myRoom);
+      resoudreVoteStop(myRoom, false);
+      return;
+    }
+    if (v.accepted.includes(me.idx) || v.declined.includes(me.idx)) return;
+    if (reponse === "oui") v.accepted.push(me.idx);
+    else if (reponse === "non") v.declined.push(me.idx);
+    else return;
+    touch(myRoom);
+    broadcast(myRoom);
+    resoudreVoteStop(myRoom, false);
+  });
+
   socket.on("rematch", () => {
     if (!myRoom || myRoom.state !== "over") return;
     const me = findMe();
@@ -2592,7 +2657,7 @@ const PORT = process.env.PORT || 3000;
 let EMOTE_SEQ = 0;
 const AVATARS_POOL = ["🦁", "🐯", "🦊", "🐼", "🐸", "🦉", "🐙", "🦜", "🐢", "🦎"]; // avatars de table (uniques par salon)
 const AVATARS_PROFIL = ["😎", "🤠", "🥷", "🧙", "🤖", "👽", "🧞", "🦹", "👑", "🃏"]; // avatars de profil (partagés, différents de la table)
-const EMOTES_AUTORISEES = ["😂", "👏", "😤", "🔥", "😱", "🤔", "Bien joué !", "Tu me l'as volée !", "Aïe aïe aïe…", "Trop lent !", "Chance de débutant !", "On se calme 😄"];
+const EMOTES_AUTORISEES = ["😂", "👏", "😤", "🔥", "😱", "🤔", "Bien joué !", "Je vais poser au prochain tour 😏", "Tu me l'as volée !", "Aïe aïe aïe…", "Trop lent !", "Chance de débutant !", "On se calme 😄"];
 
 // Robustesse : une erreur imprévue ne doit jamais faire tomber toutes les tables
 process.on("uncaughtException", (e) => console.error("ERREUR NON GÉRÉE:", (e && e.stack) || e));
