@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2328-M">
+<meta name="version" content="v2329-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2328-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2329-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -4000,7 +4000,7 @@ function tapCard(id) {
         <div ref={tableScrollRef} className="table-zone table-pad absolute inset-0 overflow-y-auto px-2 py-1">
           {g.melds.length === 0 && (
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center px-6">
-              <div className="text-6xl" style={{ opacity: 0.16, filter: "drop-shadow(0 4px 8px rgba(0,0,0,.4))" }}>🎴</div>
+              <img src="/icon-192.png" alt="" style={{ width: 90, height: 90, opacity: 0.16, borderRadius: 22, filter: "drop-shadow(0 4px 8px rgba(0,0,0,.4))" }} />
               <div className="text-sm text-emerald-300 italic mt-2" style={{ opacity: 0.6 }}>Les combinaisons posées apparaîtront ici</div>
               <div className="text-[11px] text-emerald-400 mt-1" style={{ opacity: 0.5 }}>Contrat de la manche : {contract.label}</div>
             </div>
