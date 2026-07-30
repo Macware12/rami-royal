@@ -1468,12 +1468,15 @@ function endStalemate(room) {
   if (!g || g.roundOver) return;
   clearTimers(room);
   let winnerIdx = 0, bestPts = Infinity;
+  const tousPosesEp = room.players.every((p2) => p2.posed);
   room.players.forEach((q, i) => {
-    const pts = E.handPoints(q.hand);
+    const remiseW = tousPosesEp ? q.hand.filter((c) => c.magique).length * 20 : 0;
+    const pts = Math.max(0, E.handPoints(q.hand) - remiseW);
     if (pts < bestPts) { bestPts = pts; winnerIdx = i; }
   });
   const summary = room.players.map((q, i) => {
-    const pts = i === winnerIdx ? 0 : E.handPoints(q.hand);
+    const remise = tousPosesEp ? q.hand.filter((c) => c.magique).length * 20 : 0;
+    const pts = i === winnerIdx ? 0 : Math.max(0, E.handPoints(q.hand) - remise);
     q.total += pts;
     return { name: q.name, pts, bonus: 0, total: q.total };
   });
@@ -1635,7 +1638,7 @@ function handleComplete(room, idx, meldId, cardId) {
   // Échange de joker : escalier uniquement, si la carte remplace exactement le joker
   if (meld.type === "esc" && !card.joker) {
     for (let ji = 0; ji < meld.cards.length; ji++) {
-      if (!meld.cards[ji].joker) continue;
+      if (!meld.cards[ji].joker || meld.cards[ji].magique) continue; // le joker magique n'est jamais récupérable
       const inPlace = meld.cards.map((c, i) => (i === ji ? card : c));
       if (E.isOrderedEscalier(inPlace)) {
         const jk = meld.cards[ji];
@@ -1886,7 +1889,7 @@ function handleJokerNet(room, idx) {
   saveComptes();
   pousserSolde(p, -COUT_JOKER, "joker magique");
   // Joker MAGIQUE : créé de toutes pièces (indépendant des 4 jokers du paquet)
-  const jk = { id: "jm" + Date.now() + Math.floor(Math.random() * 1000), rank: 0, suit: "★", joker: true };
+  const jk = { id: "jm" + Date.now() + Math.floor(Math.random() * 1000), rank: 0, suit: "★", joker: true, magique: true };
   p.hand.push(jk);
   p.jokerNetUsed = true;
   log(room, "🪄 " + p.name + " invoque un joker magique (" + COUT_JOKER + " 💎)");
@@ -1981,8 +1984,11 @@ function checkRoundEnd(room, idx) {
   if (isFinal) bonusType = "final";
   else if (p.justPosed && !room.players.some((q, i) => i !== idx && q.posed)) bonusType = "anticipe";
   const n = room.players.length;
+  const tousPoses = room.players.every((p2) => p2.posed);
   const summary = room.players.map((q, i) => {
-    let pts = i === idx ? 0 : E.handPoints(q.hand);
+    // Joker magique : 0 point s'il reste en main alors que tout le monde a posé
+    const remise = tousPoses ? q.hand.filter((c) => c.magique).length * 20 : 0;
+    let pts = i === idx ? 0 : Math.max(0, E.handPoints(q.hand) - remise);
     let bonus = 0;
     if (i === idx && bonusType === "final") bonus = -50 * n;
     if (i === idx && bonusType === "anticipe") bonus = -10 * n;
@@ -2075,7 +2081,7 @@ function aiPlayTurn(room) {
       for (const m of g.melds) {
         if (m.type !== "esc") continue;
         for (let ji = 0; ji < m.cards.length && !swapped; ji++) {
-          if (!m.cards[ji].joker) continue;
+          if (!m.cards[ji].joker || m.cards[ji].magique) continue; // le joker magique n'est jamais récupérable
           const c = p.hand.find((h) => !h.joker && E.isOrderedEscalier(m.cards.map((x, i2) => (i2 === ji ? h : x))));
           if (!c) continue;
           const jk = m.cards[ji];

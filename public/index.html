@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2321-M">
+<meta name="version" content="v2322-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2321-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2322-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -220,10 +220,10 @@ function sfx(name) {
 function vibrate(p) { try { if (navigator.vibrate) navigator.vibrate(p); } catch (_) {} }
 
 function rankLabel(c) {
-  if (c.joker) return "JK";
+  if (c.joker) return c.magique ? "JM" : "JK";
   return { 1: "A", 11: "V", 12: "D", 13: "R" }[c.rank] || String(c.rank);
 }
-function cardName(c) { return c.joker ? "Joker" : rankLabel(c) + c.suit; }
+function cardName(c) { return c.joker ? (c.magique ? "Joker magique" : "Joker") : rankLabel(c) + c.suit; }
 
 // ---------- Validation locale (miroir du serveur, pour l'aide à la pose) ----------
 function isTri(cards) {
@@ -649,10 +649,10 @@ function Card({ card, selected, isNew, onClick, small, tiny, faceDown, flat }) {
       className="relative rounded-lg flex flex-col items-center justify-center font-bold select-none transition-all duration-150"
       style={{
         height: h, width: w,
-        background: card.joker ? "linear-gradient(160deg, #faf5ff 0%, #e9dcfc 100%)" : "linear-gradient(160deg, #fffdf6 0%, #f6efdd 100%)",
+        background: card.magique ? "linear-gradient(160deg, #ecfeff 0%, #bae6fd 100%)" : card.joker ? "linear-gradient(160deg, #faf5ff 0%, #e9dcfc 100%)" : "linear-gradient(160deg, #fffdf6 0%, #f6efdd 100%)",
         color: suitInk(card),
         fontSize: f,
-        border: selected ? "2px solid #fbbf24" : isNew ? "2px solid #67e8f9" : card.joker ? "2px solid #a78bfa" : "1px solid #d6cdb8",
+        border: selected ? "2px solid #fbbf24" : isNew ? "2px solid #67e8f9" : card.magique ? "2px solid #0ea5e9" : card.joker ? "2px solid #a78bfa" : "1px solid #d6cdb8",
         transform: selected ? "translateY(-10px)" : "none",
         boxShadow: selected ? "0 10px 16px rgba(0,0,0,.5), 0 0 12px rgba(251,191,36,.5)"
           : card.joker ? "0 1px 3px rgba(0,0,0,.3), 0 0 9px rgba(167,139,250,.85)"
@@ -661,7 +661,7 @@ function Card({ card, selected, isNew, onClick, small, tiny, faceDown, flat }) {
       }}>
       {isNew && !selected && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-cyan-400 border border-white" />}
       <span>{rankLabel(card)}</span>
-      <span style={{ fontSize: f2 }}>{card.joker ? "🤡" : card.suit}</span>
+      <span style={{ fontSize: f2 }}>{card.joker ? (card.magique ? "🪄" : "🤡") : card.suit}</span>
     </button>
   );
 }
@@ -725,13 +725,13 @@ function StackCard({ card, overlap, small }) {
       <div className="rounded-md relative"
         style={{
           width: w, height: h,
-          background: card.joker ? "linear-gradient(160deg,#faf5ff,#e9dcfc)" : "linear-gradient(160deg,#fffdf6,#f6efdd)",
-          border: card.joker ? "1.5px solid #a78bfa" : "1px solid #d6cdb8",
+          background: card.magique ? "linear-gradient(160deg,#ecfeff,#bae6fd)" : card.joker ? "linear-gradient(160deg,#faf5ff,#e9dcfc)" : "linear-gradient(160deg,#fffdf6,#f6efdd)",
+          border: card.magique ? "1.5px solid #0ea5e9" : card.joker ? "1.5px solid #a78bfa" : "1px solid #d6cdb8",
           boxShadow: "0 1px 3px rgba(0,0,0,.35)",
           color: suitInk(card),
         }}>
         <span className="absolute font-bold leading-none text-center" style={{ top: 2, left: 2, width: small ? 10 : 12, fontSize: small ? 8 : 9 }}>
-          {rankLabel(card)}<br />{card.joker ? "🤡" : card.suit}
+          {rankLabel(card)}<br />{card.joker ? (card.magique ? "🪄" : "🤡") : card.suit}
         </span>
       </div>
     </div>
@@ -2609,7 +2609,7 @@ function App() {
               <a href="/contact.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">💬 Nous contacter</a>
               <a href="/signaler.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🚩 Signaler un joueur</a>
               <a href="/confidentialite.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🔒 Confidentialité</a>
-              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2321-M</div>
+              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2322-M</div>
             </div>
           </div>
         )}
@@ -3168,7 +3168,7 @@ function App() {
           </div>
         )}
         <div className="flex gap-2 text-[11px] text-emerald-400 flex-wrap justify-center items-center pb-4">
-          <span className="opacity-60 self-center">v2321-M</span>
+          <span className="opacity-60 self-center">v2322-M</span>
         </div>
       </div>
     );
@@ -3767,7 +3767,7 @@ function App() {
               <li><b>Pioche</b> une carte (ou prends celle de la défausse, gratuite à ton tour).</li>
               <li><b>Prépare le contrat</b> : touche 3+ cartes de même valeur (tri) ou qui se suivent (escalier), puis valide. Le bouton 💡 Aide classe ta main selon le contrat — une aide offerte par manche (le point ● du bouton), ensuite 5 💎 chacune. 🪄 prépare la pose quand elle est possible !</li>
               <li><b>Achat net</b> : pendant une fenêtre d'achat, le bouton ✨ prend la carte <b>sans la carte de pénalité</b> pour 15 💎 diamants (il consomme quand même un jeton 🛒). Il n'apparaît que si ton compte a assez de diamants.</li>
-              <li><b>Pouvoirs 💎</b> : à court de jetons, 🛒 +1 achat (20 diamants, 1 recharge par manche) ; à tout moment, 🪄 Joker magique (30 diamants, 1 par manche) crée un joker de plus dans ta main.</li>
+              <li><b>Pouvoirs 💎</b> : à court de jetons, 🛒 +1 achat (20 diamants, 1 recharge par manche) ; à tout moment, 🪄 Joker magique (30 diamants, 1 par manche) crée un joker de plus dans ta main (carte bleutée) — jamais récupérable par échange, et 0 point en main si tout le monde a posé.</li>
               <li><b>Pose</b> quand le contrat est complet (bouton doré), en une seule fois.</li>
               <li><b>Jette</b> une carte pour finir ton tour : glisse-la sur la défausse, puis <b>touche la défausse pour confirmer</b> 🔒 (touche une carte de ta main pour annuler). Premier à vider sa main = gagnant !</li>
             </ol>
