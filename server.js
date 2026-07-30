@@ -997,6 +997,91 @@ app.post("/missions/valider", (req, res) => {
   res.json({ ok: true, pieces: c.pieces || 0, gains, faites: mj.faites });
 });
 
+// ---------- Boutique cosmétique ----------
+// Achats définitifs payés en diamants : dos de cartes, tapis, titres affichés près du pseudo.
+// Purement décoratif — aucun avantage de jeu, donc aucune frustration pour qui ne dépense pas.
+const COSMETIQUES = {
+  dos: [
+    { id: "dos-classique", nom: "Rouge classique", prix: 0, motif: "repeating-linear-gradient(45deg,#7f1d1d,#7f1d1d 4px,#991b1b 4px,#991b1b 8px)", bord: "#450a0a" },
+    { id: "dos-royal", nom: "Bleu royal", prix: 300, motif: "repeating-linear-gradient(45deg,#1e3a8a,#1e3a8a 4px,#2563eb 4px,#2563eb 8px)", bord: "#172554" },
+    { id: "dos-emeraude", nom: "Émeraude", prix: 300, motif: "repeating-linear-gradient(45deg,#065f46,#065f46 4px,#059669 4px,#059669 8px)", bord: "#022c22" },
+    { id: "dos-nuit", nom: "Nuit d'encre", prix: 500, motif: "repeating-linear-gradient(45deg,#1f2937,#1f2937 4px,#374151 4px,#374151 8px)", bord: "#030712" },
+    { id: "dos-or", nom: "Or du Roi", prix: 900, motif: "repeating-linear-gradient(45deg,#b45309,#b45309 4px,#f59e0b 4px,#f59e0b 8px)", bord: "#78350f" },
+    { id: "dos-vola", nom: "Ravinala 🇲🇬", prix: 1200, motif: "repeating-linear-gradient(135deg,#7c2d12,#7c2d12 5px,#c2410c 5px,#c2410c 10px)", bord: "#431407" },
+  ],
+  tapis: [
+    { id: "tapis-classique", nom: "Feutrine verte", prix: 0, fond: "radial-gradient(ellipse at 50% -10%, #1a6b42 0%, #14532d 45%, #052e16 100%)" },
+    { id: "tapis-nuit", nom: "Table de nuit", prix: 400, fond: "radial-gradient(ellipse at 50% -10%, #1e293b 0%, #0f172a 45%, #020617 100%)" },
+    { id: "tapis-bordeaux", nom: "Velours bordeaux", prix: 400, fond: "radial-gradient(ellipse at 50% -10%, #7f1d1d 0%, #581c1c 45%, #290a0a 100%)" },
+    { id: "tapis-ocean", nom: "Océan Indien", prix: 700, fond: "radial-gradient(ellipse at 50% -10%, #0e7490 0%, #155e75 45%, #082f49 100%)" },
+    { id: "tapis-coucher", nom: "Coucher malgache", prix: 1000, fond: "radial-gradient(ellipse at 50% -10%, #b45309 0%, #7c2d12 45%, #431407 100%)" },
+  ],
+  titres: [
+    { id: "titre-none", nom: "Aucun titre", prix: 0, texte: "" },
+    { id: "titre-apprenti", nom: "Apprenti", prix: 200, texte: "Apprenti" },
+    { id: "titre-strategie", nom: "Stratège", prix: 500, texte: "Stratège" },
+    { id: "titre-maitre", nom: "Maître du Rami", prix: 900, texte: "Maître du Rami" },
+    { id: "titre-roi", nom: "Roi du Ramy", prix: 1500, texte: "👑 Roi du Ramy" },
+    { id: "titre-legende", nom: "Légende de Madagascar", prix: 2500, texte: "🇲🇬 Légende" },
+  ],
+};
+const COSMETIQUES_DEFAUT = { dos: "dos-classique", tapis: "tapis-classique", titres: "titre-none" };
+function trouverCosmetique(id) {
+  for (const [cat, liste] of Object.entries(COSMETIQUES)) {
+    const item = liste.find((x) => x.id === id);
+    if (item) return { cat, item };
+  }
+  return null;
+}
+// Ce que possède et porte un compte (les gratuits sont possédés d'office)
+function cosmetiquesDe(c) {
+  const possedes = Array.isArray(c.cosmetiques) ? c.cosmetiques : [];
+  const gratuits = Object.values(COSMETIQUES).flat().filter((x) => x.prix === 0).map((x) => x.id);
+  return {
+    possedes: [...new Set([...gratuits, ...possedes])],
+    equipes: { ...COSMETIQUES_DEFAUT, ...(c.equipes || {}) },
+  };
+}
+app.get("/cosmetiques/catalogue", (req, res) => {
+  const code = String(req.query.code || "").trim();
+  const c = /^[0-9]{6}$/.test(code) ? comptes.get(code) : null;
+  res.json({ catalogue: COSMETIQUES, ...(c ? cosmetiquesDe(c) : { possedes: [], equipes: COSMETIQUES_DEFAUT }), pieces: (c && c.pieces) || 0 });
+});
+app.use("/cosmetiques", express.json({ limit: "4kb" }));
+app.post("/cosmetiques/acheter", (req, res) => {
+  if (tropDEssais(req, res)) return;
+  const { code, id } = req.body || {};
+  const c = typeof code === "string" && /^[0-9]{6}$/.test(code.trim()) ? comptes.get(code.trim()) : null;
+  if (!c) return res.status(404).json({ erreur: "Compte requis." });
+  if (c.banni) return res.status(403).json({ erreur: MESSAGE_BANNI });
+  const trouve = trouverCosmetique(String(id || ""));
+  if (!trouve) return res.status(400).json({ erreur: "Article inconnu." });
+  const { cat, item } = trouve;
+  const etat = cosmetiquesDe(c);
+  if (etat.possedes.includes(item.id)) return res.status(400).json({ erreur: "Tu possèdes déjà cet article." });
+  if ((c.pieces || 0) < item.prix) return res.status(400).json({ erreur: "Il te faut " + item.prix + " 💎 (solde : " + (c.pieces || 0) + ")." });
+  c.pieces -= item.prix;
+  c.cosmetiques = [...(c.cosmetiques || []), item.id];
+  c.equipes = { ...(c.equipes || {}), [cat]: item.id }; // équipé aussitôt acheté
+  c.lastSeen = Date.now();
+  saveComptes();
+  res.json({ ok: true, pieces: c.pieces, ...cosmetiquesDe(c), gains: { depense: -item.prix, motif: item.nom } });
+});
+app.post("/cosmetiques/equiper", (req, res) => {
+  if (tropDEssais(req, res)) return;
+  const { code, id } = req.body || {};
+  const c = typeof code === "string" && /^[0-9]{6}$/.test(code.trim()) ? comptes.get(code.trim()) : null;
+  if (!c) return res.status(404).json({ erreur: "Compte requis." });
+  const trouve = trouverCosmetique(String(id || ""));
+  if (!trouve) return res.status(400).json({ erreur: "Article inconnu." });
+  const etat = cosmetiquesDe(c);
+  if (!etat.possedes.includes(trouve.item.id)) return res.status(403).json({ erreur: "Tu ne possèdes pas cet article." });
+  c.equipes = { ...(c.equipes || {}), [trouve.cat]: trouve.item.id };
+  c.lastSeen = Date.now();
+  saveComptes();
+  res.json({ ok: true, ...cosmetiquesDe(c) });
+});
+
 // ---------- Boutique : obtenir des diamants ----------
 // Socle préparé mais DÉSACTIVÉ : tout s'activera côté serveur (variables d'environnement),
 // sans nouvelle version des clients. ACTIVER_PUBS=1 pour les pubs récompensées (AdMob),
@@ -1594,7 +1679,7 @@ function log(room, text) {
 function publicPlayer(p, idx) {
   return {
     idx, name: p.name, isBot: p.isBot, connected: p.connected, absent: p.absent,
-    handCount: p.hand.length, posed: p.posed, buysLeft: p.buysLeft,
+    handCount: p.hand.length, posed: p.posed, buysLeft: p.buysLeft, titre: p.titre || "",
     extraBuyUsed: Boolean(p.extraBuyUsed), jokerNetUsed: Boolean(p.jokerNetUsed),
     lastTaken: p.lastTaken, total: p.total, wins: p.wins || 0, avatar: p.avatar,
   };
@@ -2446,7 +2531,11 @@ io.on("connection", (socket) => {
     detachFromRoom();
     const room = createRoom(name, options);
     const player = addPlayer(room, name, false, avatar);
-    if (cptC) { player.compte = cptC.code; cptC.salonEnCours = room.code; saveComptes(); } // jamais diffusé (publicPlayer ne l'expose pas)
+    if (cptC) {
+      player.compte = cptC.code; cptC.salonEnCours = room.code; saveComptes();
+      const t = trouverCosmetique(cosmetiquesDe(cptC).equipes.titres);
+      player.titre = (t && t.item.texte) || "";
+    } // le code compte n'est jamais diffusé (publicPlayer ne l'expose pas)
     player.socketId = socket.id;
     player.connected = true;
     myRoom = room; myToken = player.token;
@@ -2518,7 +2607,11 @@ io.on("connection", (socket) => {
       bot.connected = true;
       bot.absent = false;
       bot.timeouts = 0;
-      if (cptJ) { bot.compte = cptJ.code; cptJ.salonEnCours = room.code; saveComptes(); }
+      if (cptJ) {
+        bot.compte = cptJ.code; cptJ.salonEnCours = room.code; saveComptes();
+        const tb = trouverCosmetique(cosmetiquesDe(cptJ).equipes.titres);
+        bot.titre = (tb && tb.item.texte) || "";
+      }
       myRoom = room; myToken = bot.token;
       socket.join(room.code);
       touch(room);
@@ -2537,7 +2630,11 @@ io.on("connection", (socket) => {
     }
     if (room.players.length >= 6) return cb({ ok: false, error: "Salon complet (6 joueurs max)." });
     const player = addPlayer(room, name, false, avatar);
-    if (cptJ) { player.compte = cptJ.code; cptJ.salonEnCours = room.code; saveComptes(); }
+    if (cptJ) {
+      player.compte = cptJ.code; cptJ.salonEnCours = room.code; saveComptes();
+      const tj = trouverCosmetique(cosmetiquesDe(cptJ).equipes.titres);
+      player.titre = (tj && tj.item.texte) || "";
+    }
     player.socketId = socket.id;
     player.connected = true;
     myRoom = room; myToken = player.token;

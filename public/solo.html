@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2334-M">
+<meta name="version" content="v2335-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2334-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2335-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -1080,7 +1080,7 @@ const Card = React.memo(function Card({ card, selected, isNew, onClick, small, t
       <div className="rounded-lg border border-red-950"
         style={{
           height: 52, width: 36,
-          background: "repeating-linear-gradient(45deg,#7f1d1d,#7f1d1d 4px,#991b1b 4px,#991b1b 8px)",
+          background: dosActuel().motif,
           boxShadow: flat ? "none" : "0 2px 0 #450a0a, 0 4px 8px rgba(0,0,0,.4)",
         }} />
     );
@@ -1237,6 +1237,130 @@ function ObtenirDiamants() {
   );
 }
 
+// ---------- Cosmétiques (dos de cartes, tapis, titre) ----------
+// Le choix du joueur vit dans son compte ; on garde une copie locale pour un rendu
+// immédiat au chargement, rafraîchie depuis le serveur à chaque ouverture.
+const DOS_DEFAUT = { motif: "repeating-linear-gradient(45deg,#7f1d1d,#7f1d1d 4px,#991b1b 4px,#991b1b 8px)", bord: "#450a0a" };
+const TAPIS_DEFAUT = { fond: "radial-gradient(ellipse at 50% -10%, #1a6b42 0%, #14532d 45%, #052e16 100%)" };
+function cosmoLocal() {
+  try { return JSON.parse(store.get("rami-cosmetiques")) || null; } catch (_) { return null; }
+}
+function dosActuel() {
+  const c = cosmoLocal();
+  if (!c || !c.catalogue) return DOS_DEFAUT;
+  return c.catalogue.dos.find((x) => x.id === c.equipes.dos) || DOS_DEFAUT;
+}
+function tapisActuel() {
+  const c = cosmoLocal();
+  if (!c || !c.catalogue) return TAPIS_DEFAUT;
+  return c.catalogue.tapis.find((x) => x.id === c.equipes.tapis) || TAPIS_DEFAUT;
+}
+function titreActuel() {
+  const c = cosmoLocal();
+  if (!c || !c.catalogue) return "";
+  const t = c.catalogue.titres.find((x) => x.id === c.equipes.titres);
+  return (t && t.texte) || "";
+}
+function chargerCosmetiques() {
+  let acc = {};
+  try { acc = JSON.parse(store.get("rami-account")) || {}; } catch (_) {}
+  return fetch(API_BASE + "/cosmetiques/catalogue" + (acc.code ? "?code=" + acc.code : ""))
+    .then((r) => r.json())
+    .then((d) => {
+      store.set("rami-cosmetiques", JSON.stringify(d));
+      try { window.dispatchEvent(new CustomEvent("rami-cosmo")); } catch (_) {}
+      return d;
+    })
+    .catch(() => cosmoLocal());
+}
+setTimeout(chargerCosmetiques, 0);
+
+// Boutique cosmétique : dos de cartes, tapis, titres (événement "rami-boutique-cosmo")
+function BoutiqueCosmetique() {
+  const [ouvert, setOuvert] = React.useState(false);
+  const [data, setData] = React.useState(cosmoLocal());
+  const [onglet, setOnglet] = React.useState("dos");
+  const [msg, setMsg] = React.useState("");
+  React.useEffect(() => {
+    const h = () => { setOuvert(true); setMsg(""); chargerCosmetiques().then(setData); };
+    window.addEventListener("rami-boutique-cosmo", h);
+    return () => window.removeEventListener("rami-boutique-cosmo", h);
+  }, []);
+  if (!ouvert) return null;
+  let acc = {};
+  try { acc = JSON.parse(store.get("rami-account")) || {}; } catch (_) {}
+  const cat = (data && data.catalogue) || { dos: [], tapis: [], titres: [] };
+  const possedes = (data && data.possedes) || [];
+  const equipes = (data && data.equipes) || {};
+  const solde = (data && data.pieces) || 0;
+  const agir = (chemin, id) => {
+    if (!acc.code) { setMsg("🔒 Crée un compte pour acheter (100 💎 offerts !)"); return; }
+    fetch(API_BASE + "/cosmetiques/" + chemin, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: acc.code, id }),
+    }).then((r) => r.json().then((d) => ({ ok: r.ok, d })))
+      .then(({ ok, d }) => {
+        if (!ok) { setMsg(d.erreur || "Erreur."); return; }
+        setMsg(chemin === "acheter" ? "✨ Acheté et équipé !" : "✓ Équipé !");
+        chargerCosmetiques().then(setData);
+        if (typeof d.pieces === "number") {
+          try {
+            const a2 = JSON.parse(store.get("rami-account")) || {};
+            a2.pieces = d.pieces; store.set("rami-account", JSON.stringify(a2));
+            window.dispatchEvent(new CustomEvent("rami-gains", { detail: { pieces: d.pieces, depense: d.gains } }));
+          } catch (_) {}
+        }
+      })
+      .catch(() => setMsg("Serveur injoignable."));
+  };
+  const apercu = (it) => onglet === "dos"
+    ? <div className="rounded-md shrink-0" style={{ width: 30, height: 44, background: it.motif, border: "1px solid " + it.bord }} />
+    : onglet === "tapis"
+      ? <div className="rounded-md shrink-0" style={{ width: 44, height: 30, background: it.fond, border: "1px solid #14705288" }} />
+      : <span className="text-lg shrink-0">{it.texte ? "🏷️" : "—"}</span>;
+  const onglets = [["dos", "🎴 Dos"], ["tapis", "🟩 Tapis"], ["titres", "🏷️ Titres"]];
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setOuvert(false)}>
+      <div className="panel rounded-2xl p-5 w-full max-w-sm flex flex-col gap-2 relative max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <button onClick={() => setOuvert(false)} className="absolute top-1 right-1 p-2.5 text-emerald-400 text-xl leading-none">✕</button>
+        <h3 className="text-amber-300 font-bold text-center" style={{ fontFamily: "Georgia, serif" }}>🛍️ Boutique</h3>
+        <div className="text-[11px] text-center text-yellow-300 font-bold -mt-1">💎 {fmtSolde(solde)}</div>
+        <div className="flex gap-1.5">
+          {onglets.map(([k, lbl]) => (
+            <button key={k} onClick={() => { setOnglet(k); setMsg(""); }}
+              className={`flex-1 py-1.5 rounded-xl text-[11px] font-bold ${onglet === k ? "btn-gold" : "btn-dark"}`}>{lbl}</button>
+          ))}
+        </div>
+        {msg && <div className="text-[11px] text-center text-amber-200">{msg}</div>}
+        {(cat[onglet] || []).map((it) => {
+          const possede = possedes.includes(it.id);
+          const porte = equipes[onglet] === it.id;
+          return (
+            <div key={it.id} className="flex items-center gap-2.5 bg-emerald-950/50 border border-emerald-800/60 rounded-xl px-3 py-2">
+              {apercu(it)}
+              <span className="flex-1 min-w-0">
+                <span className="block text-sm font-bold text-emerald-100 truncate">{it.nom}</span>
+                <span className="block text-[10px] text-emerald-400">{it.prix === 0 ? "Offert" : possede ? "Possédé" : it.prix + " 💎"}</span>
+              </span>
+              {porte ? (
+                <span className="text-[10px] font-bold text-amber-300 px-2">Porté ✓</span>
+              ) : possede ? (
+                <button onClick={() => agir("equiper", it.id)} className="btn-dark px-3 py-1.5 rounded-xl text-[11px] font-bold">Équiper</button>
+              ) : (
+                <button onClick={() => agir("acheter", it.id)}
+                  className={(solde >= it.prix ? "btn-diamant" : "btn-dark opacity-70") + " px-3 py-1.5 rounded-xl text-[11px] font-bold"}>
+                  {solde >= it.prix ? "" : "🔒 "}{it.prix} 💎
+                </button>
+              )}
+            </div>
+          );
+        })}
+        <p className="text-[10px] text-emerald-400 text-center mt-1">Purement décoratif : aucun avantage en jeu.</p>
+      </div>
+    </div>
+  );
+}
+
 // Récap des tarifs 💎, ouvert d'un tap sur le solde (événement "rami-tarifs")
 function TarifsDiamants() {
   const [ouvert, setOuvert] = React.useState(false);
@@ -1269,8 +1393,10 @@ function TarifsDiamants() {
         <L n="🛒 4e jeton d'achat (1/manche)" v="20" />
         <L n="🪄 Joker magique (1/manche)" v="30" />
         <div className="text-[10px] text-emerald-400">⚖️ Pouvoirs désactivés pendant les défis, et dans les salons où l'hôte les a coupés.</div>
+        <button onClick={() => { setOuvert(false); try { window.dispatchEvent(new CustomEvent("rami-boutique-cosmo")); } catch (_) {} }}
+          className="btn-diamant font-bold py-2.5 rounded-xl text-sm mt-1">🛍️ Boutique — dos, tapis, titres</button>
         <button onClick={() => { setOuvert(false); try { window.dispatchEvent(new CustomEvent("rami-boutique")); } catch (_) {} }}
-          className="btn-diamant font-bold py-2.5 rounded-xl text-sm mt-1">➕ Obtenir des diamants</button>
+          className="btn-dark font-bold py-2.5 rounded-xl text-sm">➕ Obtenir des diamants</button>
       </div>
     </div>
   );
@@ -1534,7 +1660,7 @@ function CardFan({ count }) {
           style={{
             width: 13, height: 19, marginLeft: i === 0 ? 0 : -8,
             transform: `rotate(${(i - (n - 1) / 2) * 7}deg)`,
-            background: "repeating-linear-gradient(45deg,#7f1d1d,#7f1d1d 3px,#991b1b 3px,#991b1b 6px)",
+            background: dosActuel().motif,
             boxShadow: "0 1px 2px rgba(0,0,0,.4)",
           }} />
       ))}
@@ -3480,7 +3606,7 @@ function tapCard(id) {
   }
 
   const bgStyle = {
-    background: "radial-gradient(ellipse at 50% -10%, #1a6b42 0%, #14532d 45%, #052e16 100%)",
+    background: tapisActuel().fond,
   };
 
   // ---------- Écran d'accueil ----------
@@ -3658,6 +3784,10 @@ function tapCard(id) {
                   <span className="text-xl leading-none" style={ico}>📖</span>
                   <span className={lbl}>Règles</span>
                 </a>
+                <button onClick={() => { try { window.dispatchEvent(new CustomEvent("rami-boutique-cosmo")); } catch (_) {} }} className={tuile}>
+                  <span className="text-xl leading-none" style={ico}>🛍️</span>
+                  <span className={lbl}>Boutique</span>
+                </button>
                 <button onClick={() => setShowStats(true)} className={tuile}>
                   <span className="text-xl leading-none" style={ico}>📊</span>
                   <span className={lbl}>Statistiques</span>
@@ -4533,7 +4663,7 @@ function tapCard(id) {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<React.Fragment><RamiRoyal /><GainsToast /><AnnonceDiamants /><TarifsDiamants /><ObtenirDiamants /><VeilleVersion /></React.Fragment>);
+ReactDOM.createRoot(document.getElementById('root')).render(<React.Fragment><RamiRoyal /><GainsToast /><AnnonceDiamants /><TarifsDiamants /><ObtenirDiamants /><VeilleVersion /><BoutiqueCosmetique /></React.Fragment>);
 </script>
 </body>
 </html>
