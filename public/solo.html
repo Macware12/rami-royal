@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2335-M">
+<meta name="version" content="v2336-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2335-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2336-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -1117,10 +1117,10 @@ const Card = React.memo(function Card({ card, selected, isNew, onClick, small, t
 
 function FlyingCard({ from, to, card, faceDown, delay, emphasis, onDone }) {
   const [moved, setMoved] = useState(false);
-  const dur = emphasis ? 1000 : 600;
+  const dur = emphasis ? 700 : 320; // vol plus vif : moins d'attente ressentie
   useEffect(() => {
     const t1 = setTimeout(() => setMoved(true), 40 + delay);
-    const t2 = setTimeout(onDone, dur + 180 + delay);
+    const t2 = setTimeout(onDone, dur + 60 + delay);
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, []);
   const dx = to.x - from.x, dy = to.y - from.y;
@@ -2020,7 +2020,7 @@ function RamiRoyal() {
     (g.animEvents || []).forEach((e, i) => {
       const from = rectFor(e.source), to = rectFor(e.target);
       if (!from || !to) return;
-      created.push({ key: g.animSeq + "-" + i, from, to, card: e.card, faceDown: e.faceDown, emphasis: e.emphasis, delay: i * 380 });
+      created.push({ key: g.animSeq + "-" + i, from, to, card: e.card, faceDown: e.faceDown, emphasis: e.emphasis, delay: i * 200 });
     });
     if (created.length) setAnims((a) => [...a, ...created]);
   }, [g]);
@@ -2063,7 +2063,7 @@ function RamiRoyal() {
           else if (d.origin === "hand" && handleDropRef.current) handleDropRef.current(e.clientX, e.clientY, d.card);
         } catch (_) {}
       }
-      setDrag(null);
+      stopDrag();
     };
     window.addEventListener("pointerup", clearDrag);
     window.addEventListener("pointercancel", clearDrag);
@@ -2519,6 +2519,12 @@ function tapCard(id) {
   const dragInfo = useRef(null);
   const dragRaf = useRef(null); // dernière position du glissement (throttlé par requestAnimationFrame)
   const dragRafId = useRef(0);
+  // Arrêt net du glissement : plus aucune image en attente ne peut refaire apparaître la carte
+  function stopDrag() {
+    if (dragRafId.current) { cancelAnimationFrame(dragRafId.current); dragRafId.current = 0; }
+    dragRaf.current = null;
+    setDrag(null);
+  }
   const lastTargetRef = useRef(-1);
   const [drag, setDrag] = useState(null);
   const [pendingDiscard, setPendingDiscard] = useState(null);
@@ -2639,7 +2645,7 @@ function tapCard(id) {
     if (!d || d.origin !== "hand") return;
     dragInfo.current = null;
     if (d.dragging) {
-      setDrag(null); lastTargetRef.current = -1;
+      stopDrag(); lastTargetRef.current = -1;
       handleDrop(e.clientX, e.clientY, d.card);
       return;
     }
@@ -2717,7 +2723,7 @@ function tapCard(id) {
     }
 
     if (d && d.origin === "discard" && d.dragging) {
-      setDrag(null);
+      stopDrag();
       discardDropAt(e.clientX, e.clientY);
       return;
     }
@@ -2807,7 +2813,7 @@ function tapCard(id) {
   handleDropRef.current = handleDrop;
   discardDropRef.current = discardDropAt;
 
-  function endDrag() { dragInfo.current = null; setDrag(null); lastTargetRef.current = -1; }
+  function endDrag() { dragInfo.current = null; stopDrag(); lastTargetRef.current = -1; }
 
   function reorderTo(x, y, id) {
     const cont = handRef.current;
