@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2322-M">
+<meta name="version" content="v2323-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2322-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2323-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -1330,7 +1330,9 @@ function flushMissions() {
     .catch(() => { missionsEnCours = false; });
 }
 brancherMissions();
-chargerMissions();
+// API_BASE est déclaré plus bas dans le fichier : on diffère le premier chargement
+// (l'appeler directement plantait tout le démarrage de la page d'accueil)
+setTimeout(chargerMissions, 0);
 
 // Carte « Missions du jour » : progression + récompenses (partagée accueil/solo)
 function MissionsDuJour() {
