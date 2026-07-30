@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2344-M">
+<meta name="version" content="v2345-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2344-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2345-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -418,6 +418,8 @@ const STYLE = (
        (joueurs impairs à gauche, pairs à droite, remplissage ligne par ligne) */
     .table-grille { display: grid; grid-template-columns: 1fr; gap: 8px; align-items: start; }
     .table-pad { padding-right: 84px; }
+    .ecran-accueil { height: 100vh; height: 100dvh; overflow: hidden; }
+    .panneau-solo { max-height: calc(100dvh - 120px); overflow-y: auto; }
     @media (max-width: 759px) {
       .table-pad { padding-right: 12px; }
       .table-grille { gap: 5px; }
@@ -3710,14 +3712,14 @@ function tapCard(id) {
 
   if (screen === "setup") {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-3 p-4" style={bgStyle}>
+      <div className="ecran-accueil flex flex-col items-center justify-center gap-3 p-4" style={bgStyle}>
         {STYLE}
         <a href="/" className="fixed top-3 left-3 z-40 btn-gold rounded-xl px-3 py-1.5 text-xs font-bold no-underline">← Accueil</a>
         <div className="text-center" style={{ textShadow: "0 3px 10px rgba(0,0,0,.6)" }}>
           <h1 className="text-4xl text-amber-300" style={{ fontFamily: "Georgia, serif" }}>Ramy Gasy</h1>
           <p className="text-emerald-200 text-xs mt-0.5">Le rami à contrats de Madagascar</p>
         </div>
-        <div className="panel rounded-2xl p-4 w-full max-w-md flex flex-col gap-2.5 text-emerald-100">
+        <div className="panel rounded-2xl p-4 w-full max-w-md flex flex-col gap-2.5 text-emerald-100 panneau-solo">
           {hasSave && (
             <button onClick={resumeGame} className="btn-green font-bold py-3 rounded-xl text-base">
               ▶ Reprendre la partie en cours
