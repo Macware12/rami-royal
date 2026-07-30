@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2302-M">
+<meta name="version" content="v2303-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2302-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2303-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -824,7 +824,19 @@ function GainsToast() {
     const t = setTimeout(() => setInfo(null), 6500);
     return () => clearTimeout(t);
   }, [info]);
-  if (!info || !info.gains || !info.gains.total) return null;
+  const dep = info && info.depense;
+  if (!info || (!dep && (!info.gains || !info.gains.total))) return null;
+  if (dep) {
+    const debit = dep.montant < 0;
+    return (
+      <div className="fixed left-1/2 -translate-x-1/2 z-40 px-4 py-2.5 rounded-2xl text-sm font-bold text-center cursor-pointer"
+        style={{ top: "calc(env(safe-area-inset-top, 0px) + 10px)", background: "linear-gradient(180deg, rgba(6,58,42,.97), rgba(4,40,28,.97))", border: debit ? "1px solid #fb718588" : "1px solid #34d39988", boxShadow: "0 6px 18px rgba(0,0,0,.45)", color: debit ? "#fda4af" : "#6ee7b7" }}
+        onClick={() => setInfo(null)}>
+        {(dep.montant > 0 ? "+" : "") + dep.montant} 💎 · {dep.motif}
+        <span className="block text-[10px] font-normal text-emerald-300">{typeof info.pieces === "number" ? "solde : " + info.pieces + " 💎" : ""}</span>
+      </div>
+    );
+  }
   const g = info.gains;
   const det = [];
   if (g.partie) det.push("partie +" + g.partie);
@@ -999,6 +1011,14 @@ function peutPayer(montant) {
   try { const a = JSON.parse(store.get("rami-account")) || {}; return Boolean(a.code) && (a.pieces || 0) >= montant; } catch (_) { return false; }
 }
 const peutAchatNet = () => peutPayer(COUT_ACHAT_NET);
+// Message affiché quand un pouvoir 💎 est verrouillé (invité ou solde insuffisant)
+function messageVerrou(prix) {
+  let acc = {};
+  try { acc = JSON.parse(store.get("rami-account")) || {}; } catch (_) {}
+  if (!acc.code) return "🔒 Crée un compte (gratuit, pastille 👤) pour utiliser les pouvoirs 💎 — et reçois 100 💎 de bienvenue !";
+  return "🔒 Il te manque " + (prix - (acc.pieces || 0)) + " 💎 pour ce pouvoir (solde : " + (acc.pieces || 0) + " 💎).";
+}
+const LIBELLES_DEPENSE = { aide: "aide", "achat-net": "achat net", "achat-extra": "4e jeton d'achat", joker: "joker invoqué" };
 // Débite des diamants (optimiste : l'interface bouge tout de suite, le serveur confirme)
 function depenserPieces(montant, motif) {
   let acc = {};
@@ -1006,7 +1026,7 @@ function depenserPieces(montant, motif) {
   if (!acc.code) return;
   acc.pieces = Math.max(0, (acc.pieces || 0) - montant);
   store.set("rami-account", JSON.stringify(acc));
-  try { window.dispatchEvent(new CustomEvent("rami-gains", { detail: { pieces: acc.pieces } })); } catch (_) {}
+  try { window.dispatchEvent(new CustomEvent("rami-gains", { detail: { pieces: acc.pieces, depense: { montant: -montant, motif: LIBELLES_DEPENSE[motif] || motif } } })); } catch (_) {}
   fetch(API_BASE + "/compte/depenser", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ code: acc.code, montant, motif }),
@@ -1421,7 +1441,11 @@ function App() {
         const acc = JSON.parse(store.get("rami-account")) || {};
         if (acc.code) { acc.pieces = d.pieces; store.set("rami-account", JSON.stringify(acc)); }
       } catch (_) {}
-      try { window.dispatchEvent(new CustomEvent("rami-gains", { detail: { pieces: d.pieces } })); } catch (_) {}
+      try {
+        window.dispatchEvent(new CustomEvent("rami-gains", { detail: d.delta
+          ? { pieces: d.pieces, depense: { montant: d.delta, motif: d.motif || "" } }
+          : { pieces: d.pieces } }));
+      } catch (_) {}
     });
     socket.on("roomClosed", () => { setSrv(null); setMsg("Le salon a été fermé (inactivité)."); store.del("ramimp-save"); });
     socket.on("kicked", (m) => { setSrv(null); setMsg(m || "L'hôte t'a retiré du salon."); store.del("ramimp-save"); });
@@ -2268,7 +2292,7 @@ function App() {
               <a href="/contact.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">💬 Nous contacter</a>
               <a href="/signaler.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🚩 Signaler un joueur</a>
               <a href="/confidentialite.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🔒 Confidentialité</a>
-              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2302-M</div>
+              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2303-M</div>
             </div>
           </div>
         )}
@@ -2815,7 +2839,7 @@ function App() {
           </div>
         )}
         <div className="flex gap-2 text-[11px] text-emerald-400 flex-wrap justify-center items-center pb-4">
-          <span className="opacity-60 self-center">v2302-M</span>
+          <span className="opacity-60 self-center">v2303-M</span>
         </div>
       </div>
     );
@@ -3144,15 +3168,13 @@ function App() {
             <div className="flex gap-2 mt-1 justify-center">
               <button onClick={() => act({ type: "buy" })} disabled={me.buysLeft <= 0}
                 className="btn-gold px-3 py-1.5 rounded-xl text-xs font-bold disabled:opacity-40">💰 Acheter (+1 pénalité)</button>
-              {peutAchatNet() && (
-                <button onClick={() => act({ type: "buy", net: true })} disabled={me.buysLeft <= 0}
-                  title={"Achat net : la carte sans la carte de pénalité, pour " + COUT_ACHAT_NET + " diamants"}
-                  className="btn-green px-3 py-1.5 rounded-xl text-xs font-bold disabled:opacity-40">✨ Achat net · {COUT_ACHAT_NET} 💎</button>
-              )}
-              {me.buysLeft <= 0 && !me.extraBuyUsed && peutPayer(COUT_ACHAT_EXTRA) && (
-                <button onClick={() => act({ type: "rechargeAchat" })}
+              <button onClick={() => peutAchatNet() ? act({ type: "buy", net: true }) : setMsg(messageVerrou(COUT_ACHAT_NET))} disabled={me.buysLeft <= 0}
+                title={"Achat net : la carte sans la carte de pénalité, pour " + COUT_ACHAT_NET + " diamants"}
+                className={(peutAchatNet() ? "btn-green" : "btn-dark opacity-70") + " px-3 py-1.5 rounded-xl text-xs font-bold disabled:opacity-40"}>{peutAchatNet() ? "✨" : "🔒"} Achat net · {COUT_ACHAT_NET} 💎</button>
+              {me.buysLeft <= 0 && !me.extraBuyUsed && (
+                <button onClick={() => peutPayer(COUT_ACHAT_EXTRA) ? act({ type: "rechargeAchat" }) : setMsg(messageVerrou(COUT_ACHAT_EXTRA))}
                   title="Un 4e jeton d'achat pour cette manche (1 recharge max)"
-                  className="btn-green px-3 py-1.5 rounded-xl text-xs font-bold">🛒 +1 achat · {COUT_ACHAT_EXTRA} 💎</button>
+                  className={(peutPayer(COUT_ACHAT_EXTRA) ? "btn-green" : "btn-dark opacity-70") + " px-3 py-1.5 rounded-xl text-xs font-bold"}>{peutPayer(COUT_ACHAT_EXTRA) ? "🛒" : "🔒"} +1 achat · {COUT_ACHAT_EXTRA} 💎</button>
               )}
               <button onClick={() => setPassedWindow(g.buyWindowUntil)} className="btn-dark px-3 py-1.5 rounded-xl text-xs font-bold">Passer</button>
             </div>
@@ -3280,9 +3302,9 @@ function App() {
           )}
           {!me.posed && selected.length < 3 && (
             <>
-              {myTurn && g.phase === "play" && me && !me.jokerNetUsed && peutPayer(COUT_JOKER) && (
-                <button onClick={() => act({ type: "jokerNet" })} title="Sort un joker de la pioche — une seule fois par manche"
-                  className="btn-green px-4 py-2 rounded-xl text-sm font-bold">🤡 Joker · {COUT_JOKER} 💎</button>
+              {myTurn && g.phase === "play" && me && !me.jokerNetUsed && (
+                <button onClick={() => peutPayer(COUT_JOKER) ? act({ type: "jokerNet" }) : setMsg(messageVerrou(COUT_JOKER))} title="Sort un joker de la pioche — une seule fois par manche"
+                  className={(peutPayer(COUT_JOKER) ? "btn-green" : "btn-dark opacity-70") + " px-4 py-2 rounded-xl text-sm font-bold"}>{peutPayer(COUT_JOKER) ? "🤡" : "🔒"} Joker · {COUT_JOKER} 💎</button>
               )}
               <button onClick={helpSort} className="btn-dark px-4 py-2 rounded-xl text-sm font-bold">💡 Aide{(() => {
                 const rest = Math.max(0, AIDES_GRATUITES - aidesInfo().n);

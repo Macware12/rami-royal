@@ -1721,7 +1721,7 @@ function handleBuyRequest(room, idx, net) {
     if ((c.pieces || 0) < COUT_ACHAT_NET) return "Il te faut " + COUT_ACHAT_NET + " diamants (solde : " + (c.pieces || 0) + ").";
     c.pieces -= COUT_ACHAT_NET;
     saveComptes();
-    pousserSolde(p);
+    pousserSolde(p, -COUT_ACHAT_NET, "achat net");
     g.achatNet = g.achatNet || {};
     g.achatNet[idx] = true;
   }
@@ -1737,15 +1737,15 @@ function rembourserAchatsNets(room, sauf) {
     if (i === sauf) continue;
     const p = room.players[i];
     const c = p && p.compte ? comptes.get(p.compte) : null;
-    if (c) { c.pieces = (c.pieces || 0) + COUT_ACHAT_NET; saveComptes(); pousserSolde(p); }
+    if (c) { c.pieces = (c.pieces || 0) + COUT_ACHAT_NET; saveComptes(); pousserSolde(p, COUT_ACHAT_NET, "achat net remboursé"); }
     delete g.achatNet[k];
   }
 }
 
 // Envoie son nouveau solde au joueur (affichage instantané côté client)
-function pousserSolde(p) {
+function pousserSolde(p, delta, motif) {
   const c = p && p.compte ? comptes.get(p.compte) : null;
-  if (c && p.socketId) io.to(p.socketId).emit("pieces", { pieces: c.pieces || 0 });
+  if (c && p.socketId) io.to(p.socketId).emit("pieces", { pieces: c.pieces || 0, delta: delta || 0, motif: motif || null });
 }
 
 // 4e jeton d'achat de la manche, payé en diamants (une seule recharge par manche)
@@ -1760,7 +1760,7 @@ function handleRechargeAchat(room, idx) {
   if ((c.pieces || 0) < COUT_ACHAT_EXTRA) return "Il te faut " + COUT_ACHAT_EXTRA + " diamants (solde : " + (c.pieces || 0) + ").";
   c.pieces -= COUT_ACHAT_EXTRA;
   saveComptes();
-  pousserSolde(p);
+  pousserSolde(p, -COUT_ACHAT_EXTRA, "4e jeton d'achat");
   p.buysLeft = 1;
   p.extraBuyUsed = true;
   log(room, p.name + " recharge un jeton d'achat 🛒 (" + COUT_ACHAT_EXTRA + " 💎)");
@@ -1782,7 +1782,7 @@ function handleJokerNet(room, idx) {
   if ((c.pieces || 0) < COUT_JOKER) return "Il te faut " + COUT_JOKER + " diamants (solde : " + (c.pieces || 0) + ").";
   c.pieces -= COUT_JOKER;
   saveComptes();
-  pousserSolde(p);
+  pousserSolde(p, -COUT_JOKER, "joker invoqué");
   const jk = g.stock.splice(ji, 1)[0];
   p.hand.push(jk);
   p.jokerNetUsed = true;
