@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2309-M">
+<meta name="version" content="v2310-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2309-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2310-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -1810,9 +1810,48 @@ function RamiRoyal() {
     return () => { document.removeEventListener("visibilitychange", onVis); try { lock && lock.release(); } catch (_) {} };
   }, [screen]);
 
+  // Aperçu visuel rapide : solo.html?rendu=table&joueurs=5 affiche une table factice
+  // pleine de combinaisons (aucune partie, rien n'est sauvegardé). Pour tester la lisibilité.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("rendu") !== "table") return;
+    const nb = Math.min(6, Math.max(3, parseInt(q.get("joueurs"), 10) || 5));
+    let seq = 0;
+    const C = (rank, suit) => ({ id: "ap" + (++seq), rank, suit, joker: false });
+    const JOK = () => ({ id: "ap" + (++seq), rank: 0, suit: "★", joker: true });
+    const noms = ["Toi", "Naly", "Hery", "Mirana", "Solofo", "Vero"];
+    const avs = ["🦁", "🐯", "🦊", "🐼", "🐸", "🦉"];
+    const players = Array.from({ length: nb }, (_, i) => ({
+      name: noms[i], isAI: i > 0, avatar: avs[i], color: "#fbbf24",
+      hand: i === 0 ? [C(3, "♠"), C(5, "♥"), C(9, "♦"), C(11, "♣"), C(1, "♠"), C(7, "♥"), C(12, "♦"), C(4, "♣")] : [C(2, "♠"), C(6, "♥"), C(10, "♦")],
+      posed: true, buysLeft: 2, lastTaken: null, total: 40 + i * 17, justPosed: false,
+      extraBuyUsed: false, jokerNetUsed: false,
+    }));
+    const melds = [];
+    let mid = 0;
+    players.forEach((p, i) => {
+      const n = 2 + (i % 3); // 2 à 4 combinaisons par joueur
+      for (let k = 0; k < n; k++) {
+        const r = 3 + ((i * 3 + k) % 8);
+        if (k % 2 === 0) melds.push({ id: "m" + (++mid), type: "tri", owner: i, cards: [C(r, "♠"), C(r, "♥"), C(r, "♦")].concat(i % 2 === 1 && k === 0 ? [C(r, "♣")] : []) });
+        else melds.push({ id: "m" + (++mid), type: "esc", owner: i, cards: [C(r, "♣"), C(r + 1, "♣")].concat(i % 3 === 0 ? [JOK()] : [C(r + 2, "♣")], [C(r + 3, "♣")]) });
+      }
+    });
+    setG({
+      apercu: true, players, melds,
+      stock: Array.from({ length: 30 }, () => C(2, "♥")), discard: [C(8, "♠")],
+      turn: 1, phase: "play", mancheIdx: 4, manches: MANCHES, history: [], staged: [],
+      justPosed: false, lastDrawn: [], log: [], animEvents: [], animSeq: 0, toast: null,
+      buyWindow: null, roundOver: null, discardLocked: false, takenCards: [], recycles: 0,
+      startedAt: Date.now() - 300000, mancheDebut: Date.now(), level: "moyen", shortMode: false,
+      defi: null, defiAmi: null, graineBase: null,
+    });
+    setScreen("game");
+  }, []);
+
   const derniereSauvServeur = useRef(0);
   useEffect(() => {
-    if (screen === "game" && g && !tuto) {
+    if (screen === "game" && g && !tuto && !g.apercu) {
       store.set("rami-save", JSON.stringify({ g }));
       store.set("rami-save-maj", String(Date.now()));
       // Compte connecté : la partie suit le joueur sur tous ses appareils (envoi au plus toutes les 10 s)
