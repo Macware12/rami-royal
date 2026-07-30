@@ -93,12 +93,13 @@ input, textarea { -webkit-user-select: text; user-select: text; }
     <p>🔒 <b>Confirmation du jet</b> : quand tu glisses une carte sur la défausse, elle n'est pas jetée immédiatement — un badge rouge « Confirmer » apparaît sur la défausse. <b>Touche la défausse pour confirmer le jet</b>, ou touche une carte de ta main pour annuler (le jet s'annule aussi tout seul après 8 secondes). Fini les cartes jetées par accident en rangeant sa main !</p>
     <p>On ne peut <b>compléter</b> les combinaisons de la table (les siennes ou celles des autres) qu'<b>après avoir posé son propre contrat</b>.</p>
     <p>La manche s'arrête dès qu'un joueur <b>vide sa main</b> (en jetant sa dernière carte ou en complétant). Si la pioche s'épuise, la défausse (sauf sa carte du dessus) est mélangée pour la reformer.</p>
-    <p>🔚 <b>Manche insolvable</b> : si la pioche doit être reformée une <b>3<sup>e</sup> fois</b> sans vainqueur, la manche s'arrête — le joueur avec <b>la main la plus légère</b> (le moins de points en main) la remporte.</p>
+    <p>🔚 <b>Manche insolvable</b> — la manche s'arrête d'elle-même dans deux cas : si la pioche doit être reformée une <b>3<sup>e</sup> fois</b> sans vainqueur, ou si <b>tous les joueurs ont posé et qu'aucune carte du jeu ne peut plus compléter quoi que ce soit</b>. Le joueur avec <b>la main la plus légère</b> (le moins de points en main) remporte alors la manche.</p>
+    <p>🏳️ <b>Arrêter la manche d'un commun accord</b> (multijoueur) : n'importe quel joueur peut proposer de stopper la manche. Chacun vote ; il faut <b>l'unanimité</b> des joueurs connectés (les bots acceptent d'office). Un seul refus, ou 30 secondes sans réponse, et la partie continue. Si le vote passe, la main la plus légère l'emporte comme ci-dessus.</p>
   </div>
 
   <div class="card">
     <h2>💰 L'achat</h2>
-    <p>Après <b>chaque carte jetée</b>, une <b>fenêtre d'achat de quelques secondes</b> s'ouvre : un joueur dont ce n'est pas le tour peut acheter la carte, en récupérant aussi <b>une carte de pénalité</b> piochée dans le tas.</p>
+    <p>Après <b>chaque carte jetée</b>, une <b>fenêtre d'achat de 5 secondes</b> s'ouvre : un joueur dont ce n'est pas le tour peut acheter la carte, en récupérant aussi <b>une carte de pénalité</b> piochée dans le tas.</p>
     <ul>
       <li>Maximum <b>3 achats par joueur et par manche</b> — possible même après avoir posé son contrat</li>
       <li>Si plusieurs joueurs veulent la carte : priorité dans <b>le sens du jeu</b> à partir du jeteur</li>
@@ -106,7 +107,7 @@ input, textarea { -webkit-user-select: text; user-select: text; }
       <li>Sans réponse avant la fin du décompte, personne n'achète</li>
       <li>🚫 <b>Après un achat, la défausse est bloquée</b> : la carte révélée en dessous ne peut être ni prise ni achetée par personne, jusqu'à ce qu'une nouvelle carte soit jetée</li>
     </ul>
-    <p>💎 Avec des diamants (voir plus bas) : l'<b>achat sans pénalité</b> (bouton ✨) évite la carte piochée en plus, et une <b>recharge</b> offre un 4<sup>e</sup> achat dans la manche.</p>
+    <p>💎 Avec des diamants (voir plus bas) : l'<b>achat sans pénalité</b> (bouton ✨) évite la carte piochée en plus — il consomme quand même un jeton 🛒 — et une <b>recharge</b> offre un 4<sup>e</sup> achat dans la manche.</p>
   </div>
 
   <div class="card">
@@ -123,15 +124,39 @@ input, textarea { -webkit-user-select: text; user-select: text; }
   <div class="card">
     <h2>💎 Les diamants (bonus de l'appli)</h2>
     <p>Les diamants ne changent pas les règles du rami : ce sont des <b>bonus optionnels</b> réservés aux joueurs qui ont un <b>compte</b> (gratuit — 🎁 100 💎 offerts à l'inscription).</p>
-    <p><b>On en gagne</b> en terminant des parties (+10, +25 de plus en cas de victoire), en débloquant des succès (+25), aux défis du jour (+15) et entre amis (+10), et grâce à la <b>série quotidienne</b> 🔥 (+10 à +50 par jour de jeu consécutif).</p>
-    <p><b>On les dépense</b> en pouvoirs :</p>
+    <p><b>On en gagne</b> :</p>
+    <ul>
+      <li>partie terminée <b>+10</b>, victoire <b>+25</b> de plus, succès débloqué <b>+25</b> ;</li>
+      <li><b>défi du jour +15</b> (+10 s'il est gagné), <b>défi entre amis +10</b> (+5 s'il est gagné) ;</li>
+      <li><b>série quotidienne 🔥</b> : +10 le 1<sup>er</sup> jour, jusqu'à +50 à partir du 7<sup>e</sup> jour consécutif ;</li>
+      <li><b>série de défis</b> : +100 tous les 7 jours de défi du jour d'affilée ;</li>
+      <li><b>missions du jour</b> : 3 objectifs quotidiens à +15 chacun, et <b>+25 de bonus</b> si les trois sont terminés ;</li>
+      <li><b>podium du défi du jour</b> : le top 3 reçoit <b>50 / 30 / 20</b> le lendemain ;</li>
+      <li><b>classement de la semaine</b> (victoires du lundi au dimanche) : le top 3 reçoit <b>100 / 60 / 40</b> ;</li>
+      <li>🎁 <b>100 diamants</b> offerts à la création du compte.</li>
+    </ul>
+    <p>⚠️ Anti-abus : au-delà de <b>15 parties par jour</b>, les parties ne rapportent plus de diamants (les succès et les défis, si).</p>
+    <p><b>On les dépense</b> en pouvoirs, ou dans la <b>boutique</b> (décor uniquement, aucun avantage de jeu) : dos de cartes (300 à 1200 💎, <b>visibles par les autres joueurs</b>), tapis de jeu (400 à 1000 💎, pour vous seul) et titres affichés sous votre pseudo (200 à 2500 💎, visibles par tous).</p>
+    <p>Les pouvoirs :</p>
     <ul>
       <li>💡 <b>Aide</b> — un classement de main offert par manche, puis 5 💎 chacun</li>
       <li>✨ <b>Achat sans pénalité</b> (15 💎) — acheter la carte de la défausse <b>sans</b> la carte piochée en plus</li>
       <li>🛒 <b>4<sup>e</sup> achat</b> (20 💎) — recharger un jeton d'achat, une fois par manche</li>
       <li>🪄 <b>Joker magique</b> (30 💎) — un joker <b>créé en plus</b> dans ta main (reconnaissable à sa carte bleutée), à tout moment, une fois par manche. Deux règles propres à lui : posé dans un escalier, <b>personne ne peut le récupérer par échange</b> ; et s'il te reste en main à la fin alors que <b>tous les joueurs ont posé</b>, il vaut <b>0 point</b> (au lieu de 20).</li>
     </ul>
+    <p>🗓️ <b>Défi du jour</b> : la même donne pour tous, chaque jour. Vous pouvez recommencer tant que vous n'avez pas fini la partie ; <b>dès qu'elle est terminée, le défi est bouclé pour la journée</b> et votre score entre au classement mondial. Une partie anormalement rapide n'est pas enregistrée. Même principe pour les défis entre amis : seul le premier résultat compte.</p>
     <p>⚖️ <b>Équité</b> : les pouvoirs sont <b>désactivés pendant les défis</b> (même donne, mêmes armes pour tous), l'hôte d'un salon peut les <b>couper</b> à la création (« Sans pouvoirs »), et ils ne sont pas disponibles en multijoueur local.</p>
+  </div>
+
+  <div class="card">
+    <h2>🌐 Le multijoueur</h2>
+    <ul>
+      <li>L'hôte crée un salon et partage son <b>code à 5 lettres</b> ; il choisit le temps par tour (45, 60 ou 90 s), la durée de partie et s'il autorise les pouvoirs 💎.</li>
+      <li><b>Minuteur</b> : sans action dans le temps imparti, le jeu joue à votre place. Après 3 dépassements, le mode automatique s'active — un bouton « Reprendre » vous rend la main quand vous voulez.</li>
+      <li><b>Déconnexion</b> : l'ordinateur vous remplace le temps de votre absence ; vous reprenez votre place en revenant avec le code du salon (ou depuis votre compte).</li>
+      <li><b>Places libres</b> : une partie en cours peut être rejointe en prenant la place d'un bot — le nouveau venu hérite de sa main et de ses points.</li>
+      <li>Un joueur peut quitter à tout moment ; l'hôte peut fermer le salon pour tout le monde.</li>
+    </ul>
   </div>
 
   <div class="card">

@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2351-M">
+<meta name="version" content="v2352-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2351-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2352-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -3667,7 +3667,7 @@ function tapCard(id) {
     const slides = [
       {
         emoji: "🎴", titre: "Bienvenue !",
-        texte: "Le but est simple : être le PREMIER à se débarrasser de toutes ses cartes. Pour ça, on les regroupe en combinaisons. On va voir ça ensemble, pas à pas.",
+        texte: "À chaque manche, on essaie d'être le PREMIER à se débarrasser de ses cartes, en les regroupant en combinaisons. Les cartes qui restent en main à la fin d'une manche donnent des points de pénalité — et à la fin de la partie, c'est le plus PETIT total qui gagne. On va voir ça ensemble, pas à pas.",
         cartes: null,
       },
       {
@@ -3686,13 +3686,18 @@ function tapCard(id) {
         cartes: [C(5, "♠"), C(0, "★", true), C(7, "♠")],
       },
       {
+        emoji: "💰", titre: "L'ACHAT", accent: "prendre une carte jetée par un autre",
+        texte: "Quand quelqu'un jette une carte qui t'intéresse, tu peux l'ACHETER pendant quelques secondes — mais tu piocheras une carte de pénalité en plus. Tu as 3 achats par manche (les points 🛒 du badge « Toi »).",
+        cartes: null,
+      },
+      {
         emoji: "🎯", titre: "Le CONTRAT",
         texte: "À chaque manche, un CONTRAT t'indique ce que tu dois former (par exemple : 1 tri + 1 escalier). Tu le réalises dans ta main, puis tu le POSES sur la table. En jeu, ton badge « Toi » (à droite de la défausse) affiche tes points et tes achats restants 🛒.",
         cartes: null,
       },
       {
         emoji: "🐒", titre: "C'est parti !",
-        texte: "Je te guide à chaque étape. Suis simplement les cartes qui BRILLENT et mes messages. On apprend en jouant — tu ne peux pas te tromper.",
+        texte: "Je te guide à chaque étape : suis les cartes qui BRILLENT et mes messages. Après ce tutoriel, tu gagneras des diamants 💎 à chaque partie, avec des missions du jour et un défi quotidien contre le monde entier. On apprend en jouant — tu ne peux pas te tromper.",
         cartes: null,
       },
     ];
@@ -4590,11 +4595,11 @@ function tapCard(id) {
               </details>
               <details className="bg-emerald-950/40 rounded-lg px-2.5 py-1.5">
                 <summary className="font-bold text-emerald-100 cursor-pointer">🃏 Le joker et les points</summary>
-                <p className="mt-1 leading-relaxed">Le joker remplace n'importe quelle carte (min. 3 vraies cartes par combinaison, jamais 2 jokers côte à côte). Jeté dans la défausse, il est perdu pour tous. Échange : si un escalier posé contient un joker (halo violet) et que tu as la carte de sa position exacte, glisse-la dessus pour le récupérer — après avoir posé, jamais sur un tri. Cartes restantes = points : 2-9 → 5 · 10-R → 10 · As → 15 · Joker → 20. Le plus petit total après 8 manches gagne !</p>
+                <p className="mt-1 leading-relaxed">Le joker remplace n'importe quelle carte (min. 3 vraies cartes par combinaison, jamais 2 jokers côte à côte). Jeté dans la défausse, il est perdu pour tous. Échange : si un escalier posé contient un joker (halo violet) et que tu as la carte de sa position exacte, glisse-la dessus pour le récupérer — après avoir posé, jamais sur un tri. Cartes restantes = points : 2-9 → 5 · 10-R → 10 · As → 15 · Joker → 20 (le joker magique 🪄 vaut 0 si tout le monde a posé). Le plus petit total à la fin gagne ! Bonus pose-tout : −50 × nombre de joueurs en dernière manche, −10 × joueurs si tu poses tout par surprise avant. Si la pioche est rebattue 3 fois, ou si plus aucun coup n'est possible, la manche s'arrête et la main la plus légère l'emporte.</p>
               </details>
             </div>
             <div className="mt-3 text-[11px] text-emerald-200">
-              <b className="text-amber-200">Les 8 manches :</b> {MANCHES.map((m, i) => `${i + 1}. ${m.label}`).join(" · ")}
+              <b className="text-amber-200">{(g && g.manches ? g.manches.length : 8) === 8 ? "Les 8 manches :" : "Tes " + g.manches.length + " manches :"}</b> {(g && g.manches ? g.manches : MANCHES).map((m, i) => `${i + 1}. ${m.label}`).join(" · ")}
             </div>
           </div>
         </div>
