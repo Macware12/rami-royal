@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2336-M">
+<meta name="version" content="v2337-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2336-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2337-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -74,7 +74,6 @@ const { useState, useEffect, useRef } = React;
 
 // ---------- Données de base ----------
 const SUITS = ["♠", "♥", "♦", "♣"];
-const AVATARS = ["🦎", "🐒", "🦉", "🦜", "🐢"];
 const AVATAR_COLORS = ["#f59e0b", "#38bdf8", "#f472b6", "#a3e635", "#c084fc"];
 const LEVELS = [
   { id: "facile", label: "Facile" },
@@ -458,7 +457,6 @@ function graineDe(base, extra) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-function graineDuJour(extra) { return graineDe("jour-" + cleDuJour(), extra); }
 
 // ---------- Partage du score : image prête pour WhatsApp & co ----------
 function partagerScore(ranking, defi) {
@@ -1216,7 +1214,27 @@ function ObtenirDiamants() {
             <span className="block text-[10px] text-emerald-400">+{pub.recompense} 💎 · jusqu'à {pub.maxJour} fois par jour</span>
           </span>
           {cat && cat.pubsActives ? (
-            <button className="btn-diamant px-3 py-1.5 rounded-xl text-xs font-bold">▶ Regarder</button>
+            <button onClick={() => {
+                let acc = {};
+                try { acc = JSON.parse(store.get("rami-account")) || {}; } catch (_) {}
+                if (!acc.code) { setCat(Object.assign({}, cat, { msg: "🔒 Crée un compte pour gagner des diamants !" })); return; }
+                // La vidéo AdMob s'insérera ici ; le crédit reste décidé par le serveur
+                fetch(API_BASE + "/boutique/pub", {
+                  method: "POST", headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ code: acc.code }),
+                }).then((r) => r.json().then((d) => ({ ok: r.ok, d })))
+                  .then(({ ok, d }) => {
+                    if (!ok) { setCat(Object.assign({}, cat, { msg: d.erreur || "Réessaie plus tard." })); return; }
+                    try {
+                      const a2 = JSON.parse(store.get("rami-account")) || {};
+                      a2.pieces = d.pieces; store.set("rami-account", JSON.stringify(a2));
+                      window.dispatchEvent(new CustomEvent("rami-gains", { detail: d }));
+                    } catch (_) {}
+                    setCat(Object.assign({}, cat, { msg: "✨ +" + pub.recompense + " 💎 ! Encore " + d.restantes + " aujourd'hui." }));
+                  })
+                  .catch(() => setCat(Object.assign({}, cat, { msg: "Serveur injoignable." })));
+              }}
+              className="btn-diamant px-3 py-1.5 rounded-xl text-xs font-bold">▶ Regarder</button>
           ) : bientot}
         </div>
         {packs.map((p) => (
@@ -1231,6 +1249,7 @@ function ObtenirDiamants() {
             ) : bientot}
           </div>
         ))}
+        {cat && cat.msg && <p className="text-[11px] text-amber-200 text-center">{cat.msg}</p>}
         <p className="text-[10px] text-emerald-400 text-center">En attendant, chaque partie, défi et jour de série 🔥 te rapporte des 💎 !</p>
       </div>
     </div>
@@ -1816,7 +1835,7 @@ function RamiRoyal() {
   const [newCode, setNewCode] = useState(null); // code fraîchement créé, à montrer au joueur
   const succesSession = useRef({}); // succès du mode invité : mémoire de session uniquement
   const [myAvatar, setMyAvatar] = useState(store.get("rami-avatar") || AVATARS_POOL[0]);
-  const [muted, setMuted] = useState(store.get("rami-muted") === "1");
+  const [muted, setMuted] = useState(store.get("rami-muted") === "1" || store.get("ramimp-muted") === "1");
   const [intro, setIntro] = useState(null);
   const [hasSave, setHasSave] = useState(false);
   const [showCfg, setShowCfg] = useState(!store.get("rami-level")); // réglages repliés pour les habitués
@@ -2042,7 +2061,7 @@ function RamiRoyal() {
     return () => { clearTimeout(t); clearInterval(iv); };
   }, [g && g.buyWindow && g.buyWindow.until, screen]);
 
-  useEffect(() => { SFX_MUTED = muted; store.set("rami-muted", muted ? "1" : "0"); }, [muted]);
+  useEffect(() => { SFX_MUTED = muted; const v = muted ? "1" : "0"; store.set("rami-muted", v); store.set("ramimp-muted", v); }, [muted]); // les deux clients partagent la préférence
 
   // Chrono : rafraîchit l'affichage chaque seconde pendant la partie
   useEffect(() => {
@@ -3859,6 +3878,7 @@ function tapCard(id) {
                     <div className="flex flex-col items-center gap-1">
                       <PhotoCompte t={52} />
                       <h3 className="text-amber-300 font-bold text-center">{account.pseudo}</h3>
+                      {titreActuel() ? <div className="text-[11px] text-amber-200">{titreActuel()}</div> : null}
                       <div className="text-xs font-bold text-yellow-300">💎 {lireSolde().pieces} diamants{lireSolde().serie > 1 ? " · 🔥 série " + lireSolde().serie + " jours" : ""}</div>
                     </div>
                     <details className="text-[10px] text-emerald-300 bg-emerald-950/40 border border-emerald-800/40 rounded-xl px-3 py-2">

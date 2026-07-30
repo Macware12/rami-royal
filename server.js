@@ -1130,7 +1130,7 @@ app.post("/boutique/achat", (req, res) => {
 // ---------- Dépense de diamants (aide payante, boutique à venir) ----------
 app.post("/compte/depenser", (req, res) => {
   if (tropDEssais(req, res)) return;
-  const { code, montant } = req.body || {};
+  const { code, montant, motif } = req.body || {};
   const c = typeof code === "string" && /^[0-9]{6}$/.test(code.trim()) ? comptes.get(code.trim()) : null;
   if (!c) return res.status(404).json({ erreur: "Code inexistant." });
   if (c.banni) return res.status(403).json({ erreur: MESSAGE_BANNI });
@@ -1140,6 +1140,7 @@ app.post("/compte/depenser", (req, res) => {
   c.pieces -= m;
   c.lastSeen = Date.now();
   saveComptes();
+  if (motif) console.log("💎 " + c.pseudo + " dépense " + m + " (" + String(motif).slice(0, 30) + ")");
   res.json({ pieces: c.pieces });
 });
 
