@@ -2271,7 +2271,38 @@ io.on("connection", (socket) => {
         return;
       }
     }
-    if (room.state !== "lobby") return cb({ ok: false, error: "La partie a déjà commencé (utilise « Reprendre » si tu en faisais partie)." });
+    if (room.state !== "lobby") {
+      // Partie en cours : on peut rejoindre en prenant la place d'un bot (main, points
+      // et jetons du bot conservés — le nouveau venu hérite de sa situation)
+      const bot = room.players.find((p) => p.isBot);
+      if (!bot) return cb({ ok: false, error: "La partie a déjà commencé et aucun bot n'est remplaçable (utilise « Reprendre » si tu en faisais partie)." });
+      const ancienNom = bot.name;
+      const idx = room.players.indexOf(bot);
+      bot.isBot = false;
+      bot.name = sanitizeName(name);
+      const autresAvatars = room.players.filter((q) => q !== bot).map((q) => q.avatar);
+      if (avatar && !autresAvatars.includes(avatar)) bot.avatar = avatar;
+      bot.token = genToken();
+      bot.socketId = socket.id;
+      bot.connected = true;
+      bot.absent = false;
+      bot.timeouts = 0;
+      if (cptJ) { bot.compte = cptJ.code; cptJ.salonEnCours = room.code; saveComptes(); }
+      myRoom = room; myToken = bot.token;
+      socket.join(room.code);
+      touch(room);
+      // Si c'était le tour du bot : on rend la main au nouveau venu avec un vrai minuteur
+      if (room.game && room.state === "playing" && room.game.turn === idx && room.game.phase !== "buyWindow") {
+        clearTimeout(room.aiTimer);
+        clearTimeout(room.turnTimer);
+        room.game.turnDeadline = Date.now() + room.options.turnSeconds * 1000;
+        room.turnTimer = setTimeout(() => safeRun(() => onTurnTimeout(room)), room.options.turnSeconds * 1000);
+      }
+      log(room, "🎉 " + bot.name + " rejoint la partie et remplace " + ancienNom);
+      cb({ ok: true, code: room.code, token: bot.token });
+      broadcast(room);
+      return;
+    }
     if (room.players.length >= 6) return cb({ ok: false, error: "Salon complet (6 joueurs max)." });
     const player = addPlayer(room, name, false, avatar);
     if (cptJ) { player.compte = cptJ.code; cptJ.salonEnCours = room.code; saveComptes(); }
