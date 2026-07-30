@@ -57,6 +57,12 @@
     </div>
     <div class="carte ok" id="calme" style="display:none;"><b>✅ Aucun signalement en attente</b></div>
 
+    <div class="carte alerte" id="erreurs-alerte" style="display:none;">
+      <b id="erreurs-titre">🐞</b>
+      <div id="erreurs-liste" style="margin-top:8px; font-size:12px; line-height:1.7;"></div>
+    </div>
+    <div class="carte ok" id="erreurs-calme" style="display:none;"><b>🐞 Aucune erreur client ces dernières 24 h</b></div>
+
     <div class="grille">
       <div class="tuile"><b id="t-connectes">–</b><span>connectés maintenant</span></div>
       <div class="tuile"><b id="t-parties">–</b><span>parties en cours</span></div>
@@ -133,6 +139,7 @@ function fmtDate(t) {
     : d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
 }
 function esc2(t) { var d = document.createElement("div"); d.textContent = t; return d.innerHTML; }
+var esc = esc2; // alias
 function rendreJoueurs() {
   var f = (document.getElementById("filtre").value || "").toLowerCase();
   var corps = document.getElementById("j-corps");
@@ -158,8 +165,23 @@ function rafraichir() {
     fetch("/admin/resume?cle=" + encodeURIComponent(CLE)).then(function (r) { if (!r.ok) throw new Error("cle"); return r.json(); }),
     fetch("/stats.json?cle=" + encodeURIComponent(CLE)).then(function (r) { return r.json(); }).catch(function () { return {}; }),
     fetch("/admin/joueurs?cle=" + encodeURIComponent(CLE)).then(function (r) { return r.json(); }).catch(function () { return null; }),
+    fetch("/admin/erreurs?cle=" + encodeURIComponent(CLE)).then(function (r) { return r.json(); }).catch(function () { return null; }),
   ]).then(function (res) {
-    var a = res[0], s = res[1], j = res[2];
+    var a = res[0], s = res[1], j = res[2], err = res[3];
+    // Erreurs clients (24 h) : rouge si récentes, vert sinon
+    var nbErr = (a.erreurs && a.erreurs.recentes24h) || 0;
+    document.getElementById("erreurs-alerte").style.display = nbErr > 0 ? "" : "none";
+    document.getElementById("erreurs-calme").style.display = nbErr > 0 ? "none" : "";
+    if (nbErr > 0) {
+      document.getElementById("erreurs-titre").textContent = "🐞 " + nbErr + " erreur" + (nbErr > 1 ? "s" : "") + " client ces dernières 24 h";
+      var recentes = ((err && err.erreurs) || []).filter(function (e) { return Date.now() - e.dernier < 86400000; }).slice(0, 8);
+      document.getElementById("erreurs-liste").innerHTML = recentes.map(function (e) {
+        return "<div><b>" + esc(e.version || "?") + "</b> · " + esc(e.page || "?") + " · ×" + e.n +
+          " · " + new Date(e.dernier).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) +
+          "<br><span style=\"color:#fecaca;\">" + esc(e.message) + "</span>" +
+          (e.source ? "<br><span style=\"opacity:.6; font-size:11px;\">" + esc(e.source) + (e.ligne ? ":" + e.ligne : "") + "</span>" : "") + "</div>";
+      }).join("<hr style='border:none; border-top:1px solid #7f1d1d55; margin:6px 0;'>");
+    }
     if (j && j.joueurs) { joueurs = j.joueurs; document.getElementById("j-total").textContent = j.total; rendreJoueurs(); }
     localStorage.setItem("rami-admin-cle", CLE);
     montre();

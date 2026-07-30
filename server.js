@@ -567,6 +567,50 @@ function envoyerEmail(sujet, corps) {
   brancher(direct ? tls.connect(SMTP.port, SMTP.host, () => {}) : net.connect(SMTP.port, SMTP.host));
 }
 
+// ---------- Télémétrie : erreurs JavaScript des clients ----------
+// Chaque page envoie ses erreurs fatales ici (dédupliquées par message+version).
+// Consultables sur le tableau de bord admin — un crash en prod se voit en minutes, plus en semaines.
+const ERREURS_FILE = process.env.ERREURS_FILE || path.join(__dirname, "erreurs-save.json");
+const erreursClients = []; // { cle, message, source, ligne, pile, version, page, n, premier, dernier }
+let erreursTimer = null;
+function saveErreurs() {
+  clearTimeout(erreursTimer);
+  erreursTimer = setTimeout(() => {
+    while (erreursClients.length > 200) erreursClients.shift();
+    storage.save("erreurs", erreursClients, ERREURS_FILE)
+      .catch((e) => console.error("Sauvegarde des erreurs impossible:", e.message));
+  }, 1000);
+}
+app.use("/telemetrie", express.json({ limit: "8kb" }));
+app.post("/telemetrie", (req, res) => {
+  if (tropDEssais(req, res)) return;
+  const { message, source, ligne, pile, version, page } = req.body || {};
+  const msg = String(message || "").trim().slice(0, 300);
+  if (!msg) return res.status(400).json({ erreur: "Message vide." });
+  const cle = msg + "|" + String(version || "");
+  const existante = erreursClients.find((x) => x.cle === cle);
+  if (existante) {
+    existante.n += 1;
+    existante.dernier = Date.now();
+  } else {
+    erreursClients.push({
+      cle, message: msg,
+      source: String(source || "").slice(0, 200),
+      ligne: parseInt(ligne, 10) || 0,
+      pile: String(pile || "").slice(0, 600),
+      version: String(version || "").slice(0, 20),
+      page: String(page || "").slice(0, 40),
+      n: 1, premier: Date.now(), dernier: Date.now(),
+    });
+  }
+  saveErreurs();
+  res.json({ ok: true });
+});
+app.get("/admin/erreurs", (req, res) => {
+  if (!adminOk(req, res)) return;
+  res.json({ erreurs: [...erreursClients].sort((a, b) => b.dernier - a.dernier).slice(0, 50) });
+});
+
 app.use("/signaler", express.json({ limit: "4kb" }));
 app.post("/signaler", (req, res) => {
   if (tropDEssais(req, res)) return;
@@ -716,6 +760,7 @@ app.get("/admin/resume", (req, res) => {
   res.json({
     comptes: { total: comptes.size, nouveaux24h, actifs7j },
     signalements: { total: signalements.length, aTraiter: signalements.filter((s) => !s.traite).length },
+    erreurs: { total: erreursClients.length, recentes24h: erreursClients.filter((e) => Date.now() - e.dernier < 86400000).length },
     defiJour: (defiScores.get(cleJour) || new Map()).size,
     defisPrives: defisPrives.size,
     salons: rooms.size,
@@ -2754,6 +2799,7 @@ function flushComptes() {
     storage.save("defi", outDefi, DEFI_FILE),
     storage.save("defis-prives", Object.fromEntries(defisPrives), DEFIS_PRIVES_FILE),
     storage.save("signalements", signalements, SIGNALEMENTS_FILE),
+    storage.save("erreurs", erreursClients, ERREURS_FILE),
   ]).catch(() => {});
 }
 process.on("SIGTERM", () => { saveRooms(); Promise.resolve(flushComptes()).finally(() => setTimeout(() => process.exit(0), 800)); });
@@ -2791,6 +2837,8 @@ process.on("SIGINT", () => { saveRooms(); Promise.resolve(flushComptes()).finall
     if (dataPrives && typeof dataPrives === "object")
       Object.keys(dataPrives).forEach((id) => defisPrives.set(id, dataPrives[id]));
     if (defisPrives.size) console.log(defisPrives.size + " défi(s) privé(s) chargé(s)");
+    const dataErr = await storage.load("erreurs", ERREURS_FILE);
+    if (Array.isArray(dataErr)) dataErr.forEach((e) => e && e.cle && erreursClients.push(e));
     const dataSignal = await storage.load("signalements", SIGNALEMENTS_FILE);
     if (Array.isArray(dataSignal)) dataSignal.forEach((s) => s && s.id && signalements.push(s));
     const enAttente = signalements.filter((s) => !s.traite).length;

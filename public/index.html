@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2332-M">
+<meta name="version" content="v2333-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2332-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2333-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -129,6 +129,40 @@ const STYLE = (
 );
 
 // ---------- Aides ----------
+// ---------- Télémétrie des erreurs ----------
+// Toute erreur fatale est envoyée au serveur (dédupliquée, 5 max par session, sans
+// donnée personnelle) : un crash en production se voit sur le tableau de bord admin.
+(function () {
+  const envoyees = new Set();
+  let quota = 5;
+  window.signalerErreur = function (message, source, ligne, pile) {
+    try {
+      const msg = String(message || "").slice(0, 300);
+      if (!msg || envoyees.has(msg) || quota <= 0) return;
+      envoyees.add(msg);
+      quota -= 1;
+      const meta = document.querySelector('meta[name="version"]');
+      const base = (window.RAMI_CONFIG && window.RAMI_CONFIG.server) || "";
+      fetch(base + "/telemetrie", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: msg, source: String(source || "").slice(0, 200), ligne: ligne || 0,
+          pile: String(pile || "").slice(0, 600),
+          version: (meta && meta.content) || "?",
+          page: window.location.pathname,
+        }),
+      }).catch(function () {});
+    } catch (_) {}
+  };
+  window.addEventListener("error", function (e) {
+    window.signalerErreur(e.message, e.filename, e.lineno, e.error && e.error.stack);
+  });
+  window.addEventListener("unhandledrejection", function (e) {
+    const r = e.reason || {};
+    window.signalerErreur("Promesse rejetée : " + (r.message || String(r).slice(0, 200)), "", 0, r.stack);
+  });
+})();
+
 const store = {
   get(k) { try { return window.localStorage.getItem(k); } catch (_) { return null; } },
   set(k, v) { try { window.localStorage.setItem(k, v); } catch (_) {} },
@@ -2710,7 +2744,7 @@ function App() {
               <a href="/contact.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">💬 Nous contacter</a>
               <a href="/signaler.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🚩 Signaler un joueur</a>
               <a href="/confidentialite.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🔒 Confidentialité</a>
-              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2332-M</div>
+              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2333-M</div>
             </div>
           </div>
         )}
@@ -3280,7 +3314,7 @@ function App() {
           </div>
         )}
         <div className="flex gap-2 text-[11px] text-emerald-400 flex-wrap justify-center items-center pb-4">
-          <span className="opacity-60 self-center">v2332-M</span>
+          <span className="opacity-60 self-center">v2333-M</span>
         </div>
       </div>
     );
