@@ -317,7 +317,8 @@ app.post("/compte/creer", (req, res) => {
   let code;
   do { code = String(crypto.randomInt(100000, 1000000)); } while (comptes.has(code));
   const compte = { code, pseudo: req.body.pseudo.trim(), stats: cleanStats(req.body.stats),
-    succes: cleanSucces(req.body.succes), createdAt: Date.now(), lastSeen: Date.now() };
+    succes: cleanSucces(req.body.succes), createdAt: Date.now(), lastSeen: Date.now(),
+    pieces: PIECES_BIENVENUE }; // cadeau de bienvenue 🎁
   comptes.set(code, compte);
   noteCompteCree(req);
   saveComptes();
@@ -352,7 +353,10 @@ app.post("/compte/connexion", (req, res) => {
 // partie terminée 10, victoire +25, succès débloqué +25, défi du jour 15 (+10 si gagné),
 // série quotidienne croissante (jour 1 → 7+). Plafond anti-farm : 15 parties payées par jour.
 const PIECES = { partie: 10, victoire: 25, succes: 25, defi: 15, defiVictoire: 10, defiAmi: 10, defiAmiVictoire: 5 };
-const COUT_ACHAT_NET = 15; // achat « net » : la carte sans la carte de pénalité
+const COUT_ACHAT_NET = 15;   // achat « net » : la carte sans la carte de pénalité
+const COUT_ACHAT_EXTRA = 20; // 4e jeton d'achat de la manche
+const COUT_JOKER = 30;       // un joker sorti de la pioche (1 fois par manche)
+const PIECES_BIENVENUE = 100; // offert à la création du compte
 const SERIE_RECOMPENSES = [10, 15, 20, 25, 30, 40, 50];
 const PARTIES_PAYEES_MAX = 15;
 const dateDuJour = () => new Date().toISOString().slice(0, 10);
@@ -1261,6 +1265,7 @@ function startRound(room, mancheIdx) {
   room.players.forEach((p) => {
     p.hand = deck.splice(0, 13);
     p.posed = false; p.buysLeft = E.MAX_ACHATS; p.lastTaken = null; p.justPosed = false; p.timeouts = 0;
+    p.extraBuyUsed = false; p.jokerNetUsed = false; // pouvoirs payants : 1 fois par manche
   });
   // Mode court : 3 manches aléatoires parmi les 7 premières (exclut Pose-tout)
   let manchesFinales = room.game?.manches; // Garde les manches si on passe à la manche suivante
@@ -1310,6 +1315,7 @@ function publicPlayer(p, idx) {
   return {
     idx, name: p.name, isBot: p.isBot, connected: p.connected, absent: p.absent,
     handCount: p.hand.length, posed: p.posed, buysLeft: p.buysLeft,
+    extraBuyUsed: Boolean(p.extraBuyUsed), jokerNetUsed: Boolean(p.jokerNetUsed),
     lastTaken: p.lastTaken, total: p.total, wins: p.wins || 0, avatar: p.avatar,
   };
 }
@@ -1715,6 +1721,7 @@ function handleBuyRequest(room, idx, net) {
     if ((c.pieces || 0) < COUT_ACHAT_NET) return "Il te faut " + COUT_ACHAT_NET + " pièces (solde : " + (c.pieces || 0) + ").";
     c.pieces -= COUT_ACHAT_NET;
     saveComptes();
+    pousserSolde(p);
     g.achatNet = g.achatNet || {};
     g.achatNet[idx] = true;
   }
@@ -1730,9 +1737,59 @@ function rembourserAchatsNets(room, sauf) {
     if (i === sauf) continue;
     const p = room.players[i];
     const c = p && p.compte ? comptes.get(p.compte) : null;
-    if (c) { c.pieces = (c.pieces || 0) + COUT_ACHAT_NET; saveComptes(); }
+    if (c) { c.pieces = (c.pieces || 0) + COUT_ACHAT_NET; saveComptes(); pousserSolde(p); }
     delete g.achatNet[k];
   }
+}
+
+// Envoie son nouveau solde au joueur (affichage instantané côté client)
+function pousserSolde(p) {
+  const c = p && p.compte ? comptes.get(p.compte) : null;
+  if (c && p.socketId) io.to(p.socketId).emit("pieces", { pieces: c.pieces || 0 });
+}
+
+// 4e jeton d'achat de la manche, payé en pièces (une seule recharge par manche)
+function handleRechargeAchat(room, idx) {
+  const g = room.game;
+  if (!g || room.state !== "playing") return "Pas de partie en cours.";
+  const p = room.players[idx];
+  if (p.buysLeft > 0) return "Il te reste des jetons d'achat (🛒) — la recharge attendra.";
+  if (p.extraBuyUsed) return "Recharge déjà utilisée cette manche (1 max).";
+  const c = p.compte ? comptes.get(p.compte) : null;
+  if (!c) return "Il faut un compte pour recharger (pastille en haut à droite).";
+  if ((c.pieces || 0) < COUT_ACHAT_EXTRA) return "Il te faut " + COUT_ACHAT_EXTRA + " pièces (solde : " + (c.pieces || 0) + ").";
+  c.pieces -= COUT_ACHAT_EXTRA;
+  saveComptes();
+  pousserSolde(p);
+  p.buysLeft = 1;
+  p.extraBuyUsed = true;
+  log(room, p.name + " recharge un jeton d'achat 🛒 (" + COUT_ACHAT_EXTRA + " 🪙)");
+  broadcast(room); // état renvoyé tout de suite (jeton visible, bouton Acheter actif)
+  return null;
+}
+
+// Un joker sorti de la pioche, payé en pièces (une seule fois par manche, pendant son tour)
+function handleJokerNet(room, idx) {
+  const g = room.game;
+  if (!g || room.state !== "playing") return "Pas de partie en cours.";
+  if (g.turn !== idx || g.phase !== "play") return "Le joker s'invoque pendant ton tour, après avoir pioché.";
+  const p = room.players[idx];
+  if (p.jokerNetUsed) return "Joker déjà invoqué cette manche (1 max).";
+  const ji = g.stock.findIndex((c) => c.joker);
+  if (ji === -1) return "Plus aucun joker dans la pioche !";
+  const c = p.compte ? comptes.get(p.compte) : null;
+  if (!c) return "Il faut un compte pour invoquer un joker.";
+  if ((c.pieces || 0) < COUT_JOKER) return "Il te faut " + COUT_JOKER + " pièces (solde : " + (c.pieces || 0) + ").";
+  c.pieces -= COUT_JOKER;
+  saveComptes();
+  pousserSolde(p);
+  const jk = g.stock.splice(ji, 1)[0];
+  p.hand.push(jk);
+  p.jokerNetUsed = true;
+  log(room, "🤡 " + p.name + " invoque un joker de la pioche (" + COUT_JOKER + " 🪙)");
+  io.to(room.code).emit("fx", { kind: "draw", source: "stock", idx });
+  broadcast(room); // le joker apparaît immédiatement dans la main
+  return null;
 }
 
 function maybeResolveRematch(room) {
@@ -2322,6 +2379,8 @@ io.on("connection", (socket) => {
     else if (a.type === "complete") err = handleComplete(myRoom, me.idx, a.meldId, a.cardId);
     else if (a.type === "discard") err = handleDiscard(myRoom, me.idx, a.cardId);
     else if (a.type === "buy") { err = handleBuyRequest(myRoom, me.idx, a.net); if (!err) socket.emit("info", a.net ? "Achat net demandé (15 🪙)…" : "Demande d'achat enregistrée…"); }
+    else if (a.type === "rechargeAchat") { err = handleRechargeAchat(myRoom, me.idx); if (!err) socket.emit("info", "🛒 Jeton rechargé — tu peux acheter !"); }
+    else if (a.type === "jokerNet") err = handleJokerNet(myRoom, me.idx);
     else if (a.type === "resume") { me.p.absent = false; me.p.timeouts = 0; log(myRoom, `${me.p.name} reprend la main`); broadcast(myRoom); }
     if (err) socket.emit("info", err);
   });

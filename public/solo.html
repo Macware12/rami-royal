@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2300-M">
+<meta name="version" content="v2301-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2300-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2301-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -266,10 +266,13 @@ const AIDES_GRATUITES = 3;
 const COUT_AIDE = 5;
 // Achat « net » : la carte de la défausse SANS la carte de pénalité (consomme un jeton 🛒)
 const COUT_ACHAT_NET = 15;
-// Le joueur a-t-il les moyens de l'achat net ? (compte requis)
-function peutAchatNet() {
-  try { const a = JSON.parse(store.get("rami-account")) || {}; return Boolean(a.code) && (a.pieces || 0) >= COUT_ACHAT_NET; } catch (_) { return false; }
+const COUT_ACHAT_EXTRA = 20; // 4e jeton d'achat de la manche (1 recharge max)
+const COUT_JOKER = 30;       // un joker sorti de la pioche (1 fois par manche)
+// Le joueur connecté a-t-il les moyens ? (compte requis)
+function peutPayer(montant) {
+  try { const a = JSON.parse(store.get("rami-account")) || {}; return Boolean(a.code) && (a.pieces || 0) >= montant; } catch (_) { return false; }
 }
+const peutAchatNet = () => peutPayer(COUT_ACHAT_NET);
 // Débite des pièces (optimiste : l'interface bouge tout de suite, le serveur confirme)
 function depenserPieces(montant, motif) {
   let acc = {};
@@ -1130,6 +1133,7 @@ function GainsToast() {
   if (g.victoire) det.push("victoire +" + g.victoire);
   if (g.succes) det.push("succès +" + g.succes);
   if (g.serie) det.push("série " + g.serieJours + " j +" + g.serie);
+  if (g.bienvenue) det.push("🎁 cadeau de bienvenue");
   return (
     <div className="fixed left-1/2 -translate-x-1/2 z-40 px-4 py-2.5 rounded-2xl text-sm font-bold text-amber-200 text-center cursor-pointer"
       style={{ top: "calc(env(safe-area-inset-top, 0px) + 10px)", background: "linear-gradient(180deg, rgba(6,58,42,.97), rgba(4,40,28,.97))", border: "1px solid #f59e0b88", boxShadow: "0 6px 18px rgba(0,0,0,.45)" }}
@@ -1366,6 +1370,7 @@ function RamiRoyal() {
       hand: deck.splice(0, 13),
       posed: false,
       buysLeft: MAX_ACHATS,
+      extraBuyUsed: false, jokerNetUsed: false, // pouvoirs payants : 1 fois par manche
       lastTaken: null,
       total: totals ? totals[i] : 0,
     }));
@@ -1812,6 +1817,42 @@ function RamiRoyal() {
 
   function passBuy() {
     setG((s) => resolveBuyNow(s, "pass"));
+  }
+
+  // 4e jeton d'achat de la manche, payé en pièces (une seule recharge par manche)
+  function rechargerAchat() {
+    if (!peutPayer(COUT_ACHAT_EXTRA)) { setMsg("Recharge : il te faut un compte et " + COUT_ACHAT_EXTRA + " pièces."); return; }
+    setG((s) => {
+      const p = s.players[0];
+      if (p.buysLeft > 0 || p.extraBuyUsed) return s;
+      depenserPieces(COUT_ACHAT_EXTRA, "achat-extra");
+      setMsg("🛒 Jeton d'achat rechargé (" + COUT_ACHAT_EXTRA + " 🪙) — tu peux acheter !");
+      const players = s.players.map((q, i) => (i === 0 ? { ...q, buysLeft: 1, extraBuyUsed: true } : q));
+      return addLog({ ...s, players }, "Tu recharges un jeton d'achat 🛒 (" + COUT_ACHAT_EXTRA + " 🪙)");
+    });
+  }
+
+  // Un joker sorti de la pioche, payé en pièces (1 fois par manche, pendant ton tour)
+  function invoquerJoker() {
+    if (!peutPayer(COUT_JOKER)) { setMsg("Joker : il te faut un compte et " + COUT_JOKER + " pièces."); return; }
+    setG((s) => {
+      if (!s || s.roundOver || s.turn !== 0 || s.phase !== "play") return s;
+      const p = s.players[0];
+      if (p.jokerNetUsed) { setMsg("Joker déjà invoqué cette manche (1 max)."); return s; }
+      const ji = s.stock.findIndex((c) => c.joker);
+      if (ji === -1) { setMsg("Plus aucun joker dans la pioche !"); return s; }
+      depenserPieces(COUT_JOKER, "joker");
+      const stock = [...s.stock];
+      const jk = stock.splice(ji, 1)[0];
+      const players = s.players.map((q, i) => (i === 0 ? { ...q, hand: [...q.hand, jk], jokerNetUsed: true } : q));
+      setMsg("🤡 Joker ajouté à ta main (" + COUT_JOKER + " 🪙) !");
+      sfx("draw");
+      return addLog({
+        ...s, stock, players, lastDrawn: [jk.id],
+        animEvents: [{ source: "stock", target: "p0", card: jk, faceDown: false, emphasis: true }],
+        animSeq: ++ANIM_SEQ,
+      }, "🤡 Tu invoques un joker de la pioche (" + COUT_JOKER + " 🪙)");
+    });
   }
 
   function execBuy(state, idx, insertAt, net) {
@@ -2858,7 +2899,10 @@ function tapCard(id) {
     if (pseudo.length < 2) { setLoginErr("Choisis d'abord un pseudo (2 caractères minimum)."); return; }
     setLoginBusy(true); setLoginErr("");
     compteApi("creer", { pseudo, stats: statsLocalesAFusionner(), succes: { ...readJSON("rami-succes"), ...succesSession.current } })
-      .then((d) => { activerCompte(d); setNewCode(d.code); })
+      .then((d) => {
+        activerCompte(d); setNewCode(d.code);
+        if (d.pieces > 0) try { window.dispatchEvent(new CustomEvent("rami-gains", { detail: { pieces: d.pieces, gains: { bienvenue: d.pieces, total: d.pieces } } })); } catch (_) {}
+      })
       .catch((e) => { setLoginBusy(false); setLoginErr(e.message || "Serveur injoignable — réessaie."); });
   }
   function connecterParCode() {
@@ -3250,7 +3294,8 @@ function tapCard(id) {
                         Défi du jour <b className="text-yellow-300">+15</b> <span className="opacity-80">(+10 si gagné)</span><br/>
                         Défi entre amis <b className="text-yellow-300">+10</b> <span className="opacity-80">(+5 si gagné)</span><br/>
                         Joue chaque jour : série de <b className="text-yellow-300">+10</b> (jour 1) à <b className="text-yellow-300">+50</b> (jour 7 et plus)<br/>
-                        <span className="opacity-70">Au-delà de 15 parties par jour, les parties ne rapportent plus rien (les succès, si).</span>
+                        <span className="opacity-70">Au-delà de 15 parties par jour, les parties ne rapportent plus rien (les succès, si).</span><br/>
+                        À dépenser : aide +3 <b className="text-yellow-300">5</b> · achat net <b className="text-yellow-300">15</b> · 4e achat <b className="text-yellow-300">20</b> · joker <b className="text-yellow-300">30</b> · 🎁 <b className="text-yellow-300">100</b> offertes à l'inscription
                       </div>
                     </details>
                     <p className="text-[11px] text-emerald-300 text-center">Ton code secret — c'est lui qui permet de retrouver ton compte sur n'importe quel appareil :</p>
@@ -3642,6 +3687,11 @@ function tapCard(id) {
                   title={"Achat net : la carte sans la carte de pénalité, pour " + COUT_ACHAT_NET + " pièces"}
                   className="btn-green px-3 py-1.5 rounded-xl text-xs font-bold disabled:opacity-40">✨ Achat net · {COUT_ACHAT_NET} 🪙</button>
               )}
+              {!tuto && me.buysLeft <= 0 && !me.extraBuyUsed && peutPayer(COUT_ACHAT_EXTRA) && (
+                <button onClick={rechargerAchat}
+                  title="Un 4e jeton d'achat pour cette manche (1 recharge max)"
+                  className="btn-green px-3 py-1.5 rounded-xl text-xs font-bold">🛒 +1 achat · {COUT_ACHAT_EXTRA} 🪙</button>
+              )}
               <button onClick={passBuy} className="btn-dark px-3 py-1.5 rounded-xl text-xs font-bold">Passer</button>
             </div>
           </div>
@@ -3779,6 +3829,10 @@ function tapCard(id) {
                   return <span className="text-[10px] font-normal"> {rest > 0 ? "●".repeat(rest) + "○".repeat(AIDES_GRATUITES - rest) : COUT_AIDE + " 🪙"}</span>;
                 })()}
               </button>
+              {!tuto && myTurn && g.phase === "play" && !me.jokerNetUsed && peutPayer(COUT_JOKER) && g.stock.some((c) => c.joker) && (
+                <button onClick={invoquerJoker} title="Sort un joker de la pioche — une seule fois par manche"
+                  className="btn-green px-4 py-2 rounded-xl text-sm font-bold">🤡 Joker · {COUT_JOKER} 🪙</button>
+              )}
               {!contract.poseTout && (
                 <button onClick={autoStage} className="btn-dark px-4 py-2 rounded-xl text-sm font-bold">
                   ✨ Classer mes cartes
@@ -3910,6 +3964,7 @@ function tapCard(id) {
               <li><b>Pioche</b> une carte (ou prends celle de la défausse, gratuite à ton tour).</li>
               <li><b>Prépare le contrat</b> de la manche : touche 3+ cartes de même valeur (tri) ou qui se suivent dans la même enseigne (escalier), puis valide. Le bouton 💡 Aide classe ta main selon le contrat — 3 aides offertes par partie (les points ● du bouton), ensuite 5 🪙 pièces chacune. 🪄 prépare la pose quand elle est possible !</li>
               <li><b>Achat net</b> : pendant une fenêtre d'achat, le bouton ✨ prend la carte <b>sans la carte de pénalité</b> pour 15 🪙 pièces (il consomme quand même un jeton 🛒). Il n'apparaît que si ton compte a assez de pièces.</li>
+              <li><b>Pouvoirs 🪙</b> : à court de jetons, 🛒 +1 achat (20 pièces, 1 recharge par manche) ; pendant ton tour, 🤡 Joker (30 pièces, 1 par manche) sort un joker de la pioche.</li>
               <li><b>Pose</b> quand le contrat est complet (bouton doré), en une seule fois.</li>
               <li><b>Jette</b> une carte pour finir ton tour : glisse-la sur la défausse, puis <b>touche la défausse pour confirmer</b> 🔒 (touche une carte de ta main pour annuler). Premier à vider sa main = gagnant de la manche !</li>
             </ol>

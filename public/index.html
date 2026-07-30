@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2300-M">
+<meta name="version" content="v2301-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2300-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2301-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -832,6 +832,7 @@ function GainsToast() {
   if (g.victoire) det.push("victoire +" + g.victoire);
   if (g.succes) det.push("succès +" + g.succes);
   if (g.serie) det.push("série " + g.serieJours + " j +" + g.serie);
+  if (g.bienvenue) det.push("🎁 cadeau de bienvenue");
   return (
     <div className="fixed left-1/2 -translate-x-1/2 z-40 px-4 py-2.5 rounded-2xl text-sm font-bold text-amber-200 text-center cursor-pointer"
       style={{ top: "calc(env(safe-area-inset-top, 0px) + 10px)", background: "linear-gradient(180deg, rgba(6,58,42,.97), rgba(4,40,28,.97))", border: "1px solid #f59e0b88", boxShadow: "0 6px 18px rgba(0,0,0,.45)" }}
@@ -991,10 +992,13 @@ const AIDES_GRATUITES = 3;
 const COUT_AIDE = 5;
 // Achat « net » : la carte de la défausse SANS la carte de pénalité (consomme un jeton 🛒)
 const COUT_ACHAT_NET = 15;
-// Le joueur a-t-il les moyens de l'achat net ? (compte requis)
-function peutAchatNet() {
-  try { const a = JSON.parse(store.get("rami-account")) || {}; return Boolean(a.code) && (a.pieces || 0) >= COUT_ACHAT_NET; } catch (_) { return false; }
+const COUT_ACHAT_EXTRA = 20; // 4e jeton d'achat de la manche (1 recharge max)
+const COUT_JOKER = 30;       // un joker sorti de la pioche (1 fois par manche)
+// Le joueur connecté a-t-il les moyens ? (compte requis)
+function peutPayer(montant) {
+  try { const a = JSON.parse(store.get("rami-account")) || {}; return Boolean(a.code) && (a.pieces || 0) >= montant; } catch (_) { return false; }
 }
+const peutAchatNet = () => peutPayer(COUT_ACHAT_NET);
 // Débite des pièces (optimiste : l'interface bouge tout de suite, le serveur confirme)
 function depenserPieces(montant, motif) {
   let acc = {};
@@ -1172,7 +1176,10 @@ function App() {
     if (p.length < 2) { setCptErr("Choisis d'abord un pseudo (2 caractères minimum)."); return; }
     setCptBusy(true); setCptErr("");
     compteApi("creer", { pseudo: p, stats: readJSONls("rami-stats"), succes: readJSONls("rami-succes") })
-      .then((d) => { cptActiver(d); setCptNouveau(d.code); })
+      .then((d) => {
+        cptActiver(d); setCptNouveau(d.code);
+        if (d.pieces > 0) try { window.dispatchEvent(new CustomEvent("rami-gains", { detail: { pieces: d.pieces, gains: { bienvenue: d.pieces, total: d.pieces } } })); } catch (_) {}
+      })
       .catch((e) => { setCptBusy(false); setCptErr(e.message || "Serveur injoignable — réessaie."); });
   }
   function cptReconnecter() {
@@ -1408,6 +1415,14 @@ function App() {
     socket.on("state", (st) => { if (st && st.serverNow) CLOCK_OFFSET = st.serverNow - Date.now(); setSrv(st); setConnErr(""); setConnLost(false); });
     socket.on("disconnect", () => setConnLost(true));
     socket.on("info", (m) => setMsg(m));
+    socket.on("pieces", (d) => { // solde poussé par le serveur après un débit/remboursement
+      if (!d || typeof d.pieces !== "number") return;
+      try {
+        const acc = JSON.parse(store.get("rami-account")) || {};
+        if (acc.code) { acc.pieces = d.pieces; store.set("rami-account", JSON.stringify(acc)); }
+      } catch (_) {}
+      try { window.dispatchEvent(new CustomEvent("rami-gains", { detail: { pieces: d.pieces } })); } catch (_) {}
+    });
     socket.on("roomClosed", () => { setSrv(null); setMsg("Le salon a été fermé (inactivité)."); store.del("ramimp-save"); });
     socket.on("kicked", (m) => { setSrv(null); setMsg(m || "L'hôte t'a retiré du salon."); store.del("ramimp-save"); });
     socket.on("emote", (e) => {
@@ -2253,7 +2268,7 @@ function App() {
               <a href="/contact.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">💬 Nous contacter</a>
               <a href="/signaler.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🚩 Signaler un joueur</a>
               <a href="/confidentialite.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🔒 Confidentialité</a>
-              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2300-M</div>
+              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2301-M</div>
             </div>
           </div>
         )}
@@ -2347,7 +2362,8 @@ function App() {
                         Défi du jour <b className="text-yellow-300">+15</b> <span className="opacity-80">(+10 si gagné)</span><br/>
                         Défi entre amis <b className="text-yellow-300">+10</b> <span className="opacity-80">(+5 si gagné)</span><br/>
                         Joue chaque jour : série de <b className="text-yellow-300">+10</b> (jour 1) à <b className="text-yellow-300">+50</b> (jour 7 et plus)<br/>
-                        <span className="opacity-70">Au-delà de 15 parties par jour, les parties ne rapportent plus rien (les succès, si).</span>
+                        <span className="opacity-70">Au-delà de 15 parties par jour, les parties ne rapportent plus rien (les succès, si).</span><br/>
+                        À dépenser : aide +3 <b className="text-yellow-300">5</b> · achat net <b className="text-yellow-300">15</b> · 4e achat <b className="text-yellow-300">20</b> · joker <b className="text-yellow-300">30</b> · 🎁 <b className="text-yellow-300">100</b> offertes à l'inscription
                       </div>
                     </details>
                   <p className="text-[11px] text-emerald-300 text-center">Ton code secret — c'est lui qui permet de retrouver ton compte sur n'importe quel appareil :</p>
@@ -2799,7 +2815,7 @@ function App() {
           </div>
         )}
         <div className="flex gap-2 text-[11px] text-emerald-400 flex-wrap justify-center items-center pb-4">
-          <span className="opacity-60 self-center">v2300-M</span>
+          <span className="opacity-60 self-center">v2301-M</span>
         </div>
       </div>
     );
@@ -3133,6 +3149,11 @@ function App() {
                   title={"Achat net : la carte sans la carte de pénalité, pour " + COUT_ACHAT_NET + " pièces"}
                   className="btn-green px-3 py-1.5 rounded-xl text-xs font-bold disabled:opacity-40">✨ Achat net · {COUT_ACHAT_NET} 🪙</button>
               )}
+              {me.buysLeft <= 0 && !me.extraBuyUsed && peutPayer(COUT_ACHAT_EXTRA) && (
+                <button onClick={() => act({ type: "rechargeAchat" })}
+                  title="Un 4e jeton d'achat pour cette manche (1 recharge max)"
+                  className="btn-green px-3 py-1.5 rounded-xl text-xs font-bold">🛒 +1 achat · {COUT_ACHAT_EXTRA} 🪙</button>
+              )}
               <button onClick={() => setPassedWindow(g.buyWindowUntil)} className="btn-dark px-3 py-1.5 rounded-xl text-xs font-bold">Passer</button>
             </div>
           </div>
@@ -3259,6 +3280,10 @@ function App() {
           )}
           {!me.posed && selected.length < 3 && (
             <>
+              {myTurn && g.phase === "play" && me && !me.jokerNetUsed && peutPayer(COUT_JOKER) && (
+                <button onClick={() => act({ type: "jokerNet" })} title="Sort un joker de la pioche — une seule fois par manche"
+                  className="btn-green px-4 py-2 rounded-xl text-sm font-bold">🤡 Joker · {COUT_JOKER} 🪙</button>
+              )}
               <button onClick={helpSort} className="btn-dark px-4 py-2 rounded-xl text-sm font-bold">💡 Aide{(() => {
                 const rest = Math.max(0, AIDES_GRATUITES - aidesInfo().n);
                 return <span className="text-[10px] font-normal"> {rest > 0 ? "●".repeat(rest) + "○".repeat(AIDES_GRATUITES - rest) : COUT_AIDE + " 🪙"}</span>;
@@ -3386,6 +3411,7 @@ function App() {
               <li><b>Pioche</b> une carte (ou prends celle de la défausse, gratuite à ton tour).</li>
               <li><b>Prépare le contrat</b> : touche 3+ cartes de même valeur (tri) ou qui se suivent (escalier), puis valide. Le bouton 💡 Aide classe ta main selon le contrat — 3 aides offertes par partie (les points ● du bouton), ensuite 5 🪙 pièces chacune. 🪄 prépare la pose quand elle est possible !</li>
               <li><b>Achat net</b> : pendant une fenêtre d'achat, le bouton ✨ prend la carte <b>sans la carte de pénalité</b> pour 15 🪙 pièces (il consomme quand même un jeton 🛒). Il n'apparaît que si ton compte a assez de pièces.</li>
+              <li><b>Pouvoirs 🪙</b> : à court de jetons, 🛒 +1 achat (20 pièces, 1 recharge par manche) ; pendant ton tour, 🤡 Joker (30 pièces, 1 par manche) sort un joker de la pioche.</li>
               <li><b>Pose</b> quand le contrat est complet (bouton doré), en une seule fois.</li>
               <li><b>Jette</b> une carte pour finir ton tour : glisse-la sur la défausse, puis <b>touche la défausse pour confirmer</b> 🔒 (touche une carte de ta main pour annuler). Premier à vider sa main = gagnant !</li>
             </ol>
