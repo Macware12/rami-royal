@@ -45,6 +45,8 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Choisis une photo de profil pour te représenter à la table de jeu. Elle reste facultative et tu peux la retirer à tout moment.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Ramy Gasy relie les téléphones proches pour jouer ensemble sans internet (mode avion).</string>
 	<key>NSBonjourServices</key>
