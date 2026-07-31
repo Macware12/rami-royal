@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2352-M">
+<meta name="version" content="v2353-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2352-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2353-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -3021,7 +3021,7 @@ function App() {
               <a href="/contact.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">💬 Nous contacter</a>
               <a href="/signaler.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🚩 Signaler un joueur</a>
               <a href="/confidentialite.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🔒 Confidentialité</a>
-              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2352-M</div>
+              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2353-M</div>
             </div>
           </div>
         )}
@@ -3654,7 +3654,7 @@ function App() {
           </div>
         )}
         <div className="flex gap-2 text-[11px] text-emerald-400 flex-wrap justify-center items-center pb-4">
-          <span className="opacity-60 self-center">v2352-M</span>
+          <span className="opacity-60 self-center">v2353-M</span>
         </div>
       </div>
     );
@@ -4131,9 +4131,16 @@ function App() {
           {!me.posed && selEscOk && <button onClick={() => stageSelection("esc")} className="btn-green px-4 py-2 rounded-xl text-sm font-bold">✓ C'est un escalier !</button>}
           {!me.posed && selected.length >= 3 && !selTriOk && !selEscOk && (
             <span className="text-[11px] text-red-300 self-center">
-              {selCards.some((c) => c.joker) && selCards.filter((c) => !c.joker).length < 3
-                ? "Un joker 🤡 exige au moins 3 vraies cartes autour de lui : ajoute une vraie carte."
-                : "Ni tri, ni escalier — ajuste ta sélection"}
+{(() => {
+                const jk = selCards.filter((c) => c.joker).length;
+                const vraies = selCards.filter((c) => !c.joker);
+                if (jk > 0 && vraies.length < 3) return "🤡 Avec un joker, il faut au moins 3 vraies cartes autour de lui (4 cartes en tout) — ajoute une vraie carte.";
+                const memeRang = vraies.every((c) => c.rank === vraies[0].rank);
+                const memeCouleur = vraies.every((c) => c.suit === vraies[0].suit);
+                if (memeCouleur) return "🪜 Même enseigne, mais les cartes ne se suivent pas : il faut une suite sans trou (ex. 5-6-7 ♠).";
+                if (memeRang) return "👯 Même valeur, mais un tri demande 3 cartes de rang identique — vérifie ta sélection.";
+                return "Ni tri (3 cartes de même valeur), ni escalier (3 cartes qui se suivent dans la même enseigne).";
+              })()}
             </span>
           )}
           {!me.posed && selected.length < 3 && (
@@ -4296,7 +4303,7 @@ function App() {
             </div>
             <ol className="list-decimal ml-4 space-y-2 text-emerald-100 text-xs">
               <li><b>Pioche</b> une carte (ou prends celle de la défausse, gratuite à ton tour).</li>
-              <li><b>Prépare le contrat</b> : touche 3+ cartes de même valeur (tri) ou qui se suivent (escalier), puis valide. Le bouton 💡 Aide classe ta main selon le contrat — une aide offerte par manche (le point ● du bouton), ensuite 5 💎 chacune. 🪄 prépare la pose quand elle est possible !</li>
+              <li><b>Prépare le contrat</b> : touche 3 cartes (ou plus) de même valeur (tri) ou qui se suivent dans la même enseigne (escalier), puis valide. <b>3 cartes suffisent</b> — avec un joker il en faut 4 (3 vraies + le joker). Le bouton 💡 Aide classe ta main selon le contrat — une aide offerte par manche (le point ● du bouton), ensuite 5 💎 chacune. 🪄 prépare la pose quand elle est possible !</li>
               <li><b>Achat sans pénalité</b> : pendant une fenêtre d'achat, le bouton ✨ prend la carte <b>sans la carte de pénalité</b> pour 15 💎 (il consomme quand même un jeton 🛒).</li>
               <li><b>Pouvoirs 💎</b> : à court de jetons, 🛒 +1 achat (20 diamants, 1 recharge par manche) ; à tout moment, 🪄 Joker magique (30 diamants, 1 par manche) crée un joker de plus dans ta main (carte bleutée) — jamais récupérable par échange, et 0 point en main si tout le monde a posé.</li>
               <li><b>Pose</b> quand le contrat est complet (bouton doré), en une seule fois.</li>
