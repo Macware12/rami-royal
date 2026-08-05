@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2353-M">
+<meta name="version" content="v2354-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -25,7 +25,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2353-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2354-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -1175,7 +1175,7 @@ function TarifsDiamants() {
         <L n="✨ Achat sans pénalité (fenêtre d’achat)" v="15" />
         <L n="🛒 4e jeton d'achat (1/manche)" v="20" />
         <L n="🪄 Joker magique (1/manche)" v="30" />
-        <div className="text-[10px] text-emerald-400">⚖️ Pouvoirs désactivés pendant les défis, et dans les salons où l'hôte les a coupés.</div>
+        <div className="text-[10px] text-emerald-400">⚖️ Pouvoirs désactivés pendant les défis et dans les salons où l'hôte les a coupés. Une partie jouée avec un pouvoir 💎 ne compte pas pour le classement de la semaine.</div>
         <button onClick={() => { setOuvert(false); try { window.dispatchEvent(new CustomEvent("rami-boutique-cosmo")); } catch (_) {} }}
           className="btn-diamant font-bold py-2.5 rounded-xl text-sm mt-1">🛍️ Boutique — dos, tapis, titres</button>
         <button onClick={() => { setOuvert(false); try { window.dispatchEvent(new CustomEvent("rami-boutique")); } catch (_) {} }}
@@ -1581,8 +1581,15 @@ function messageVerrou(prix) {
   return "🔒 Il te manque " + (prix - (acc.pieces || 0)) + " 💎 pour ce pouvoir (solde : " + (acc.pieces || 0) + " 💎).";
 }
 const LIBELLES_DEPENSE = { aide: "aide", "achat-net": "achat sans pénalité", "achat-extra": "4e jeton d'achat", joker: "joker invoqué" };
+// Un pouvoir payant a-t-il servi dans la partie en cours ? (exclut la partie du classement)
+let POUVOIR_UTILISE = false;
+function marquerPouvoir() { POUVOIR_UTILISE = true; }
+function pouvoirsUtilises() { return POUVOIR_UTILISE; }
+function reinitPouvoirs() { POUVOIR_UTILISE = false; }
+
 // Débite des diamants (optimiste : l'interface bouge tout de suite, le serveur confirme)
 function depenserPieces(montant, motif) {
+  marquerPouvoir();
   let acc = {};
   try { acc = JSON.parse(store.get("rami-account")) || {}; } catch (_) {}
   if (!acc.code) return;
@@ -1862,6 +1869,36 @@ function App() {
   const [pouvoirs, setPouvoirs] = useState(() => store.get("ramimp-pouvoirs") !== "0"); // pouvoirs 💎 autorisés
   const [showCfgMp, setShowCfgMp] = useState(!store.get("ramimp-turn")); // réglages repliés pour les habitués
   const [missionsOuvert, setMissionsOuvert] = useState(false); // détail des missions du jour
+  const [blocage, setBlocage] = useState(null); // { pseudo } en cours de confirmation, ou "liste"
+  const [bloques, setBloques] = useState([]);   // joueurs bloqués (chargés à la demande)
+  function chargerBloques() {
+    const acc = readJSONls("rami-account");
+    if (!acc.code) return Promise.resolve([]);
+    return fetch(API_BASE + "/blocage/liste", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: acc.code }),
+    }).then((r) => r.json()).then((d) => { setBloques(d.bloques || []); return d.bloques || []; }).catch(() => []);
+  }
+  function bloquerJoueur(pseudo) {
+    const acc = readJSONls("rami-account");
+    if (!acc.code) { setMsg("Crée un compte pour bloquer un joueur."); return; }
+    fetch(API_BASE + "/blocage/bloquer", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: acc.code, pseudo }),
+    }).then((r) => r.json().then((d) => ({ ok: r.ok, d })))
+      .then(({ ok, d }) => {
+        setBlocage(null);
+        if (!ok) { setMsg(d.erreur || "Blocage impossible."); return; }
+        setBloques(d.bloques || []);
+        setMsg("🚫 " + pseudo + " est bloqué — vous ne serez plus à la même table.");
+      })
+      .catch(() => setMsg("Serveur injoignable."));
+  }
+  function debloquerJoueur(cible) {
+    const acc = readJSONls("rami-account");
+    if (!acc.code) return;
+    fetch(API_BASE + "/blocage/debloquer", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: acc.code, cible }),
+    }).then((r) => r.json()).then((d) => setBloques(d.bloques || [])).catch(() => {});
+  }
   // Grand écran : on montre tout, rangé en deux colonnes (les portails n'ont de sens que sur mobile)
   const [grandEcran, setGrandEcran] = useState(() => (typeof window !== "undefined" ? window.innerWidth >= 860 && window.innerHeight >= 520 : false));
   useEffect(() => {
@@ -1980,6 +2017,11 @@ function App() {
   // Enregistre le résultat de la partie multi dans le compte (une seule fois par partie, si connecté)
   const statsDoneRef = useRef(null);
   const missionsFinRef = useRef(null);
+  const partieRef = useRef(null);
+  useEffect(() => { // nouvelle partie : le drapeau « pouvoir payant » repart à zéro
+    const cle = (srv && srv.code) + ":" + (g && g.startedAt);
+    if (g && g.startedAt && partieRef.current !== cle) { partieRef.current = cle; reinitPouvoirs(); }
+  }, [srv && srv.code, g && g.startedAt]);
   useEffect(() => {
     if (!srv || srv.state !== "over" || !g || youIdx < 0) return;
     // Missions de fin de partie : pour tous, y compris les invités (progression locale)
@@ -2021,7 +2063,7 @@ function App() {
     all.mp = st;
     store.set("rami-stats", JSON.stringify(all)); // affichage immédiat ; le serveur reste la référence
     pousserPartie({
-      mode: "mp", win: won, score: myTotal,
+      mode: "mp", win: won, score: myTotal, pouvoirs: pouvoirsUtilises(),
       dureeMs: g.startedAt ? srvNow() - g.startedAt : null,
       manches: (g.history || []).slice(0, 10).map((hm) => {
         const mine = hm.summary && hm.summary[youIdx];
@@ -3018,10 +3060,12 @@ function App() {
                   className={`flex-1 py-2.5 rounded-xl text-sm font-bold ${UI_PREFS.four ? "btn-gold" : "btn-dark"}`}>🎨 4 couleurs</button>
               </div>
               <p className="text-[10px] text-emerald-400 text-center -mt-1">« 4 couleurs » : ♦ en bleu et ♣ en vert — pensé pour le daltonisme.</p>
+              <button onClick={() => { setCptMenu(false); chargerBloques().then(() => setBlocage("liste")); }}
+                className="btn-dark font-bold py-2.5 rounded-xl text-sm">🚫 Joueurs bloqués</button>
               <a href="/contact.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">💬 Nous contacter</a>
               <a href="/signaler.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🚩 Signaler un joueur</a>
               <a href="/confidentialite.html" className="btn-dark font-bold py-2.5 rounded-xl text-sm text-center no-underline">🔒 Confidentialité</a>
-              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2353-M</div>
+              <div className="text-[10px] text-emerald-400 text-center mt-1 opacity-60">Ramy Gasy · v2354-M</div>
             </div>
           </div>
         )}
@@ -3059,10 +3103,43 @@ function App() {
                   ) : (
                     <div className="text-[11px] text-emerald-300 text-center">{readJSONls("rami-account").code ? "Gagne une partie pour entrer au classement !" : "Crée un compte (pastille 👤) pour concourir !"}</div>
                   )}
-                  <div className="text-[10px] text-emerald-400 text-center">Remise à zéro chaque lundi — nouvelle chance pour tout le monde.</div>
+                  <div className="text-[10px] text-emerald-400 text-center">Remise à zéro chaque lundi — nouvelle chance pour tout le monde.<br/>⚖️ Seules les parties <b>sans pouvoir 💎</b> comptent : le classement reste au mérite.</div>
                 </React.Fragment>
               )}
               <button onClick={() => setHebdo(null)} className="btn-gold font-bold py-2.5 rounded-xl text-sm">Fermer</button>
+            </div>
+          </div>
+        )}
+
+        {/* Blocage : confirmation, puis gestion de la liste */}
+        {blocage && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setBlocage(null)}>
+            <div className="panel rounded-2xl p-5 w-full max-w-md flex flex-col gap-3 relative" onClick={(e) => e.stopPropagation()}>
+              <button onClick={() => setBlocage(null)} className="absolute top-1 right-1 p-2.5 text-emerald-400 text-xl leading-none">✕</button>
+              {blocage === "liste" ? (
+                <React.Fragment>
+                  <h3 className="text-amber-300 font-bold text-center" style={{ fontFamily: "Georgia, serif" }}>🚫 Joueurs bloqués</h3>
+                  {bloques.length === 0 ? (
+                    <p className="text-xs text-emerald-300 text-center py-3">Tu n'as bloqué personne. Depuis une partie, touche « Scores » puis 🚫 à côté d'un joueur.</p>
+                  ) : bloques.map((b) => (
+                    <div key={b.code} className="flex items-center gap-2 bg-emerald-950/50 border border-emerald-800/60 rounded-xl px-3 py-2">
+                      <span className="flex-1 text-sm text-emerald-100 truncate">{b.pseudo}</span>
+                      <button onClick={() => debloquerJoueur(b.code)} className="btn-dark px-3 py-1.5 rounded-xl text-[11px] font-bold">Débloquer</button>
+                    </div>
+                  ))}
+                  <p className="text-[10px] text-emerald-400 text-center">Un joueur bloqué ne peut plus t'envoyer de messages, et vous ne pouvez plus être à la même table.</p>
+                </React.Fragment>
+              ) : (
+                <React.Fragment>
+                  <div className="text-4xl text-center">🚫</div>
+                  <h3 className="text-amber-300 font-bold text-center">Bloquer {blocage.pseudo} ?</h3>
+                  <p className="text-xs text-emerald-300 text-center leading-relaxed">
+                    Vous ne pourrez plus jouer à la même table et tu ne recevras plus ses messages. Tu pourras le débloquer depuis les réglages ⚙️.
+                  </p>
+                  <button onClick={() => bloquerJoueur(blocage.pseudo)} className="btn-red font-bold py-2.5 rounded-xl text-sm">Bloquer</button>
+                  <button onClick={() => setBlocage(null)} className="btn-dark font-bold py-2 rounded-xl text-sm">Annuler</button>
+                </React.Fragment>
+              )}
             </div>
           </div>
         )}
@@ -3654,7 +3731,7 @@ function App() {
           </div>
         )}
         <div className="flex gap-2 text-[11px] text-emerald-400 flex-wrap justify-center items-center pb-4">
-          <span className="opacity-60 self-center">v2353-M</span>
+          <span className="opacity-60 self-center">v2354-M</span>
         </div>
       </div>
     );
@@ -4339,6 +4416,15 @@ function App() {
             <div className="flex justify-between items-center mb-2">
               <h3 className="text-amber-300 font-bold text-sm">Tableau des scores</h3>
               <button onClick={() => setShowScores(false)} className="text-emerald-300 text-sm px-2">Fermer ✕</button>
+            </div>
+            <div className="flex gap-1.5 flex-wrap mb-2">
+              {srv.players.filter((p) => !p.isBot && p.idx !== youIdx).map((p) => (
+                <span key={p.idx} className="flex items-center gap-1 bg-emerald-950/60 border border-emerald-800/60 rounded-lg px-2 py-1">
+                  <span className="text-[11px] text-emerald-200">{p.name}</span>
+                  <a href={"/signaler.html?joueur=" + encodeURIComponent(p.name)} className="text-[10px] text-amber-300 no-underline" title="Signaler">🚩</a>
+                  <button onClick={() => setBlocage({ pseudo: p.name })} className="text-[10px] text-red-300" title="Bloquer ce joueur">🚫</button>
+                </span>
+              ))}
             </div>
             <div className="overflow-x-auto">
               <table className="text-xs w-full whitespace-nowrap">

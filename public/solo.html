@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ramy Gasy">
 <meta name="theme-color" content="#052e16">
-<meta name="version" content="v2353-M">
+<meta name="version" content="v2354-M">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="manifest" href="/manifest.json">
@@ -34,7 +34,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 <script src="/lib/react.production.min.js"></script>
 <script src="/lib/react-dom.production.min.js"></script>
 <script src="/lib/babel.min.js"></script>
-<link rel="stylesheet" href="/lib/tailwind.css?v2353-M">
+<link rel="stylesheet" href="/lib/tailwind.css?v2354-M">
 <style>
 /* Pas de selection de texte (rendu app) - les champs de saisie restent editables */
 html { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -315,8 +315,15 @@ function messageVerrou(prix) {
   return "🔒 Il te manque " + (prix - (acc.pieces || 0)) + " 💎 pour ce pouvoir (solde : " + (acc.pieces || 0) + " 💎).";
 }
 const LIBELLES_DEPENSE = { aide: "aide", "achat-net": "achat sans pénalité", "achat-extra": "4e jeton d'achat", joker: "joker invoqué" };
+// Un pouvoir payant a-t-il servi dans la partie en cours ? (exclut la partie du classement)
+let POUVOIR_UTILISE = false;
+function marquerPouvoir() { POUVOIR_UTILISE = true; }
+function pouvoirsUtilises() { return POUVOIR_UTILISE; }
+function reinitPouvoirs() { POUVOIR_UTILISE = false; }
+
 // Débite des diamants (optimiste : l'interface bouge tout de suite, le serveur confirme)
 function depenserPieces(montant, motif) {
+  marquerPouvoir();
   let acc = {};
   try { acc = JSON.parse(store.get("rami-account")) || {}; } catch (_) {}
   if (!acc.code) return;
@@ -1421,7 +1428,7 @@ function TarifsDiamants() {
         <L n="✨ Achat sans pénalité (fenêtre d’achat)" v="15" />
         <L n="🛒 4e jeton d'achat (1/manche)" v="20" />
         <L n="🪄 Joker magique (1/manche)" v="30" />
-        <div className="text-[10px] text-emerald-400">⚖️ Pouvoirs désactivés pendant les défis, et dans les salons où l'hôte les a coupés.</div>
+        <div className="text-[10px] text-emerald-400">⚖️ Pouvoirs désactivés pendant les défis et dans les salons où l'hôte les a coupés. Une partie jouée avec un pouvoir 💎 ne compte pas pour le classement de la semaine.</div>
         <button onClick={() => { setOuvert(false); try { window.dispatchEvent(new CustomEvent("rami-boutique-cosmo")); } catch (_) {} }}
           className="btn-diamant font-bold py-2.5 rounded-xl text-sm mt-1">🛍️ Boutique — dos, tapis, titres</button>
         <button onClick={() => { setOuvert(false); try { window.dispatchEvent(new CustomEvent("rami-boutique")); } catch (_) {} }}
@@ -1998,6 +2005,7 @@ function RamiRoyal() {
       })),
     ];
     ensureAudio();
+    reinitPouvoirs(); // nouvelle partie : le drapeau « pouvoir payant » repart à zéro
     store.set("rami-name", name);
     store.set("rami-avatar", myAvatar);
     store.set("rami-level", lvlChoisi);
@@ -3627,7 +3635,7 @@ function tapCard(id) {
       if (acc.code) {
         store.set("rami-stats", JSON.stringify(st)); // affichage immédiat ; le serveur reste la référence
         pousserPartie({
-          mode: "solo", win: won, score: g.players[0].total,
+          mode: "solo", win: won, score: g.players[0].total, pouvoirs: pouvoirsUtilises(),
           dureeMs: g.startedAt ? Date.now() - g.startedAt : null,
           manches: (g.history || []).slice(0, 10).map((hm) => ({
             label: (manchesList[hm.mancheIdx] || {}).label || "?",

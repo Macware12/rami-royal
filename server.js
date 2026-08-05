@@ -877,7 +877,7 @@ app.post("/compte/salon", (req, res) => {
 // est connecté sur deux appareils en même temps (l'ancienne synchro par cumuls prenait le max).
 app.post("/compte/partie", (req, res) => {
   if (tropDEssais(req, res)) return;
-  const { code, mode, win, score, dureeMs, manches, succes } = req.body || {};
+  const { code, mode, win, score, dureeMs, manches, succes, pouvoirs } = req.body || {};
   const c = typeof code === "string" && /^[0-9]{6}$/.test(code.trim()) ? comptes.get(code.trim()) : null;
   if (!c) return res.status(404).json({ erreur: "Code inexistant." });
   if (c.banni) return res.status(403).json({ erreur: MESSAGE_BANNI });
@@ -931,12 +931,64 @@ app.post("/compte/partie", (req, res) => {
   gains.serie = serie.gain;
   gains.serieJours = serie.jours;
   gains.total = gains.partie + gains.victoire + gains.succes + gains.serie;
-  pointHebdo(c, w); // classement de la semaine (victoires)
+  // Classement de la semaine : uniquement les parties SANS pouvoir payant. Ainsi, acheter
+  // des diamants ne peut jamais acheter un rang — le classement reste au mérite.
+  if (!pouvoirs) pointHebdo(c, w);
   crediterPieces(c, gains.total - gains.serie); // la série est déjà créditée par majSerie
   c.lastSeen = Date.now();
   saveComptes();
   res.json({ stats: c.stats, succes: c.succes || {}, pieces: c.pieces || 0, gains });
 });
+
+// ---------- Blocage de joueurs ----------
+// Exigence App Store (1.2) pour tout jeu à contenu généré par les utilisateurs :
+// on doit pouvoir bloquer quelqu'un. Un joueur bloqué ne peut plus t'envoyer de messages
+// et vous ne pouvez plus vous asseoir à la même table.
+const BLOQUES_MAX = 200;
+function bloquesDe(c) { return Array.isArray(c.bloques) ? c.bloques : []; }
+function compteParPseudo(pseudo) {
+  const p = String(pseudo || "").trim().toLowerCase();
+  if (!p) return null;
+  return [...comptes.values()].find((x) => x.pseudo.toLowerCase() === p) || null;
+}
+app.use("/blocage", express.json({ limit: "4kb" }));
+app.post("/blocage/bloquer", (req, res) => {
+  if (tropDEssais(req, res)) return;
+  const { code, pseudo } = req.body || {};
+  const c = typeof code === "string" && /^[0-9]{6}$/.test(code.trim()) ? comptes.get(code.trim()) : null;
+  if (!c) return res.status(404).json({ erreur: "Compte requis." });
+  const cible = compteParPseudo(pseudo);
+  if (!cible) return res.status(404).json({ erreur: "Joueur introuvable." });
+  if (cible.code === c.code) return res.status(400).json({ erreur: "Tu ne peux pas te bloquer toi-même." });
+  const liste = bloquesDe(c);
+  if (liste.length >= BLOQUES_MAX) return res.status(400).json({ erreur: "Liste de blocage pleine." });
+  if (!liste.includes(cible.code)) liste.push(cible.code);
+  c.bloques = liste;
+  saveComptes();
+  res.json({ ok: true, bloques: liste.map((k) => ({ code: k, pseudo: (comptes.get(k) || {}).pseudo || "?" })) });
+});
+app.post("/blocage/debloquer", (req, res) => {
+  if (tropDEssais(req, res)) return;
+  const { code, cible } = req.body || {};
+  const c = typeof code === "string" && /^[0-9]{6}$/.test(code.trim()) ? comptes.get(code.trim()) : null;
+  if (!c) return res.status(404).json({ erreur: "Compte requis." });
+  c.bloques = bloquesDe(c).filter((k) => k !== String(cible || "").trim());
+  saveComptes();
+  res.json({ ok: true, bloques: c.bloques.map((k) => ({ code: k, pseudo: (comptes.get(k) || {}).pseudo || "?" })) });
+});
+app.post("/blocage/liste", (req, res) => {
+  if (tropDEssais(req, res)) return;
+  const { code } = req.body || {};
+  const c = typeof code === "string" && /^[0-9]{6}$/.test(code.trim()) ? comptes.get(code.trim()) : null;
+  if (!c) return res.status(404).json({ erreur: "Compte requis." });
+  res.json({ bloques: bloquesDe(c).map((k) => ({ code: k, pseudo: (comptes.get(k) || {}).pseudo || "(compte supprimé)" })) });
+});
+// Deux joueurs sont-ils incompatibles (l'un a bloqué l'autre) ?
+function blocageEntre(codeA, codeB) {
+  if (!codeA || !codeB) return false;
+  const a = comptes.get(codeA), b = comptes.get(codeB);
+  return Boolean((a && bloquesDe(a).includes(codeB)) || (b && bloquesDe(b).includes(codeA)));
+}
 
 // ---------- Missions du jour ----------
 // Trois objectifs qui changent chaque jour (les mêmes pour tous, choisis par la date).
@@ -2563,6 +2615,8 @@ io.on("connection", (socket) => {
     if (compte && !cptJ) return cb({ ok: false, error: "Compte invalide ou suspendu — déconnecte-toi et réessaie." });
     if (cptJ) {
       name = cptJ.pseudo; // pseudo authentique
+      const gene = room.players.find((p) => p.compte && p.compte !== cptJ.code && blocageEntre(p.compte, cptJ.code));
+      if (gene) return cb({ ok: false, error: "Tu as bloqué un joueur de ce salon (ou il t'a bloqué) — impossible de vous asseoir à la même table." });
       const siege = room.players.find((p) => p.compte === cptJ.code);
       if (siege && siege.connected)
         return cb({ ok: false, error: "Ce compte est déjà à la table sur un autre appareil." });
@@ -2746,7 +2800,13 @@ io.on("connection", (socket) => {
     if (!EMOTES_AUTORISEES.includes(text)) return;
     lastEmoteAt = now;
     touch(myRoom);
-    io.to(myRoom.code).emit("emote", { idx: me.idx, text, id: ++EMOTE_SEQ });
+    // Un joueur bloqué (dans un sens ou dans l'autre) ne reçoit pas le message
+    const paquet = { idx: me.idx, text, id: ++EMOTE_SEQ };
+    myRoom.players.forEach((p) => {
+      if (!p.socketId) return;
+      if (p.compte && me.p.compte && blocageEntre(p.compte, me.p.compte)) return;
+      io.to(p.socketId).emit("emote", paquet);
+    });
   });
 
   // Vote pour stopper la manche en cours : tous les humains connectés doivent accepter
